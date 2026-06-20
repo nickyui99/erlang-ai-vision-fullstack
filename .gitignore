@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+
+.env
+.venv/
+venv/
+
+*.db-journal
+sentineledge_migration_autogen.db
+sentineledge_migration_autogen.db-journal
