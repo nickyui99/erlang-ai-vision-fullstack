@@ -50,11 +50,19 @@ $env:PYTHONPATH="backend"
 uvicorn app.main:app --reload
 ```
 
-Run Flutter web from the app directory:
+Run the full stack from the repository root:
+
+```powershell
+.\scripts\start-dev.ps1
+```
+
+The script runs Flutter as a web server at `http://localhost:8080` and opens that URL in your normal browser profile. That is preferred for local Firebase Google sign-in because it avoids creating a fresh browser profile on every run.
+
+You can also run Flutter directly from the app directory:
 
 ```powershell
 cd frontend\sentineledge_app
-flutter run -d chrome --dart-define-from-file=config/firebase.json
+flutter run -d web-server --web-port 8080 --dart-define-from-file=config/firebase.json
 ```
 
 The default web backend URL is:
@@ -66,7 +74,7 @@ http://localhost:8000
 Override it when needed:
 
 ```powershell
-flutter run -d chrome --dart-define-from-file=config/firebase.json --dart-define=SENTINELEDGE_API_BASE_URL=http://localhost:8000
+flutter run -d web-server --web-port 8080 --dart-define-from-file=config/firebase.json --dart-define=SENTINELEDGE_API_BASE_URL=http://localhost:8000
 ```
 
 ## Platform Backend URLs
@@ -111,3 +119,5 @@ Manual validation:
 3. Google sign-in succeeds.
 4. The app shows the backend user profile.
 5. Backend logs show `POST /api/v1/auth/firebase/login` returning success.
+
+
