@@ -31,6 +31,12 @@ Run with the local config:
 flutter run -d chrome --dart-define-from-file=config/firebase.json
 ```
 
+From the repository root, you can also start the backend and Flutter frontend together:
+
+```powershell
+.\scripts\start-dev.ps1
+```
+
 For local backend URLs:
 
 ```text
@@ -50,3 +56,5 @@ Run tests:
 ```powershell
 flutter test
 ```
+
+

@@ -186,6 +186,25 @@ Interactive docs are available in development:
 http://localhost:8000/docs
 ```
 
+## Run Full Stack Locally
+
+Start the backend and Flutter web frontend together:
+
+```powershell
+.\scripts\start-dev.ps1
+```
+
+The script opens one PowerShell window for FastAPI and one for Flutter. It expects:
+
+- backend `.env` at the repository root
+- frontend Firebase config at `frontend\sentineledge_app\config\firebase.json`
+
+Optional arguments:
+
+```powershell
+.\scripts\start-dev.ps1 -BackendPort 8000 -FlutterDevice chrome
+```
+
 ## Alembic
 
 Check current migration state:
@@ -291,3 +310,4 @@ Milestone 4 is the device and agent loop:
 - create and manage agents
 - compile edge config
 - let edge pull active configs
+
