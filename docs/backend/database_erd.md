@@ -164,8 +164,8 @@ erDiagram
 
 ## Notes
 
-- `USERS.google_sub` is the stable Google OAuth identity key.
-- `USERS.password_hash` is intentionally omitted because user login is handled by Google OAuth.
+- `USERS.google_sub` stores the stable Firebase `uid` for the authenticated user.
+- `USERS.password_hash` is intentionally omitted because user login is handled by Firebase Auth.
 - `DEVICES.edge_token_hash` stores a hashed device token for edge authentication.
 - `EVENTS.idempotency_key` supports duplicate-safe event ingestion from the edge tier.
 - Raw video bytes are not stored in the database. `CLIPS` and `RECORDINGS` store metadata and storage references only.
@@ -177,13 +177,13 @@ erDiagram
 | Field | Description |
 |---|---|
 | `user_id` | Internal primary key for the SentinelEdge user. |
-| `google_sub` | Stable unique user identifier from Google OAuth/OpenID Connect. |
-| `email` | User email from Google profile. Useful for display and account lookup, but not the primary identity key. |
-| `email_verified` | Whether Google reports the email as verified. |
-| `display_name` | User-facing name from Google profile. |
-| `avatar_url` | Profile image URL from Google profile. |
+| `google_sub` | Stable unique Firebase `uid`. |
+| `email` | User email from Firebase Auth. Useful for display and account lookup, but not the primary identity key. |
+| `email_verified` | Whether Firebase reports the email as verified. |
+| `display_name` | User-facing name from Firebase token claims. |
+| `avatar_url` | Profile image URL from Firebase token claims. |
 | `role` | Application role, such as `user` or `admin`. |
-| `last_login_at` | Last successful Google OAuth login time. |
+| `last_login_at` | Last successful Firebase login time. |
 | `created_at` | Time the local user row was created. |
 | `updated_at` | Time the local user row was last updated. |
 

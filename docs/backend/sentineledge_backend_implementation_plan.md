@@ -28,7 +28,7 @@ The backend is responsible for:
 - Relational database schema and migrations, starting with SQLite locally and targeting PostgreSQL for production
 - SQLAlchemy ORM models
 - Pydantic request/response schemas
-- Google OAuth authentication for users
+- Firebase Google sign-in for users
 - API token authentication for edge clients
 - REST API routes
 - WebSocket endpoint for laptop edge tier
@@ -65,7 +65,7 @@ The backend is responsible for:
 | AI service | Qwen APIs through Alibaba Cloud Model Studio / DashScope |
 | Agent orchestration | Qwen-Agent |
 | Tool protocol | MCP-compatible tool layer |
-| Auth | Google OAuth for users, API token for edge clients |
+| Auth | Firebase Auth for users, API token for edge clients |
 | Deployment | Docker container on Alibaba Cloud ECI |
 | Local development | Docker Compose |
 
@@ -300,25 +300,25 @@ Both `clips` and `recordings` should include:
 
 ### Goal
 
-Implement secure access for users through Google OAuth and for laptop edge clients through edge API tokens.
+Implement secure access for users through Firebase Auth and for laptop edge clients through edge API tokens.
 
 ### Auth types
 
 | Actor | Auth method |
 |---|---|
-| Web app user | Google OAuth with backend-managed session or app token |
-| Mobile WebView user | Google OAuth/session through web app |
+| Web app user | Firebase Google sign-in with backend-managed session |
+| Mobile WebView user | Firebase Google sign-in through the app |
 | Laptop edge service | Edge API token |
-| Admin/debug tools | Google OAuth user with admin role |
+| Admin/debug tools | Firebase-authenticated user with admin role |
 
 ### Tasks
 
-1. Configure Google OAuth client credentials.
-2. Implement Google OAuth authorization start endpoint.
-3. Implement Google OAuth callback endpoint.
-4. Verify Google ID token and hosted user identity.
-5. Create or update the local `users` row from the Google profile.
-6. Issue a backend-managed session cookie or short-lived app token after OAuth succeeds.
+1. Configure Firebase project ID and service account credentials.
+2. Implement Firebase login endpoint.
+3. Verify Firebase ID token and hosted user identity.
+4. Create or update the local `users` row from Firebase token claims.
+5. Issue a backend-managed session cookie after Firebase login succeeds.
+6. Implement logout.
 7. Implement current-user dependency based on the backend session or app token.
 8. Implement role-based authorization.
 9. Implement edge API token authentication.
@@ -328,14 +328,13 @@ Implement secure access for users through Google OAuth and for laptop edge clien
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| GET | `/api/v1/auth/google/start` | Start Google OAuth login |
-| GET | `/api/v1/auth/google/callback` | Complete Google OAuth login |
+| POST | `/api/v1/auth/firebase/login` | Complete Firebase login |
 | POST | `/api/v1/auth/logout` | End current user session |
 | GET | `/api/v1/users/me` | Current user profile |
 
-### Google OAuth user mapping
+### Firebase user mapping
 
-The backend should maintain a local `users` table even though Google is the identity provider.
+The backend should maintain a local `users` table even though Firebase Auth is the identity broker.
 
 Recommended user fields:
 
@@ -350,14 +349,14 @@ Recommended user fields:
 - `created_at`
 - `updated_at`
 
-The `google_sub` value should be the stable unique identity key from Google. Email can change and should not be the primary identity key.
+The `google_sub` value stores the stable Firebase `uid`. Email can change and should not be the primary identity key.
 
 ### Acceptance criteria
 
 - Users cannot access other users' data.
 - Edge clients cannot call user-only APIs.
 - User APIs reject missing or invalid backend sessions/app tokens.
-- Google OAuth callback rejects invalid ID tokens, mismatched state, and unverified emails.
+- Firebase login rejects invalid ID tokens and unverified emails.
 - Edge APIs reject missing or invalid API tokens.
 
 ---
@@ -381,7 +380,7 @@ Support device registration, health status, and metadata updates.
 
 ### Implementation notes
 
-- User-facing device routes require a valid Google-authenticated backend session or app token.
+- User-facing device routes require a valid Firebase-authenticated backend session.
 - Edge heartbeat can use edge API token.
 - `pan` command should be relayed through the edge WebSocket, not sent directly from cloud to ESP32.
 - Pan commands must be rate-limited and audit logged.
@@ -832,9 +831,8 @@ API_PREFIX=/api/v1
 
 DATABASE_URL=postgresql+asyncpg://user:password@host:5432/sentineledge
 
-GOOGLE_OAUTH_CLIENT_ID=change-me
-GOOGLE_OAUTH_CLIENT_SECRET=change-me
-GOOGLE_OAUTH_REDIRECT_URI=https://api.example.com/api/v1/auth/google/callback
+FIREBASE_PROJECT_ID=change-me
+GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/firebase-service-account.json
 SESSION_SECRET_KEY=change-me
 SESSION_COOKIE_NAME=sentineledge_session
 SESSION_EXPIRE_MINUTES=1440
@@ -869,7 +867,7 @@ DAILY_RECORDING_RETENTION_HOURS=72
 
 | Area | Main endpoints |
 |---|---|
-| Auth | `/api/v1/auth/google/start`, `/api/v1/auth/google/callback`, `/api/v1/auth/logout` |
+| Auth | `/api/v1/auth/firebase/login`, `/api/v1/auth/logout` |
 | Users | `/api/v1/users/me` |
 | Devices | `/api/v1/devices`, `/api/v1/devices/{id}`, `/api/v1/devices/{id}/heartbeat`, `/api/v1/devices/{id}/pan` |
 | Agents | `/api/v1/agents`, `/api/v1/agents/{id}`, `/api/v1/agents/{id}/arm`, `/api/v1/agents/{id}/disarm` |
@@ -929,7 +927,7 @@ DAILY_RECORDING_RETENTION_HOURS=72
 
 ### Unit tests
 
-- Google OAuth callback verification and backend session/app token validation
+- Firebase ID token verification and backend session validation
 - Ownership checks
 - Agent compiler
 - Event ingestion validation
@@ -941,7 +939,7 @@ DAILY_RECORDING_RETENTION_HOURS=72
 
 ### Integration tests
 
-- Google OAuth login to protected API
+- Firebase Google sign-in to protected API
 - Device registration and heartbeat
 - Agent creation and config pull
 - Edge event upload
