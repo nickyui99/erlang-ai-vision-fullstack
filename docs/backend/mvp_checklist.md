@@ -31,16 +31,16 @@ This checklist turns the backend plan into a practical implementation sequence.
 
 ## Milestone 3: Auth
 
-- [ ] Add Google OAuth start endpoint.
-- [ ] Add Google OAuth callback endpoint.
-- [ ] Validate OAuth `state`.
-- [ ] Validate Google identity token.
-- [ ] Create or update local user.
-- [ ] Add backend session cookie.
-- [ ] Add `/api/v1/users/me`.
-- [ ] Add logout.
-- [ ] Add per-device edge token hashing.
-- [ ] Add edge-token authentication dependency.
+- [x] Add Google OAuth start endpoint.
+- [x] Add Google OAuth callback endpoint.
+- [x] Validate OAuth `state`.
+- [x] Validate Google identity token.
+- [x] Create or update local user.
+- [x] Add backend session cookie.
+- [x] Add `/api/v1/users/me`.
+- [x] Add logout.
+- [x] Add per-device edge token hashing.
+- [x] Add edge-token authentication dependency.
 
 ## Milestone 4: Device and Agent Loop
 

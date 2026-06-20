@@ -1,6 +1,23 @@
 # SentinelEdge Backend API Endpoints
 
-This document describes the planned SentinelEdge backend API surface.
+This document describes the SentinelEdge backend API surface.
+
+## Implementation Status
+
+Currently implemented endpoints:
+
+| Method | Endpoint | Status |
+|---|---|---|
+| `GET` | `/healthz` | Implemented |
+| `GET` | `/readyz` | Implemented |
+| `GET` | `/api/v1/version` | Implemented |
+| `GET` | `/api/v1/auth/google/start` | Implemented |
+| `GET` | `/api/v1/auth/google/callback` | Implemented |
+| `POST` | `/api/v1/auth/firebase/login` | Implemented |
+| `POST` | `/api/v1/auth/logout` | Implemented |
+| `GET` | `/api/v1/users/me` | Implemented |
+
+Device, agent, event, clip, recording, alert, edge, SSE, WebSocket, and tool endpoints are planned for later milestones.
 
 Base API prefix:
 
@@ -46,9 +63,9 @@ Error response:
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| `GET` | `/healthz` | Public | Basic process health check. |
-| `GET` | `/readyz` | Public | Readiness check. Validates database availability. |
-| `GET` | `/api/v1/version` | Public | Returns backend version/build metadata. |
+| `GET` | `/healthz` | Public | Implemented. Basic process health check. |
+| `GET` | `/readyz` | Public | Implemented. Validates database availability. |
+| `GET` | `/api/v1/version` | Public | Implemented. Returns backend version/build metadata. |
 
 Example `GET /readyz` response:
 
@@ -66,10 +83,19 @@ Example `GET /readyz` response:
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| `GET` | `/api/v1/auth/google/start` | Public | Starts Google OAuth login. Redirects to Google. |
-| `GET` | `/api/v1/auth/google/callback` | Public | Handles Google OAuth callback and creates backend session. |
-| `POST` | `/api/v1/auth/logout` | User session | Ends current user session. |
-| `GET` | `/api/v1/users/me` | User session | Returns current user profile. |
+| `GET` | `/api/v1/auth/google/start` | Public | Implemented. Starts Google OAuth login. Redirects to Google. |
+| `GET` | `/api/v1/auth/google/callback` | Public | Implemented. Handles Google OAuth callback and creates backend session. |
+| `POST` | `/api/v1/auth/firebase/login` | Firebase ID token | Implemented. Verifies Firebase ID token, upserts local user, and creates backend session. |
+| `POST` | `/api/v1/auth/logout` | User session | Implemented. Ends current user session. |
+| `GET` | `/api/v1/users/me` | User session | Implemented. Returns current user profile. |
+
+Example `POST /api/v1/auth/firebase/login` request:
+
+```http
+Authorization: Bearer <firebase_id_token>
+```
+
+The frontend obtains this ID token from Firebase Auth after Google sign-in. The backend maps Firebase `uid` to the local `users.google_sub` field and still uses local `users.user_id` for ownership.
 
 Example `GET /api/v1/users/me` response:
 

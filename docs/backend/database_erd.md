@@ -1,5 +1,7 @@
 # SentinelEdge Database ERD
 
+This schema is implemented by SQLAlchemy models in `backend/app/models/` and the initial Alembic revision `20260620_0001_create_core_tables.py`.
+
 ```mermaid
 erDiagram
     USERS ||--o{ DEVICES : owns
