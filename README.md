@@ -52,6 +52,13 @@ backend/
   docker-compose.yml
   requirements.txt
 
+frontend/
+  sentineledge_app/
+    lib/
+    config/
+      firebase.example.json
+    pubspec.yaml
+
 data/
   sentineledge_demo.db
 
@@ -66,6 +73,8 @@ docs/
     media_storage.md
     mvp_checklist.md
     sentineledge_backend_implementation_plan.md
+  frontend/
+    frontend_setup.md
 
 scripts/
   demo_sqlite_schema.sql
@@ -92,6 +101,16 @@ Default local database URL:
 ```env
 DATABASE_URL=sqlite+aiosqlite:///./data/sentineledge_demo.db
 ```
+
+Set up the Flutter frontend:
+
+```powershell
+cd frontend\sentineledge_app
+Copy-Item config\firebase.example.json config\firebase.json
+flutter run -d chrome --dart-define-from-file=config/firebase.json
+```
+
+See [Frontend setup](docs/frontend/frontend_setup.md) for Firebase config details, backend URL overrides, and validation steps.
 
 ## Demo SQLite Database
 
@@ -212,6 +231,11 @@ Start with:
 - [Edge integration](docs/backend/edge_integration.md)
 - [Media storage](docs/backend/media_storage.md)
 - [MVP checklist](docs/backend/mvp_checklist.md)
+
+## Frontend Docs
+
+- [Frontend setup](docs/frontend/frontend_setup.md)
+- [Flutter app README](frontend/sentineledge_app/README.md)
 
 ## Milestone 2 Validation
 
