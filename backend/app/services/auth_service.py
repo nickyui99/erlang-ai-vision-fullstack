@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
-from urllib import parse, request
 from uuid import uuid4
 
 from fastapi import HTTPException, status
@@ -13,117 +11,7 @@ from app.core.config import settings
 from app.models.user import User
 
 
-GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
-GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
 _firebase_initialized = False
-
-
-def build_google_authorization_url(state: str) -> str:
-    query = parse.urlencode(
-        {
-            "client_id": settings.google_oauth_client_id,
-            "redirect_uri": settings.google_oauth_redirect_uri,
-            "response_type": "code",
-            "scope": "openid email profile",
-            "state": state,
-            "access_type": "offline",
-            "prompt": "select_account",
-        }
-    )
-    return f"{GOOGLE_AUTH_URL}?{query}"
-
-
-def _post_form_json(url: str, data: dict[str, str]) -> dict:
-    encoded_data = parse.urlencode(data).encode("utf-8")
-    req = request.Request(
-        url,
-        data=encoded_data,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        method="POST",
-    )
-    with request.urlopen(req, timeout=10) as response:
-        return json.loads(response.read().decode("utf-8"))
-
-
-def _get_json(url: str, params: dict[str, str]) -> dict:
-    full_url = f"{url}?{parse.urlencode(params)}"
-    with request.urlopen(full_url, timeout=10) as response:
-        return json.loads(response.read().decode("utf-8"))
-
-
-async def exchange_google_code_for_profile(code: str) -> dict:
-    try:
-        token_response = _post_form_json(
-            GOOGLE_TOKEN_URL,
-            {
-                "code": code,
-                "client_id": settings.google_oauth_client_id,
-                "client_secret": settings.google_oauth_client_secret,
-                "redirect_uri": settings.google_oauth_redirect_uri,
-                "grant_type": "authorization_code",
-            },
-        )
-        id_token = token_response.get("id_token")
-        if not isinstance(id_token, str) or not id_token:
-            raise ValueError("Google token response did not include an ID token")
-
-        profile = _get_json(GOOGLE_TOKENINFO_URL, {"id_token": id_token})
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "google_oauth_failed", "message": "Google OAuth verification failed"},
-        ) from exc
-
-    audience = profile.get("aud")
-    if audience != settings.google_oauth_client_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "invalid_google_token", "message": "Google token audience mismatch"},
-        )
-
-    if profile.get("email_verified") not in ("true", True):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "email_not_verified", "message": "Google email must be verified"},
-        )
-
-    return profile
-
-
-async def upsert_google_user(session: AsyncSession, profile: dict) -> User:
-    google_sub = str(profile["sub"])
-    email = str(profile["email"])
-    now = datetime.now(timezone.utc)
-
-    result = await session.execute(select(User).where(User.google_sub == google_sub))
-    user = result.scalar_one_or_none()
-
-    if user is None:
-        user = User(
-            user_id=f"usr_{uuid4().hex}",
-            google_sub=google_sub,
-            email=email,
-            email_verified=True,
-            display_name=profile.get("name"),
-            avatar_url=profile.get("picture"),
-            role="user",
-            last_login_at=now,
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(user)
-    else:
-        user.email = email
-        user.email_verified = True
-        user.display_name = profile.get("name")
-        user.avatar_url = profile.get("picture")
-        user.last_login_at = now
-        user.updated_at = now
-
-    await session.commit()
-    await session.refresh(user)
-    return user
 
 
 def _initialize_firebase_admin() -> None:

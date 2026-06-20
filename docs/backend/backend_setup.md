@@ -60,10 +60,6 @@ API_PREFIX=/api/v1
 
 DATABASE_URL=sqlite+aiosqlite:///./data/sentineledge_demo.db
 
-GOOGLE_OAUTH_CLIENT_ID=change-me
-GOOGLE_OAUTH_CLIENT_SECRET=change-me
-GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8000/api/v1/auth/google/callback
-
 FIREBASE_PROJECT_ID=change-me
 GOOGLE_APPLICATION_CREDENTIALS=C:\path\to\firebase-service-account.json
 

@@ -12,7 +12,6 @@ from app.core.config import settings
 
 
 SESSION_PURPOSE = "session"
-OAUTH_STATE_PURPOSE = "oauth_state"
 EDGE_TOKEN_PREFIX = "pbkdf2_sha256"
 EDGE_TOKEN_ITERATIONS = 210_000
 
@@ -77,19 +76,6 @@ def verify_session_token(token: str) -> str | None:
 
     user_id = payload.get("user_id")
     return user_id if isinstance(user_id, str) and user_id else None
-
-
-def create_oauth_state_token(state: str) -> str:
-    return create_signed_token({"state": state}, OAUTH_STATE_PURPOSE, 10 * 60)
-
-
-def verify_oauth_state_token(token: str, expected_state: str) -> bool:
-    payload = verify_signed_token(token, OAUTH_STATE_PURPOSE)
-    return payload is not None and hmac.compare_digest(str(payload.get("state", "")), expected_state)
-
-
-def generate_oauth_state() -> str:
-    return secrets.token_urlsafe(32)
 
 
 def generate_edge_token() -> str:
