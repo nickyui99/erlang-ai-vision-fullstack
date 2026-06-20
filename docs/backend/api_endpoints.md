@@ -11,8 +11,6 @@ Currently implemented endpoints:
 | `GET` | `/healthz` | Implemented |
 | `GET` | `/readyz` | Implemented |
 | `GET` | `/api/v1/version` | Implemented |
-| `GET` | `/api/v1/auth/google/start` | Implemented |
-| `GET` | `/api/v1/auth/google/callback` | Implemented |
 | `POST` | `/api/v1/auth/firebase/login` | Implemented |
 | `POST` | `/api/v1/auth/logout` | Implemented |
 | `GET` | `/api/v1/users/me` | Implemented |
@@ -29,12 +27,12 @@ Base API prefix:
 
 | Actor | Auth method | Notes |
 |---|---|---|
-| Web app user | Google OAuth session cookie or app token | Used for user-facing APIs. |
+| Web app user | Firebase Google sign-in plus backend session cookie | Used for user-facing APIs. |
 | Mobile WebView user | Same as web app | Prefer cookie session for WebView and SSE compatibility. |
 | Laptop edge service | Device-bound edge token | Used for edge ingestion, heartbeat, config pull, and WebSocket. |
-| Admin user | Google OAuth user with `admin` role | Used for privileged/debug actions. |
+| Admin user | Firebase-authenticated user with `admin` role | Used for privileged/debug actions. |
 
-User-facing routes must derive `user_id` from the authenticated Google-backed session. Edge routes must derive `device_id` and `user_id` from the edge token. Clients should not send trusted `user_id` values.
+User-facing routes must derive `user_id` from the authenticated backend session. Edge routes must derive `device_id` and `user_id` from the edge token. Clients should not send trusted `user_id` values.
 
 ## Common Response Shapes
 
@@ -83,8 +81,6 @@ Example `GET /readyz` response:
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| `GET` | `/api/v1/auth/google/start` | Public | Implemented. Starts Google OAuth login. Redirects to Google. |
-| `GET` | `/api/v1/auth/google/callback` | Public | Implemented. Handles Google OAuth callback and creates backend session. |
 | `POST` | `/api/v1/auth/firebase/login` | Firebase ID token | Implemented. Verifies Firebase ID token, upserts local user, and creates backend session. |
 | `POST` | `/api/v1/auth/logout` | User session | Implemented. Ends current user session. |
 | `GET` | `/api/v1/users/me` | User session | Implemented. Returns current user profile. |

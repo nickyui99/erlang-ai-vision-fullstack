@@ -24,12 +24,6 @@ class Settings(BaseSettings):
         validation_alias="DATABASE_URL",
     )
 
-    google_oauth_client_id: str = Field(default="", validation_alias="GOOGLE_OAUTH_CLIENT_ID")
-    google_oauth_client_secret: str = Field(default="", validation_alias="GOOGLE_OAUTH_CLIENT_SECRET")
-    google_oauth_redirect_uri: str = Field(
-        default="http://localhost:8000/api/v1/auth/google/callback",
-        validation_alias="GOOGLE_OAUTH_REDIRECT_URI",
-    )
     firebase_project_id: str = Field(default="", validation_alias="FIREBASE_PROJECT_ID")
     google_application_credentials: str = Field(default="", validation_alias="GOOGLE_APPLICATION_CREDENTIALS")
 
