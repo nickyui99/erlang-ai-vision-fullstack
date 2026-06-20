@@ -4,7 +4,7 @@ SentinelEdge is a surveillance backend and edge-integration project. The current
 
 ## Current Status
 
-Milestones 1 and 2 are complete:
+Milestones 1, 2, and 3 are complete:
 
 - FastAPI app scaffold
 - environment-based configuration
@@ -19,14 +19,17 @@ Milestones 1 and 2 are complete:
 - SQLAlchemy ORM models for all core MVP tables
 - initial Alembic migration for the core schema
 - ownership indexes and idempotency constraints
+- Firebase Google sign-in through the Flutter frontend
+- Firebase ID token verification in the backend
+- backend session cookie authentication
+- current-user and logout endpoints
+- edge-token hashing and authentication dependency
 
 Implemented HTTP endpoints:
 
 - `GET /healthz`
 - `GET /readyz`
 - `GET /api/v1/version`
-- `GET /api/v1/auth/google/start`
-- `GET /api/v1/auth/google/callback`
 - `POST /api/v1/auth/firebase/login`
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/users/me`
@@ -55,6 +58,7 @@ data/
 docs/
   backend/
     api_endpoints.md
+    architecture.md
     auth_flow.md
     backend_setup.md
     database_erd.md
@@ -136,16 +140,12 @@ GET http://localhost:8000/api/v1/version
 Auth endpoints:
 
 ```text
-GET  http://localhost:8000/api/v1/auth/google/start
-GET  http://localhost:8000/api/v1/auth/google/callback
 POST http://localhost:8000/api/v1/auth/firebase/login
 POST http://localhost:8000/api/v1/auth/logout
 GET  http://localhost:8000/api/v1/users/me
 ```
 
-Google OAuth requires real `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and `GOOGLE_OAUTH_REDIRECT_URI` values in `.env`. With placeholder credentials, `/api/v1/auth/google/start` returns `503 oauth_not_configured`.
-
-Firebase Auth can also be used for Google login. The frontend signs in with Firebase, gets a Firebase ID token, and sends it to the backend:
+Firebase Auth is used for Google login. The frontend signs in with Firebase, gets a Firebase ID token, and sends it to the backend:
 
 ```http
 POST /api/v1/auth/firebase/login
@@ -205,6 +205,7 @@ alembic -c backend\alembic.ini revision --autogenerate -m "message"
 Start with:
 
 - [Backend setup](docs/backend/backend_setup.md)
+- [Architecture](docs/backend/architecture.md)
 - [API endpoints](docs/backend/api_endpoints.md)
 - [Database ERD](docs/backend/database_erd.md)
 - [Auth flow](docs/backend/auth_flow.md)
@@ -245,14 +246,6 @@ Invoke-RestMethod http://localhost:8000/api/v1/users/me
 
 Expected result without a session is `401 not_authenticated`.
 
-OAuth configuration check:
-
-```powershell
-Invoke-RestMethod http://localhost:8000/api/v1/auth/google/start
-```
-
-With placeholder Google credentials, expected result is `503 oauth_not_configured`. With real Google credentials, this endpoint redirects to Google.
-
 Firebase login configuration check:
 
 ```powershell
@@ -260,6 +253,8 @@ Invoke-RestMethod -Method Post http://localhost:8000/api/v1/auth/firebase/login
 ```
 
 Expected result without a bearer token is `401 not_authenticated`. With a fake bearer token and missing Firebase settings, expected result is `503 firebase_not_configured`.
+
+Milestone 3 is complete when Firebase Google login succeeds from the Flutter app and `/api/v1/users/me` returns the current user using the backend session cookie.
 
 ## Next Milestone
 

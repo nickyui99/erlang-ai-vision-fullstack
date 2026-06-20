@@ -31,10 +31,8 @@ This checklist turns the backend plan into a practical implementation sequence.
 
 ## Milestone 3: Auth
 
-- [x] Add Google OAuth start endpoint.
-- [x] Add Google OAuth callback endpoint.
-- [x] Validate OAuth `state`.
-- [x] Validate Google identity token.
+- [x] Add Firebase login endpoint.
+- [x] Validate Firebase ID token.
 - [x] Create or update local user.
 - [x] Add backend session cookie.
 - [x] Add `/api/v1/users/me`.
@@ -117,7 +115,7 @@ This checklist turns the backend plan into a practical implementation sequence.
 
 ## MVP Done Definition
 
-- [ ] User can log in with Google OAuth.
+- [ ] User can log in with Firebase Google sign-in.
 - [ ] User can register a device.
 - [ ] Edge can authenticate with device token.
 - [ ] User can create and arm an agent.

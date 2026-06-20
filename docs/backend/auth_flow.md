@@ -4,34 +4,34 @@ SentinelEdge uses two separate authentication paths:
 
 | Actor | Auth method |
 |---|---|
-| Web app and mobile WebView users | Google OAuth with backend-managed session. |
+| Web app and mobile users | Firebase Google sign-in with backend-managed session. |
 | Laptop edge service or camera gateway | Device-bound edge token. |
 
 ## User Login Flow
 
 1. User opens the web app.
-2. Web app sends the user to `GET /api/v1/auth/google/start`.
-3. Backend generates OAuth `state` and redirects to Google.
-4. Google redirects back to `GET /api/v1/auth/google/callback`.
-5. Backend validates the OAuth callback.
+2. Web app signs the user in with Firebase Auth Google sign-in.
+3. Firebase returns a Firebase ID token to the frontend.
+4. Web app sends the ID token to `POST /api/v1/auth/firebase/login`.
+5. Backend validates the Firebase ID token with Firebase Admin SDK.
 6. Backend creates or updates the local `users` row.
 7. Backend creates a secure session cookie.
 8. Web app calls `GET /api/v1/users/me` to load the current user.
 
 ## Google User Mapping
 
-The local `users` table stores the app profile. Google remains the identity provider.
+The local `users` table stores the app profile. Firebase Auth is the identity broker, with Google as the enabled provider.
 
 | Field | Source |
 |---|---|
-| `google_sub` | Stable Google subject claim. |
-| `email` | Google profile email. |
-| `email_verified` | Google email verification claim. |
-| `display_name` | Google profile name. |
-| `avatar_url` | Google profile picture URL. |
+| `google_sub` | Stable Firebase `uid`. |
+| `email` | Firebase user email. |
+| `email_verified` | Firebase email verification claim. |
+| `display_name` | Firebase token `name` claim. |
+| `avatar_url` | Firebase token `picture` claim. |
 | `role` | SentinelEdge app role. |
 
-Use `google_sub` as the stable identity key. Do not use email as the primary identity key because email can change.
+Use `google_sub` as the stable identity key for now, even though it stores the Firebase `uid`. Do not use email as the primary identity key because email can change.
 
 ## Session Cookie Requirements
 
@@ -46,20 +46,18 @@ Recommended cookie settings:
 
 If cookies are used for authenticated mutation routes, add CSRF protection before production.
 
-## OAuth Validation Rules
+## Firebase Validation Rules
 
-The callback must validate:
+The backend login endpoint must validate:
 
-- OAuth `state`
-- Google token signature and issuer
-- Google OAuth client ID audience
+- Firebase token signature and issuer
+- Firebase project audience
 - email verification
-- redirect URI consistency
 - optional allowed domain policy, if the app is private
 
 ## Edge Token Flow
 
-1. User logs in with Google OAuth.
+1. User logs in with Firebase Google sign-in.
 2. User registers a device through `POST /api/v1/devices`.
 3. Backend creates `devices.device_id`.
 4. Backend creates a raw edge token and stores only `edge_token_hash`.
