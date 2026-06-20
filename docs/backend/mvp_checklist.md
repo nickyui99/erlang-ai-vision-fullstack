@@ -17,17 +17,17 @@ This checklist turns the backend plan into a practical implementation sequence.
 
 ## Milestone 2: Database
 
-- [ ] Implement `users`.
-- [ ] Implement `devices`.
-- [ ] Implement `agents`.
-- [ ] Implement `events`.
-- [ ] Implement `clips`.
-- [ ] Implement `recordings`.
-- [ ] Implement `alerts`.
-- [ ] Implement `tool_audit`.
-- [ ] Add ownership indexes.
-- [ ] Add event idempotency unique constraint.
-- [ ] Add clip idempotency unique constraint.
+- [x] Implement `users`.
+- [x] Implement `devices`.
+- [x] Implement `agents`.
+- [x] Implement `events`.
+- [x] Implement `clips`.
+- [x] Implement `recordings`.
+- [x] Implement `alerts`.
+- [x] Implement `tool_audit`.
+- [x] Add ownership indexes.
+- [x] Add event idempotency unique constraint.
+- [x] Add clip idempotency unique constraint.
 
 ## Milestone 3: Auth
 
