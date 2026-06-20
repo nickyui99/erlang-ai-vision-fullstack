@@ -33,8 +33,20 @@ Implemented HTTP endpoints:
 - `POST /api/v1/auth/firebase/login`
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/users/me`
+- `POST /api/v1/devices`
+- `GET /api/v1/devices`
+- `GET /api/v1/devices/{device_id}`
+- `PUT /api/v1/devices/{device_id}`
+- `POST /api/v1/agents`
+- `GET /api/v1/agents`
+- `GET /api/v1/agents/{agent_id}`
+- `PUT /api/v1/agents/{agent_id}`
+- `POST /api/v1/agents/{agent_id}/arm`
+- `POST /api/v1/agents/{agent_id}/disarm`
+- `POST /api/v1/edge/heartbeat`
+- `GET /api/v1/edge/agents/active`
 
-Device, agent, event, clip, recording, alert, edge, SSE, and WebSocket endpoints are documented as planned API surface and will be implemented in later milestones.
+Event, clip, recording, alert, SSE, WebSocket, pan command, Qwen, and MCP endpoints are documented as planned API surface and will be implemented in later milestones.
 
 ## Repository Layout
 
@@ -162,6 +174,23 @@ Auth endpoints:
 POST http://localhost:8000/api/v1/auth/firebase/login
 POST http://localhost:8000/api/v1/auth/logout
 GET  http://localhost:8000/api/v1/users/me
+```
+
+<<Device, agent, and edge loop endpoints:
+
+```text
+POST http://localhost:8000/api/v1/devices
+GET  http://localhost:8000/api/v1/devices
+GET  http://localhost:8000/api/v1/devices/{device_id}
+PUT  http://localhost:8000/api/v1/devices/{device_id}
+POST http://localhost:8000/api/v1/agents
+GET  http://localhost:8000/api/v1/agents
+GET  http://localhost:8000/api/v1/agents/{agent_id}
+PUT  http://localhost:8000/api/v1/agents/{agent_id}
+POST http://localhost:8000/api/v1/agents/{agent_id}/arm
+POST http://localhost:8000/api/v1/agents/{agent_id}/disarm
+POST http://localhost:8000/api/v1/edge/heartbeat
+GET  http://localhost:8000/api/v1/edge/agents/active
 ```
 
 Firebase Auth is used for Google login. The frontend signs in with Firebase, gets a Firebase ID token, and sends it to the backend:
@@ -300,20 +329,47 @@ Invoke-RestMethod -Method Post http://localhost:8000/api/v1/auth/firebase/login
 
 Expected result without a bearer token is `401 not_authenticated`. With a fake bearer token and missing Firebase settings, expected result is `503 firebase_not_configured`.
 
-Milestone 3 is complete when Firebase Google login succeeds from the Flutter app and `/api/v1/users/me` returns the current user using the backend session cookie.
+<<Milestone 3 is complete when Firebase Google login succeeds from the Flutter app and `/api/v1/users/me` returns the current user using the backend session cookie.
+
+## Milestone 4 Validation
+
+Milestone 4 covers the first device and agent loop after login: register a device, receive the raw edge token once, create and arm an agent, send an edge heartbeat, and pull active edge configs.
+
+Register a device with an authenticated browser session cookie:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8000/api/v1/devices -ContentType 'application/json' -Body '{"name":"Front Door Camera","location":"Front Door"}' -WebSession $session
+```
+
+Save the returned `edge_token`, then send heartbeat as the edge service:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8000/api/v1/edge/heartbeat -Headers @{ Authorization = "Bearer <edge_token>" } -ContentType 'application/json' -Body '{"health_status":"online","rssi":-58.2,"fps":15.0,"current_pan":90}'
+```
+
+Create and arm an agent for the device:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8000/api/v1/agents -ContentType 'application/json' -Body '{"device_id":"<device_id>","name":"Night Front Door Watch","location":"Front Door","nl_rule":"Alert me if a person is lingering near the front door after 10 PM."}' -WebSession $session
+Invoke-RestMethod -Method Post http://localhost:8000/api/v1/agents/<agent_id>/arm -WebSession $session
+```
+
+Pull active configs as the edge service:
+
+```powershell
+Invoke-RestMethod http://localhost:8000/api/v1/edge/agents/active -Headers @{ Authorization = "Bearer <edge_token>" }
+```
 
 ## Next Milestone
 
-Milestone 4 is the device and agent loop:
+Milestone 5 is the event and media loop:
 
-- register device
-- return raw edge token once
-- list and update user devices
-- accept edge heartbeat
-- create and manage agents
-- compile edge config
-- let edge pull active configs
-
+- accept edge event submission
+- enforce event idempotency
+- list and inspect user events
+- register clip metadata
+- support upload and playback URL flows
+- register recording metadata
 
 
 

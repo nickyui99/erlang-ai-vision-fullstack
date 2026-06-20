@@ -1,5 +1,5 @@
 param(
-    [string]$BackendHost = "127.0.0.1",
+    [string]$BackendHost = "localhost",
     [int]$BackendPort = 8000,
     [string]$FlutterDevice = "web-server",
     [string]$FlutterHost = "localhost",
@@ -84,3 +84,4 @@ else {
     Write-Host "Frontend: Flutter $FlutterDevice window"
 }
 Write-Host "Stop the services by closing the opened PowerShell windows or pressing Ctrl+C in each window."
+

@@ -42,15 +42,15 @@ This checklist turns the backend plan into a practical implementation sequence.
 
 ## Milestone 4: Device and Agent Loop
 
-- [ ] Register device.
-- [ ] Return raw edge token once.
-- [ ] List user devices.
-- [ ] Update device metadata.
-- [ ] Accept edge heartbeat.
-- [ ] Create agent.
-- [ ] Compile edge config.
-- [ ] Arm/disarm agent.
-- [ ] Let edge pull active configs.
+- [x] Register device.
+- [x] Return raw edge token once.
+- [x] List user devices.
+- [x] Update device metadata.
+- [x] Accept edge heartbeat.
+- [x] Create agent.
+- [x] Compile edge config.
+- [x] Arm/disarm agent.
+- [x] Let edge pull active configs.
 
 ## Milestone 5: Event and Media Loop
 
@@ -125,3 +125,4 @@ This checklist turns the backend plan into a practical implementation sequence.
 - [ ] User can list events.
 - [ ] User can request signed clip playback URL.
 - [ ] Backend passes `/healthz` and `/readyz`.
+

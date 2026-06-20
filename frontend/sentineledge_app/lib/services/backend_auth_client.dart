@@ -3,8 +3,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'backend_http_client.dart';
+
 class BackendAuthClient {
-  BackendAuthClient({http.Client? httpClient}) : _httpClient = httpClient ?? http.Client();
+  BackendAuthClient({http.Client? httpClient})
+    : _httpClient = httpClient ?? createBackendHttpClient();
 
   final http.Client _httpClient;
 
@@ -29,18 +32,196 @@ class BackendAuthClient {
       _firebaseLoginUri,
       headers: {'Authorization': 'Bearer $idToken'},
     );
-
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final body = _decodeObject(response);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      final error = body['error'] as Map<String, dynamic>?;
-      throw BackendAuthException(
-        error?['code']?.toString() ?? 'backend_error',
-        error?['message']?.toString() ?? 'Backend login failed',
+      throw BackendAuthException.fromBody(
+        body,
+        fallback: 'Backend login failed',
       );
     }
-
     return BackendUser.fromJson(body['data'] as Map<String, dynamic>);
   }
+
+  Future<void> logout() async {
+    await _httpClient.post(Uri.parse('$baseUrl/api/v1/auth/logout'));
+  }
+}
+
+class SentinelEdgeApiClient {
+  SentinelEdgeApiClient({http.Client? httpClient})
+    : _httpClient = httpClient ?? createBackendHttpClient();
+
+  final http.Client _httpClient;
+
+  Future<BackendUser> currentUser() async {
+    final body = await _getObject('/api/v1/users/me');
+    return BackendUser.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  Future<DeviceRegistration> registerDevice({
+    required String name,
+    String? location,
+  }) async {
+    final body = await _postObject('/api/v1/devices', {
+      'name': name,
+      'location': _emptyToNull(location),
+    });
+    return DeviceRegistration.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  Future<List<EdgeDevice>> listDevices() async {
+    final body = await _getObject('/api/v1/devices');
+    final items = body['data'] as List<dynamic>;
+    return items
+        .map((item) => EdgeDevice.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<EdgeDevice> updateDevice({
+    required String deviceId,
+    required String name,
+    String? location,
+  }) async {
+    final body = await _putObject('/api/v1/devices/$deviceId', {
+      'name': name,
+      'location': _emptyToNull(location),
+    });
+    return EdgeDevice.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  Future<EdgeDevice> sendHeartbeat({
+    required String edgeToken,
+    required String healthStatus,
+    required double rssi,
+    required double fps,
+    required int currentPan,
+  }) async {
+    final body = await _postObject(
+      '/api/v1/edge/heartbeat',
+      {
+        'health_status': healthStatus,
+        'rssi': rssi,
+        'fps': fps,
+        'current_pan': currentPan,
+      },
+      headers: {'Authorization': 'Bearer $edgeToken'},
+    );
+    return EdgeDevice.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  Future<SurveillanceAgent> createAgent({
+    required String deviceId,
+    required String name,
+    String? location,
+    required String rule,
+  }) async {
+    final body = await _postObject('/api/v1/agents', {
+      'device_id': deviceId,
+      'name': name,
+      'location': _emptyToNull(location),
+      'nl_rule': rule,
+    });
+    return SurveillanceAgent.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  Future<List<SurveillanceAgent>> listAgents() async {
+    final body = await _getObject('/api/v1/agents');
+    final items = body['data'] as List<dynamic>;
+    return items
+        .map((item) => SurveillanceAgent.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<SurveillanceAgent> armAgent(String agentId) async {
+    final body = await _postObject('/api/v1/agents/$agentId/arm', null);
+    return SurveillanceAgent.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  Future<SurveillanceAgent> disarmAgent(String agentId) async {
+    final body = await _postObject('/api/v1/agents/$agentId/disarm', null);
+    return SurveillanceAgent.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  Future<List<EdgeAgentConfig>> activeConfigs(String edgeToken) async {
+    final body = await _getObject(
+      '/api/v1/edge/agents/active',
+      headers: {'Authorization': 'Bearer $edgeToken'},
+    );
+    final items = body['data'] as List<dynamic>;
+    return items
+        .map((item) => EdgeAgentConfig.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> _getObject(
+    String path, {
+    Map<String, String>? headers,
+  }) async {
+    final response = await _httpClient.get(
+      Uri.parse('${BackendAuthClient.baseUrl}$path'),
+      headers: headers,
+    );
+    return _handleObject(response);
+  }
+
+  Future<Map<String, dynamic>> _postObject(
+    String path,
+    Map<String, dynamic>? payload, {
+    Map<String, String>? headers,
+  }) async {
+    final requestHeaders = <String, String>{
+      if (payload != null) 'Content-Type': 'application/json',
+      ...?headers,
+    };
+    final response = await _httpClient.post(
+      Uri.parse('${BackendAuthClient.baseUrl}$path'),
+      headers: requestHeaders,
+      body: payload == null ? null : jsonEncode(payload),
+    );
+    return _handleObject(response);
+  }
+
+  Future<Map<String, dynamic>> _putObject(
+    String path,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _httpClient.put(
+      Uri.parse('${BackendAuthClient.baseUrl}$path'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(payload),
+    );
+    return _handleObject(response);
+  }
+
+  Map<String, dynamic> _handleObject(http.Response response) {
+    final body = _decodeObject(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw BackendAuthException.fromBody(
+        body,
+        fallback: 'Backend request failed',
+      );
+    }
+    return body;
+  }
+}
+
+Map<String, dynamic> _decodeObject(http.Response response) {
+  if (response.body.isEmpty) {
+    return <String, dynamic>{};
+  }
+  final decoded = jsonDecode(response.body);
+  if (decoded is Map<String, dynamic>) {
+    return decoded;
+  }
+  return <String, dynamic>{'data': decoded};
+}
+
+String? _emptyToNull(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  return trimmed;
 }
 
 class BackendAuthException implements Exception {
@@ -48,6 +229,17 @@ class BackendAuthException implements Exception {
 
   final String code;
   final String message;
+
+  factory BackendAuthException.fromBody(
+    Map<String, dynamic> body, {
+    required String fallback,
+  }) {
+    final error = body['error'] as Map<String, dynamic>?;
+    return BackendAuthException(
+      error?['code']?.toString() ?? 'backend_error',
+      error?['message']?.toString() ?? fallback,
+    );
+  }
 
   @override
   String toString() => '$code: $message';
@@ -80,4 +272,124 @@ class BackendUser {
       avatarUrl: json['avatar_url']?.toString(),
     );
   }
+}
+
+class EdgeDevice {
+  const EdgeDevice({
+    required this.deviceId,
+    required this.name,
+    required this.healthStatus,
+    required this.currentPan,
+    this.location,
+    this.rssi,
+    this.fps,
+    this.lastSeen,
+  });
+
+  final String deviceId;
+  final String name;
+  final String? location;
+  final String healthStatus;
+  final int currentPan;
+  final double? rssi;
+  final double? fps;
+  final DateTime? lastSeen;
+
+  factory EdgeDevice.fromJson(Map<String, dynamic> json) {
+    return EdgeDevice(
+      deviceId: json['device_id'].toString(),
+      name: json['name'].toString(),
+      location: json['location']?.toString(),
+      healthStatus: json['health_status'].toString(),
+      currentPan: int.tryParse(json['current_pan'].toString()) ?? 90,
+      rssi: _tryDouble(json['rssi']),
+      fps: _tryDouble(json['fps']),
+      lastSeen: json['last_seen'] == null
+          ? null
+          : DateTime.tryParse(json['last_seen'].toString()),
+    );
+  }
+}
+
+class DeviceRegistration {
+  const DeviceRegistration({required this.device, required this.edgeToken});
+
+  final EdgeDevice device;
+  final String edgeToken;
+
+  factory DeviceRegistration.fromJson(Map<String, dynamic> json) {
+    return DeviceRegistration(
+      device: EdgeDevice.fromJson(json['device'] as Map<String, dynamic>),
+      edgeToken: json['edge_token'].toString(),
+    );
+  }
+}
+
+class SurveillanceAgent {
+  const SurveillanceAgent({
+    required this.agentId,
+    required this.deviceId,
+    required this.name,
+    required this.rule,
+    required this.state,
+    required this.enabled,
+    required this.compiledEdgeConfig,
+    this.location,
+  });
+
+  final String agentId;
+  final String deviceId;
+  final String name;
+  final String? location;
+  final String rule;
+  final String state;
+  final bool enabled;
+  final Map<String, dynamic> compiledEdgeConfig;
+
+  factory SurveillanceAgent.fromJson(Map<String, dynamic> json) {
+    return SurveillanceAgent(
+      agentId: json['agent_id'].toString(),
+      deviceId: json['device_id'].toString(),
+      name: json['name'].toString(),
+      location: json['location']?.toString(),
+      rule: json['nl_rule'].toString(),
+      state: json['state'].toString(),
+      enabled: json['enabled'] == true,
+      compiledEdgeConfig: Map<String, dynamic>.from(
+        json['compiled_edge_config'] as Map? ?? const {},
+      ),
+    );
+  }
+}
+
+class EdgeAgentConfig {
+  const EdgeAgentConfig({
+    required this.agentId,
+    required this.deviceId,
+    required this.state,
+    required this.config,
+  });
+
+  final String agentId;
+  final String deviceId;
+  final String state;
+  final Map<String, dynamic> config;
+
+  factory EdgeAgentConfig.fromJson(Map<String, dynamic> json) {
+    return EdgeAgentConfig(
+      agentId: json['agent_id'].toString(),
+      deviceId: json['device_id'].toString(),
+      state: json['state'].toString(),
+      config: Map<String, dynamic>.from(
+        json['compiled_edge_config'] as Map? ?? const {},
+      ),
+    );
+  }
+}
+
+double? _tryDouble(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  return double.tryParse(value.toString());
 }

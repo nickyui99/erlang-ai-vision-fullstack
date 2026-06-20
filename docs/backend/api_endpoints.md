@@ -14,8 +14,20 @@ Currently implemented endpoints:
 | `POST` | `/api/v1/auth/firebase/login` | Implemented |
 | `POST` | `/api/v1/auth/logout` | Implemented |
 | `GET` | `/api/v1/users/me` | Implemented |
+| `POST` | `/api/v1/devices` | Implemented |
+| `GET` | `/api/v1/devices` | Implemented |
+| `GET` | `/api/v1/devices/{device_id}` | Implemented |
+| `PUT` | `/api/v1/devices/{device_id}` | Implemented |
+| `POST` | `/api/v1/agents` | Implemented |
+| `GET` | `/api/v1/agents` | Implemented |
+| `GET` | `/api/v1/agents/{agent_id}` | Implemented |
+| `PUT` | `/api/v1/agents/{agent_id}` | Implemented |
+| `POST` | `/api/v1/agents/{agent_id}/arm` | Implemented |
+| `POST` | `/api/v1/agents/{agent_id}/disarm` | Implemented |
+| `POST` | `/api/v1/edge/heartbeat` | Implemented |
+| `GET` | `/api/v1/edge/agents/active` | Implemented |
 
-Device, agent, event, clip, recording, alert, edge, SSE, WebSocket, and tool endpoints are planned for later milestones.
+Event, clip, recording, alert, SSE, WebSocket, pan command, Qwen, MCP, and tool endpoints are planned for later milestones.
 
 Base API prefix:
 
@@ -117,8 +129,8 @@ Example `GET /api/v1/users/me` response:
 | `POST` | `/api/v1/devices` | User session | Register a new device and issue an edge token once. |
 | `GET` | `/api/v1/devices/{device_id}` | User session | Get device details. |
 | `PUT` | `/api/v1/devices/{device_id}` | User session | Update device metadata. |
-| `POST` | `/api/v1/devices/{device_id}/heartbeat` | Edge token or user session | Update device health status. |
-| `POST` | `/api/v1/devices/{device_id}/pan` | User session | Request camera pan through edge relay. |
+| `POST` | `/api/v1/edge/heartbeat` | Edge token | Implemented. Update authenticated edge device health status. |
+| `POST` | `/api/v1/devices/{device_id}/pan` | User session | Planned. Request camera pan through edge relay. |
 
 Example `POST /api/v1/devices` request:
 
@@ -148,7 +160,7 @@ Example response:
 
 The backend stores only `edge_token_hash`, not the raw token.
 
-Example `POST /api/v1/devices/{device_id}/heartbeat` request:
+Example `POST /api/v1/edge/heartbeat` request:
 
 ```json
 {
@@ -167,10 +179,10 @@ Example `POST /api/v1/devices/{device_id}/heartbeat` request:
 | `POST` | `/api/v1/agents` | User session | Create an agent. |
 | `GET` | `/api/v1/agents/{agent_id}` | User session | Get agent details. |
 | `PUT` | `/api/v1/agents/{agent_id}` | User session | Update agent rule or metadata. |
-| `DELETE` | `/api/v1/agents/{agent_id}` | User session | Delete or disable an agent. |
+| `DELETE` | `/api/v1/agents/{agent_id}` | User session | Planned. Delete or disable an agent. |
 | `POST` | `/api/v1/agents/{agent_id}/arm` | User session | Arm an agent. |
 | `POST` | `/api/v1/agents/{agent_id}/disarm` | User session | Disarm an agent. |
-| `GET` | `/api/v1/agents/active` | Edge token | Edge pulls active compiled configs for its device. |
+| `GET` | `/api/v1/edge/agents/active` | Edge token | Implemented. Edge pulls active compiled configs for its device. |
 
 Example `POST /api/v1/agents` request:
 
@@ -195,10 +207,8 @@ Example response:
     "enabled": true,
     "compiled_edge_config": {
       "detectors": ["person"],
-      "schedule": {
-        "start": "22:00",
-        "end": "06:00"
-      }
+      "min_confidence": 0.75,
+      "rule_text": "Alert me if a person is lingering near the front door after 10 PM."
     }
   },
   "request_id": "req_123"
@@ -217,8 +227,8 @@ Authorization: Bearer <edge_token>
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| `POST` | `/api/v1/edge/heartbeat` | Edge token | Update current edge/device health. |
-| `GET` | `/api/v1/edge/agents/active` | Edge token | Pull active compiled agent configs for the authenticated device. |
+| `POST` | `/api/v1/edge/heartbeat` | Edge token | Implemented. Update current edge/device health. |
+| `GET` | `/api/v1/edge/agents/active` | Edge token | Implemented. Pull active compiled agent configs for the authenticated device. |
 | `POST` | `/api/v1/edge/events` | Edge token | Submit a candidate or verified event. |
 | `POST` | `/api/v1/edge/clips` | Edge token | Register clip metadata for an event. |
 | `POST` | `/api/v1/edge/clips/upload-url` | Edge token | Create clip metadata and return signed upload URL. |
@@ -502,3 +512,4 @@ All tool calls must be permission checked, rate limited, and written to `TOOL_AU
 - Edge event ingestion must verify that the agent belongs to the same device/user.
 - Signed URL generation must reject deleted media and media not owned by the caller.
 - Tool calls must verify target device ownership and write an audit record.
+
