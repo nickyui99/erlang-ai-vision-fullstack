@@ -28,7 +28,13 @@ The local `config/firebase.json` file is ignored by Git. Keep backend secrets an
 Run with the local config:
 
 ```powershell
-flutter run -d chrome --dart-define-from-file=config/firebase.json
+flutter run -d web-server --web-port 8080 --dart-define-from-file=config/firebase.json
+```
+
+From the repository root, you can also start the backend and Flutter frontend together. This uses Flutter `web-server` by default and opens `http://localhost:8080` in your normal browser profile:
+
+```powershell
+.\scripts\start-dev.ps1
 ```
 
 For local backend URLs:
@@ -42,7 +48,7 @@ iOS:     http://localhost:8000
 Override the backend URL at build/run time:
 
 ```powershell
-flutter run -d chrome --dart-define-from-file=config/firebase.json --dart-define=SENTINELEDGE_API_BASE_URL=http://localhost:8000
+flutter run -d web-server --web-port 8080 --dart-define-from-file=config/firebase.json --dart-define=SENTINELEDGE_API_BASE_URL=http://localhost:8000
 ```
 
 Run tests:
@@ -50,3 +56,7 @@ Run tests:
 ```powershell
 flutter test
 ```
+
+
+
+
