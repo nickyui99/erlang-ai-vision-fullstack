@@ -54,24 +54,24 @@ This checklist turns the backend plan into a practical implementation sequence.
 
 ## Milestone 5: Event and Media Loop
 
-- [ ] Accept edge event submission.
-- [ ] Enforce `(device_id, idempotency_key)` uniqueness.
-- [ ] List user events.
-- [ ] Get event detail.
-- [ ] Register clip metadata.
-- [ ] Generate clip upload URL.
-- [ ] Mark clip upload complete.
-- [ ] Generate signed playback URL.
-- [ ] Register recording metadata.
+- [x] Accept edge event submission.
+- [x] Enforce `(device_id, idempotency_key)` uniqueness.
+- [x] List user events.
+- [x] Get event detail.
+- [x] Register clip metadata.
+- [x] Generate clip upload URL.
+- [x] Mark clip upload complete.
+- [x] Generate signed playback URL.
+- [x] Register recording metadata.
 
 ## Milestone 6: Realtime
 
-- [ ] Add SSE endpoint.
-- [ ] Emit `event.created`.
-- [ ] Emit `clip.available`.
-- [ ] Emit `device.health_changed`.
-- [ ] Add SSE heartbeat.
-- [ ] Add reconnect behavior.
+- [x] Add SSE endpoint.
+- [x] Emit `event.created`.
+- [x] Emit `clip.available`.
+- [x] Emit `device.health_changed`.
+- [x] Add SSE heartbeat.
+- [x] Add reconnect behavior.
 
 ## Milestone 7: Edge Commands
 

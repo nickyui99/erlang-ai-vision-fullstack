@@ -26,8 +26,9 @@ Currently implemented endpoints:
 | `POST` | `/api/v1/agents/{agent_id}/disarm` | Implemented |
 | `POST` | `/api/v1/edge/heartbeat` | Implemented |
 | `GET` | `/api/v1/edge/agents/active` | Implemented |
+| `GET` | `/api/v1/stream/events` | Implemented |
 
-Event, clip, recording, alert, SSE, WebSocket, pan command, Qwen, MCP, and tool endpoints are planned for later milestones.
+Event, clip, recording, SSE, alert, WebSocket, pan command, Qwen, MCP, and tool endpoints are documented below. Alert, WebSocket, pan command, Qwen, MCP, and tool endpoints are planned for later milestones.
 
 Base API prefix:
 
@@ -416,7 +417,7 @@ Example alert response:
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| `GET` | `/api/v1/stream/events` | User session | Server-Sent Events stream for event, alert, device, agent, and clip updates. |
+| `GET` | `/api/v1/stream/events` | User session | Implemented. Server-Sent Events stream for event, device, agent, and clip updates. |
 
 Recommended event types:
 
