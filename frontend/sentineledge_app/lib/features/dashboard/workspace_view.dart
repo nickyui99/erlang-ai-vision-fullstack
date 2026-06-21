@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../services/backend_auth_client.dart';
 import '../../shared/console_widgets.dart';
@@ -46,9 +47,13 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   List<EdgeDevice> _devices = const [];
   List<SurveillanceAgent> _agents = const [];
   List<EdgeAgentConfig> _activeConfigs = const [];
+  List<SecurityEvent> _events = const [];
+  List<MediaClip> _eventClips = const [];
   String? _selectedDeviceId;
   String? _selectedAgentId;
+  String? _selectedEventId;
   String? _lastEdgeToken;
+  ClipPlaybackUrl? _lastPlaybackUrl;
   String? _error;
   int _selectedTab = 0;
   bool _isRefreshing = false;
@@ -57,6 +62,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   bool _isCreatingAgent = false;
   bool _isChangingAgentState = false;
   bool _isSyncingConfigs = false;
+  bool _isLoadingEvents = false;
+  bool _isLoadingClips = false;
+  bool _isRequestingPlayback = false;
 
   bool get _isBusy =>
       _isRefreshing ||
@@ -64,7 +72,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       _isSendingHeartbeat ||
       _isCreatingAgent ||
       _isChangingAgentState ||
-      _isSyncingConfigs;
+      _isSyncingConfigs ||
+      _isLoadingEvents ||
+      _isLoadingClips ||
+      _isRequestingPlayback;
 
   @override
   void initState() {
@@ -141,6 +152,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         setState(() {
           _devices = devices;
           _agents = agents;
+          _events = const [];
+          _eventClips = const [];
           _selectedDeviceId = _chooseExisting(
             _selectedDeviceId,
             devices.map((device) => device.deviceId),
@@ -151,6 +164,64 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           );
           _activeConfigs = const [];
         });
+      },
+    );
+  }
+
+  Future<void> _loadEvents({bool showSuccess = true}) async {
+    await _run(
+      successMessage: 'Events refreshed',
+      setBusy: (value) => _isLoadingEvents = value,
+      showSuccess: showSuccess,
+      action: () async {
+        final events = await widget.apiClient.listEvents();
+        if (!mounted) return;
+        setState(() {
+          _events = events;
+          _selectedEventId = _chooseExisting(
+            _selectedEventId,
+            events.map((event) => event.eventId),
+          );
+          _eventClips = const [];
+          _lastPlaybackUrl = null;
+        });
+        final selected = _selectedEventId;
+        if (selected != null) {
+          await _loadEventClips(selected, showSuccess: false);
+        }
+      },
+    );
+  }
+
+  Future<void> _loadEventClips(
+    String eventId, {
+    bool showSuccess = false,
+  }) async {
+    await _run(
+      successMessage: 'Event media refreshed',
+      setBusy: (value) => _isLoadingClips = value,
+      showSuccess: showSuccess,
+      action: () async {
+        final clips = await widget.apiClient.listEventClips(eventId);
+        if (!mounted) return;
+        setState(() {
+          _eventClips = clips;
+          _lastPlaybackUrl = null;
+        });
+      },
+    );
+  }
+
+  Future<void> _requestPlaybackUrl(MediaClip clip) async {
+    await _run(
+      successMessage: 'Playback URL generated',
+      setBusy: (value) => _isRequestingPlayback = value,
+      action: () async {
+        final playback = await widget.apiClient.signedClipPlaybackUrl(
+          clip.clipId,
+        );
+        if (!mounted) return;
+        setState(() => _lastPlaybackUrl = playback);
       },
     );
   }
@@ -271,6 +342,13 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  void _selectTab(int index) {
+    setState(() => _selectedTab = index);
+    if (_destinations[index].label == 'Events' && _events.isEmpty) {
+      _loadEvents(showSuccess: false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -293,8 +371,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             body: SafeArea(child: body),
             bottomNavigationBar: NavigationBar(
               selectedIndex: _selectedTab,
-              onDestinationSelected: (index) =>
-                  setState(() => _selectedTab = index),
+              onDestinationSelected: _selectTab,
               destinations: destinations
                   .map(
                     (item) => NavigationDestination(
@@ -314,8 +391,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
               children: [
                 NavigationRail(
                   selectedIndex: _selectedTab,
-                  onDestinationSelected: (index) =>
-                      setState(() => _selectedTab = index),
+                  onDestinationSelected: _selectTab,
                   extended: constraints.maxWidth >= 1120,
                   leading: Padding(
                     padding: const EdgeInsets.only(top: 12, bottom: 20),
@@ -349,6 +425,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       0 => _overviewPanel(compact),
       1 => _devicePanel(compact),
       2 => _agentPanel(compact),
+      3 => _eventsPanel(compact),
       _ => _edgePanel(),
     };
   }
@@ -790,6 +867,96 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
   }
 
+  Widget _eventsPanel(bool compact) {
+    final selectedEvent = _events
+        .where((event) => event.eventId == _selectedEventId)
+        .firstOrNull;
+    return _responsivePair(
+      compact: compact,
+      first: ConsolePanel(
+        title: 'Event review',
+        icon: Icons.warning_amber_outlined,
+        action: IconButton.filledTonal(
+          onPressed: _isLoadingEvents ? null : () => _loadEvents(),
+          tooltip: 'Refresh events',
+          icon: _isLoadingEvents
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.refresh),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_events.isEmpty)
+              const EmptyState(
+                icon: Icons.event_busy_outlined,
+                title: 'No events yet',
+                message:
+                    'Submit an edge event after arming an agent to review detections here.',
+              )
+            else
+              ..._events.map(
+                (event) => SelectableConsoleTile(
+                  selected: _selectedEventId == event.eventId,
+                  title: event.summary?.isNotEmpty == true
+                      ? event.summary!
+                      : event.eventType,
+                  subtitle:
+                      '${_formatDate(event.timestamp)} - ${event.deviceId} - ${event.agentId}',
+                  leading: Icon(
+                    Icons.warning_amber_outlined,
+                    color: _statusColor(event.severity),
+                  ),
+                  trailing: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      StatusPill(
+                        label: event.severity,
+                        color: _statusColor(event.severity),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        event.status,
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ],
+                  ),
+                  onTap: () {
+                    setState(() {
+                      _selectedEventId = event.eventId;
+                      _lastPlaybackUrl = null;
+                    });
+                    _loadEventClips(event.eventId);
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+      second: ConsolePanel(
+        title: 'Event detail',
+        icon: Icons.manage_search_outlined,
+        child: selectedEvent == null
+            ? const EmptyState(
+                icon: Icons.manage_search_outlined,
+                title: 'Select an event',
+                message: 'Choose an event to inspect stage results and media.',
+              )
+            : _EventDetail(
+                event: selectedEvent,
+                clips: _eventClips,
+                playbackUrl: _lastPlaybackUrl,
+                isLoadingClips: _isLoadingClips,
+                isRequestingPlayback: _isRequestingPlayback,
+                onRefreshClips: () => _loadEventClips(selectedEvent.eventId),
+                onPlayback: _requestPlaybackUrl,
+              ),
+      ),
+    );
+  }
+
   Widget _responsivePair({
     required bool compact,
     required Widget first,
@@ -828,11 +995,236 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       selectedIcon: Icons.radar,
     ),
     _Destination(
+      label: 'Events',
+      icon: Icons.warning_amber_outlined,
+      selectedIcon: Icons.warning_amber,
+    ),
+    _Destination(
       label: 'Edge',
       icon: Icons.hub_outlined,
       selectedIcon: Icons.hub,
     ),
   ];
+}
+
+class _EventDetail extends StatelessWidget {
+  const _EventDetail({
+    required this.event,
+    required this.clips,
+    required this.playbackUrl,
+    required this.isLoadingClips,
+    required this.isRequestingPlayback,
+    required this.onRefreshClips,
+    required this.onPlayback,
+  });
+
+  final SecurityEvent event;
+  final List<MediaClip> clips;
+  final ClipPlaybackUrl? playbackUrl;
+  final bool isLoadingClips;
+  final bool isRequestingPlayback;
+  final VoidCallback onRefreshClips;
+  final Future<void> Function(MediaClip clip) onPlayback;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            StatusPill(
+              label: event.severity,
+              color: _statusColor(event.severity),
+            ),
+            StatusPill(label: event.status, color: _statusColor(event.status)),
+            if (event.degraded)
+              const StatusPill(label: 'degraded', color: Color(0xFFB68416)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _DetailLine(label: 'Event', value: event.eventId),
+        _DetailLine(label: 'Type', value: event.eventType),
+        _DetailLine(label: 'Device', value: event.deviceId),
+        _DetailLine(label: 'Agent', value: event.agentId),
+        _DetailLine(label: 'Time', value: _formatDate(event.timestamp)),
+        if (event.confidence != null)
+          _DetailLine(
+            label: 'Confidence',
+            value: '${(event.confidence! * 100).toStringAsFixed(1)}%',
+          ),
+        if (event.summary != null)
+          _DetailLine(label: 'Summary', value: event.summary!),
+        const SizedBox(height: 12),
+        Text(
+          'Stage results',
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 8),
+        _JsonBlock(label: 'Stage 1', value: event.stage1Result),
+        _JsonBlock(label: 'Stage 2', value: event.stage2Verdict),
+        _JsonBlock(label: 'Stage 3', value: event.stage3Verdict),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Clips',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
+            IconButton.filledTonal(
+              onPressed: isLoadingClips ? null : onRefreshClips,
+              tooltip: 'Refresh clips',
+              icon: isLoadingClips
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (clips.isEmpty)
+          const EmptyState(
+            icon: Icons.movie_outlined,
+            title: 'No clips attached',
+            message: 'Register a clip from the edge service for this event.',
+          )
+        else
+          ...clips.map(
+            (clip) => SelectableConsoleTile(
+              selected: false,
+              title: clip.clipType,
+              subtitle:
+                  '${clip.status} - ${clip.mimeType ?? 'media'} - ${clip.durationSeconds ?? 0}s',
+              leading: Icon(Icons.movie_outlined, color: scheme.primary),
+              trailing: OutlinedButton.icon(
+                onPressed: isRequestingPlayback || clip.status != 'available'
+                    ? null
+                    : () => onPlayback(clip),
+                icon: const Icon(Icons.link),
+                label: const Text('URL'),
+              ),
+              onTap: () {},
+            ),
+          ),
+        if (playbackUrl != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Playback URL',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        Clipboard.setData(
+                          ClipboardData(text: playbackUrl!.playbackUrl),
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Playback URL copied')),
+                        );
+                      },
+                      tooltip: 'Copy playback URL',
+                      icon: const Icon(Icons.copy),
+                    ),
+                  ],
+                ),
+                SelectableText(playbackUrl!.playbackUrl),
+                if (playbackUrl!.expiresAt != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Expires ${_formatDate(playbackUrl!.expiresAt)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _DetailLine extends StatelessWidget {
+  const _DetailLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 82,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(child: SelectableText(value)),
+        ],
+      ),
+    );
+  }
+}
+
+class _JsonBlock extends StatelessWidget {
+  const _JsonBlock({required this.label, required this.value});
+
+  final String label;
+  final Map<String, dynamic>? value;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Text(
+        '$label: ${value?.toString() ?? 'not provided'}',
+        style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+      ),
+    );
+  }
 }
 
 class _WorkspaceBody extends StatelessWidget {
@@ -1059,4 +1451,11 @@ Color _statusColor(String value) {
     return const Color(0xFFC44732);
   }
   return const Color(0xFFB68416);
+}
+
+String _formatDate(DateTime? value) {
+  if (value == null) {
+    return 'unknown time';
+  }
+  return value.toLocal().toString().split('.').first;
 }
