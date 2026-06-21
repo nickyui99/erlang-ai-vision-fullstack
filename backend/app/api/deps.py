@@ -49,6 +49,10 @@ async def get_edge_device(
     session: AsyncSession = Depends(get_db_session),
     authorization: str | None = Header(default=None),
 ) -> Device:
+    return await get_edge_device_from_authorization(session, authorization)
+
+
+async def get_edge_device_from_authorization(session: AsyncSession, authorization: str | None) -> Device:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

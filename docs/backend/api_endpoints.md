@@ -18,6 +18,8 @@ Currently implemented endpoints:
 | `GET` | `/api/v1/devices` | Implemented |
 | `GET` | `/api/v1/devices/{device_id}` | Implemented |
 | `PUT` | `/api/v1/devices/{device_id}` | Implemented |
+| `POST` | `/api/v1/devices/{device_id}/pan` | Implemented |
+| `POST` | `/api/v1/devices/{device_id}/snapshot` | Implemented |
 | `POST` | `/api/v1/agents` | Implemented |
 | `GET` | `/api/v1/agents` | Implemented |
 | `GET` | `/api/v1/agents/{agent_id}` | Implemented |
@@ -27,8 +29,9 @@ Currently implemented endpoints:
 | `POST` | `/api/v1/edge/heartbeat` | Implemented |
 | `GET` | `/api/v1/edge/agents/active` | Implemented |
 | `GET` | `/api/v1/stream/events` | Implemented |
+| `WS` | `/api/v1/edge/ws` | Implemented |
 
-Event, clip, recording, SSE, alert, WebSocket, pan command, Qwen, MCP, and tool endpoints are documented below. Alert, WebSocket, pan command, Qwen, MCP, and tool endpoints are planned for later milestones.
+Event, clip, recording, SSE, WebSocket, pan command, and snapshot command endpoints are implemented. Alert, Qwen, MCP, and broader tool endpoints are planned for later milestones.
 
 Base API prefix:
 
@@ -131,7 +134,8 @@ Example `GET /api/v1/users/me` response:
 | `GET` | `/api/v1/devices/{device_id}` | User session | Get device details. |
 | `PUT` | `/api/v1/devices/{device_id}` | User session | Update device metadata. |
 | `POST` | `/api/v1/edge/heartbeat` | Edge token | Implemented. Update authenticated edge device health status. |
-| `POST` | `/api/v1/devices/{device_id}/pan` | User session | Planned. Request camera pan through edge relay. |
+| `POST` | `/api/v1/devices/{device_id}/pan` | User session | Implemented. Request camera pan through edge relay. |
+| `POST` | `/api/v1/devices/{device_id}/snapshot` | User session | Implemented. Request a fresh snapshot through edge relay. |
 
 Example `POST /api/v1/devices` request:
 
@@ -171,6 +175,31 @@ Example `POST /api/v1/edge/heartbeat` request:
   "current_pan": 90
 }
 ```
+
+Example `POST /api/v1/devices/{device_id}/pan` request:
+
+```json
+{
+  "angle": 90
+}
+```
+
+Example command response:
+
+```json
+{
+  "data": {
+    "request_id": "cmd_123",
+    "status": "ok",
+    "payload": {
+      "angle": 90
+    }
+  },
+  "request_id": "req_123"
+}
+```
+
+`POST /api/v1/devices/{device_id}/snapshot` accepts an empty body and returns the edge command result using the same response shape.
 
 ## Agents
 
@@ -235,7 +264,7 @@ Authorization: Bearer <edge_token>
 | `POST` | `/api/v1/edge/clips/upload-url` | Edge token | Create clip metadata and return signed upload URL. |
 | `POST` | `/api/v1/edge/clips/{clip_id}/complete` | Edge token | Mark direct upload as complete. |
 | `POST` | `/api/v1/edge/recordings` | Edge token | Register recording segment metadata. |
-| `WS` | `/api/v1/edge/ws` | Edge token | Bidirectional command/config/event channel. |
+| `WS` | `/api/v1/edge/ws` | Edge token | Implemented. Bidirectional command channel. |
 
 Example `POST /api/v1/edge/events` request:
 
@@ -453,6 +482,8 @@ Auth:
 Authorization: Bearer <edge_token>
 ```
 
+The backend derives the connected `device_id` and `user_id` from the edge token. One active connection is tracked per device; a newer connection replaces the old one.
+
 Command message example:
 
 ```json
@@ -475,6 +506,19 @@ Command result example:
   "status": "ok"
 }
 ```
+
+Snapshot command example:
+
+```json
+{
+  "type": "command.get_live_snapshot",
+  "request_id": "cmd_002",
+  "device_id": "dev_123",
+  "payload": {}
+}
+```
+
+If an edge device is disconnected, user-facing command APIs return `503 edge_not_connected`. If the edge client does not respond within 10 seconds, they return `504 command_timeout`.
 
 ## Tool Actions
 

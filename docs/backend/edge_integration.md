@@ -214,6 +214,12 @@ Endpoint:
 WS /api/v1/edge/ws
 ```
 
+Authenticate with the same device-bound edge token used by heartbeat, event, clip, and recording APIs:
+
+```http
+Authorization: Bearer <edge_token>
+```
+
 Command example:
 
 ```json
@@ -236,6 +242,19 @@ Result example:
   "status": "ok"
 }
 ```
+
+Snapshot command example:
+
+```json
+{
+  "type": "command.get_live_snapshot",
+  "request_id": "cmd_002",
+  "device_id": "dev_frontdoor_001",
+  "payload": {}
+}
+```
+
+The edge service should answer every command with `response.command_result` using the same `request_id`. The backend times out user-facing command requests after 10 seconds if no result is received.
 
 ## Retry Rules
 
