@@ -153,6 +153,32 @@ class SentinelEdgeApiClient {
         .toList();
   }
 
+  Future<List<SecurityEvent>> listEvents() async {
+    final body = await _getObject('/api/v1/events');
+    final items = body['data'] as List<dynamic>;
+    return items
+        .map((item) => SecurityEvent.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<SecurityEvent> getEvent(String eventId) async {
+    final body = await _getObject('/api/v1/events/$eventId');
+    return SecurityEvent.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  Future<List<MediaClip>> listEventClips(String eventId) async {
+    final body = await _getObject('/api/v1/events/$eventId/clips');
+    final items = body['data'] as List<dynamic>;
+    return items
+        .map((item) => MediaClip.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<ClipPlaybackUrl> signedClipPlaybackUrl(String clipId) async {
+    final body = await _postObject('/api/v1/clips/$clipId/signed-url', null);
+    return ClipPlaybackUrl.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
   Future<Map<String, dynamic>> _getObject(
     String path, {
     Map<String, String>? headers,
@@ -387,9 +413,139 @@ class EdgeAgentConfig {
   }
 }
 
+class SecurityEvent {
+  const SecurityEvent({
+    required this.eventId,
+    required this.agentId,
+    required this.deviceId,
+    required this.eventType,
+    required this.severity,
+    required this.degraded,
+    required this.status,
+    required this.stage1Result,
+    required this.stage2Verdict,
+    required this.stage3Verdict,
+    this.timestamp,
+    this.confidence,
+    this.summary,
+  });
+
+  final String eventId;
+  final String agentId;
+  final String deviceId;
+  final DateTime? timestamp;
+  final String eventType;
+  final Map<String, dynamic>? stage1Result;
+  final Map<String, dynamic>? stage2Verdict;
+  final Map<String, dynamic>? stage3Verdict;
+  final String severity;
+  final double? confidence;
+  final String? summary;
+  final bool degraded;
+  final String status;
+
+  factory SecurityEvent.fromJson(Map<String, dynamic> json) {
+    return SecurityEvent(
+      eventId: json['event_id'].toString(),
+      agentId: json['agent_id'].toString(),
+      deviceId: json['device_id'].toString(),
+      timestamp: json['timestamp'] == null
+          ? null
+          : DateTime.tryParse(json['timestamp'].toString()),
+      eventType: json['event_type'].toString(),
+      stage1Result: _tryMap(json['stage1_result']),
+      stage2Verdict: _tryMap(json['stage2_verdict']),
+      stage3Verdict: _tryMap(json['stage3_verdict']),
+      severity: json['severity'].toString(),
+      confidence: _tryDouble(json['confidence']),
+      summary: json['summary']?.toString(),
+      degraded: json['degraded'] == true,
+      status: json['status'].toString(),
+    );
+  }
+}
+
+class MediaClip {
+  const MediaClip({
+    required this.clipId,
+    required this.eventId,
+    required this.deviceId,
+    required this.storageType,
+    required this.clipType,
+    required this.status,
+    this.ossObjectKey,
+    this.durationSeconds,
+    this.fileSizeBytes,
+    this.mimeType,
+    this.checksumSha256,
+    this.uploadCompletedAt,
+  });
+
+  final String clipId;
+  final String eventId;
+  final String deviceId;
+  final String storageType;
+  final String? ossObjectKey;
+  final String clipType;
+  final int? durationSeconds;
+  final int? fileSizeBytes;
+  final String? mimeType;
+  final String? checksumSha256;
+  final String status;
+  final DateTime? uploadCompletedAt;
+
+  factory MediaClip.fromJson(Map<String, dynamic> json) {
+    return MediaClip(
+      clipId: json['clip_id'].toString(),
+      eventId: json['event_id'].toString(),
+      deviceId: json['device_id'].toString(),
+      storageType: json['storage_type'].toString(),
+      ossObjectKey: json['oss_object_key']?.toString(),
+      clipType: json['clip_type'].toString(),
+      durationSeconds: int.tryParse(json['duration_seconds'].toString()),
+      fileSizeBytes: int.tryParse(json['file_size_bytes'].toString()),
+      mimeType: json['mime_type']?.toString(),
+      checksumSha256: json['checksum_sha256']?.toString(),
+      status: json['status'].toString(),
+      uploadCompletedAt: json['upload_completed_at'] == null
+          ? null
+          : DateTime.tryParse(json['upload_completed_at'].toString()),
+    );
+  }
+}
+
+class ClipPlaybackUrl {
+  const ClipPlaybackUrl({
+    required this.clipId,
+    required this.playbackUrl,
+    this.expiresAt,
+  });
+
+  final String clipId;
+  final String playbackUrl;
+  final DateTime? expiresAt;
+
+  factory ClipPlaybackUrl.fromJson(Map<String, dynamic> json) {
+    return ClipPlaybackUrl(
+      clipId: json['clip_id'].toString(),
+      playbackUrl: json['playback_url'].toString(),
+      expiresAt: json['expires_at'] == null
+          ? null
+          : DateTime.tryParse(json['expires_at'].toString()),
+    );
+  }
+}
+
 double? _tryDouble(Object? value) {
   if (value == null) {
     return null;
   }
   return double.tryParse(value.toString());
+}
+
+Map<String, dynamic>? _tryMap(Object? value) {
+  if (value is Map) {
+    return Map<String, dynamic>.from(value);
+  }
+  return null;
 }
