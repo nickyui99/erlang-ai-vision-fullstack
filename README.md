@@ -4,7 +4,7 @@ SentinelEdge is a surveillance backend and edge-integration project. The current
 
 ## Current Status
 
-Milestones 1, 2, and 3 are complete:
+Milestones 1 through 7 are complete:
 
 - FastAPI app scaffold
 - environment-based configuration
@@ -37,6 +37,8 @@ Implemented HTTP endpoints:
 - `GET /api/v1/devices`
 - `GET /api/v1/devices/{device_id}`
 - `PUT /api/v1/devices/{device_id}`
+- `POST /api/v1/devices/{device_id}/pan`
+- `POST /api/v1/devices/{device_id}/snapshot`
 - `POST /api/v1/agents`
 - `GET /api/v1/agents`
 - `GET /api/v1/agents/{agent_id}`
@@ -45,8 +47,18 @@ Implemented HTTP endpoints:
 - `POST /api/v1/agents/{agent_id}/disarm`
 - `POST /api/v1/edge/heartbeat`
 - `GET /api/v1/edge/agents/active`
+- `POST /api/v1/edge/events`
+- `POST /api/v1/edge/clips/upload-url`
+- `POST /api/v1/edge/clips/{clip_id}/complete`
+- `POST /api/v1/edge/recordings`
+- `GET /api/v1/events`
+- `GET /api/v1/events/{event_id}`
+- `GET /api/v1/events/{event_id}/clips`
+- `POST /api/v1/clips/{clip_id}/signed-url`
+- `GET /api/v1/stream/events`
+- `WS /api/v1/edge/ws`
 
-Event, clip, recording, alert, SSE, WebSocket, pan command, Qwen, and MCP endpoints are documented as planned API surface and will be implemented in later milestones.
+Alert, Qwen, MCP, retention, and deployment work is documented as planned API surface and will be implemented in later milestones.
 
 ## Repository Layout
 
@@ -362,14 +374,13 @@ Invoke-RestMethod http://localhost:8000/api/v1/edge/agents/active -Headers @{ Au
 
 ## Next Milestone
 
-Milestone 5 is the event and media loop:
+Milestone 8 is the alert loop:
 
-- accept edge event submission
-- enforce event idempotency
-- list and inspect user events
-- register clip metadata
-- support upload and playback URL flows
-- register recording metadata
+- add alert service interface
+- add the first alert adapter
+- suppress duplicate alerts
+- store alert delivery results
+- push alert status through SSE
 
 
 

@@ -75,13 +75,13 @@ This checklist turns the backend plan into a practical implementation sequence.
 
 ## Milestone 7: Edge Commands
 
-- [ ] Add edge WebSocket endpoint.
-- [ ] Authenticate edge WebSocket with edge token.
-- [ ] Track connected device sessions.
-- [ ] Relay pan command.
-- [ ] Relay snapshot command.
-- [ ] Store command results.
-- [ ] Audit tool actions.
+- [x] Add edge WebSocket endpoint.
+- [x] Authenticate edge WebSocket with edge token.
+- [x] Track connected device sessions.
+- [x] Relay pan command.
+- [x] Relay snapshot command.
+- [x] Store command results.
+- [x] Audit tool actions.
 
 ## Milestone 8: Alerts
 

@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db_session, get_edge_device
+from app.api.deps import get_db_session, get_edge_device, get_edge_device_from_authorization
 from app.models.agent import Agent
 from app.models.clip import Clip
 from app.models.device import Device
@@ -26,6 +26,7 @@ from app.schemas.media import (
 )
 from app.core.config import settings
 from app.services.media_url_service import media_url_service
+from app.services.edge_command_hub import edge_command_hub
 from app.services.realtime_bus import realtime_bus
 
 
@@ -42,6 +43,32 @@ def _new_clip_id() -> str:
 
 def _new_recording_id() -> str:
     return f"rec_{secrets.token_urlsafe(18)}"
+
+
+@router.websocket("/ws")
+async def edge_websocket(
+    websocket: WebSocket,
+    authorization: str | None = Header(default=None),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    try:
+        edge_device = await get_edge_device_from_authorization(session, authorization)
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+    await edge_command_hub.connect(edge_device.device_id, websocket)
+    try:
+        while True:
+            message = await websocket.receive_json()
+            if message.get("type") == "response.command_result":
+                await edge_command_hub.handle_result(message)
+    except WebSocketDisconnect:
+        await edge_command_hub.disconnect(edge_device.device_id, websocket)
+    except ValueError:
+        await edge_command_hub.disconnect(edge_device.device_id, websocket)
+        await websocket.close(code=1003)
 
 
 @router.post("/heartbeat")
