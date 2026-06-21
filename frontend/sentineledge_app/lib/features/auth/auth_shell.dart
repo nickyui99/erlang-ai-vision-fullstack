@@ -19,7 +19,49 @@ class _AuthShellState extends State<AuthShell> {
   final SentinelEdgeApiClient _apiClient = SentinelEdgeApiClient();
   BackendUser? _backendUser;
   String? _error;
-  bool _isLoading = false;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    try {
+      final backendUser = await _apiClient.currentUser();
+      if (!mounted) return;
+      setState(() {
+        _backendUser = backendUser;
+        _isLoading = false;
+      });
+      return;
+    } catch (_) {
+      // The backend session cookie may be absent after a fresh browser profile.
+      // Firebase can still have a persisted Google user, so refresh backend auth.
+    }
+
+    try {
+      if (DefaultFirebaseOptions.isConfigured) {
+        final firebaseUser = FirebaseAuth.instance.currentUser;
+        final idToken = await firebaseUser?.getIdToken();
+        if (idToken != null && idToken.isNotEmpty) {
+          final backendUser = await _authClient.loginWithFirebaseIdToken(
+            idToken,
+          );
+          if (!mounted) return;
+          setState(() => _backendUser = backendUser);
+        }
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   Future<void> _signIn() async {
     if (!DefaultFirebaseOptions.isConfigured) {
