@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/backend_auth_client.dart';
+import '../../services/realtime/realtime_client.dart';
 import '../../shared/console_widgets.dart';
 
 class WorkspaceView extends StatefulWidget {
@@ -49,6 +50,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   List<EdgeAgentConfig> _activeConfigs = const [];
   List<SecurityEvent> _events = const [];
   List<MediaClip> _eventClips = const [];
+  RealtimeConnection? _realtimeConnection;
+  RealtimeStatus _realtimeStatus = RealtimeStatus.connecting;
   String? _selectedDeviceId;
   String? _selectedAgentId;
   String? _selectedEventId;
@@ -94,6 +97,13 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     if (widget.autoLoad) {
       _refreshAll(showSuccess: false);
     }
+    _realtimeConnection = connectRealtime(
+      onMessage: _handleRealtimeMessage,
+      onStatus: (status) {
+        if (!mounted) return;
+        setState(() => _realtimeStatus = status);
+      },
+    );
   }
 
   @override
@@ -106,6 +116,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     _edgeTokenController.dispose();
     _deviceSearchController.dispose();
     _agentSearchController.dispose();
+    _realtimeConnection?.dispose();
     super.dispose();
   }
 
@@ -166,6 +177,40 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         });
       },
     );
+  }
+
+  Future<void> _refreshDevicesOnly() async {
+    try {
+      final devices = await widget.apiClient.listDevices();
+      if (!mounted) return;
+      setState(() {
+        _devices = devices;
+        _selectedDeviceId = _chooseExisting(
+          _selectedDeviceId,
+          devices.map((device) => device.deviceId),
+        );
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    }
+  }
+
+  Future<void> _refreshAgentsOnly() async {
+    try {
+      final agents = await widget.apiClient.listAgents();
+      if (!mounted) return;
+      setState(() {
+        _agents = agents;
+        _selectedAgentId = _chooseExisting(
+          _selectedAgentId,
+          agents.map((agent) => agent.agentId),
+        );
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    }
   }
 
   Future<void> _loadEvents({bool showSuccess = true}) async {
@@ -349,6 +394,27 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     }
   }
 
+  void _handleRealtimeMessage(RealtimeMessage message) {
+    if (!mounted) return;
+    switch (message.type) {
+      case 'event.created':
+        _loadEvents(showSuccess: false);
+        break;
+      case 'clip.available':
+        final eventId = message.data['event_id']?.toString();
+        if (eventId != null && eventId == _selectedEventId) {
+          _loadEventClips(eventId);
+        }
+        break;
+      case 'device.health_changed':
+        _refreshDevicesOnly();
+        break;
+      case 'agent.state_changed':
+        _refreshAgentsOnly();
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -360,6 +426,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           user: widget.user,
           isBusy: _isBusy,
           isRefreshing: _isRefreshing,
+          realtimeStatus: _realtimeStatus,
           error: _error,
           onRefresh: () => _refreshAll(),
           onSignOut: widget.onSignOut,
@@ -1233,6 +1300,7 @@ class _WorkspaceBody extends StatelessWidget {
     required this.user,
     required this.isBusy,
     required this.isRefreshing,
+    required this.realtimeStatus,
     required this.error,
     required this.onRefresh,
     required this.onSignOut,
@@ -1243,6 +1311,7 @@ class _WorkspaceBody extends StatelessWidget {
   final BackendUser user;
   final bool isBusy;
   final bool isRefreshing;
+  final RealtimeStatus realtimeStatus;
   final String? error;
   final VoidCallback onRefresh;
   final Future<void> Function() onSignOut;
@@ -1271,6 +1340,8 @@ class _WorkspaceBody extends StatelessWidget {
             ],
           ),
           actions: [
+            _RealtimeStatusPill(status: realtimeStatus),
+            const SizedBox(width: 8),
             IconButton.filledTonal(
               onPressed: isRefreshing ? null : onRefresh,
               tooltip: 'Refresh',
@@ -1331,6 +1402,26 @@ class _ErrorBanner extends StatelessWidget {
         border: Border.all(color: scheme.error.withValues(alpha: 0.35)),
       ),
       child: Text(text, style: TextStyle(color: scheme.onErrorContainer)),
+    );
+  }
+}
+
+class _RealtimeStatusPill extends StatelessWidget {
+  const _RealtimeStatusPill({required this.status});
+
+  final RealtimeStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (status) {
+      RealtimeStatus.live => ('Live', const Color(0xFF2E8B57)),
+      RealtimeStatus.connecting => ('Connecting', const Color(0xFFB68416)),
+      RealtimeStatus.reconnecting => ('Reconnecting', const Color(0xFFB68416)),
+      RealtimeStatus.offline => ('Offline', const Color(0xFFC44732)),
+    };
+    return Tooltip(
+      message: 'Realtime connection: $label',
+      child: StatusPill(label: label, color: color),
     );
   }
 }

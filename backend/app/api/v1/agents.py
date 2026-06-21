@@ -13,6 +13,7 @@ from app.models.agent import Agent
 from app.models.device import Device
 from app.models.user import User
 from app.schemas.agent import AgentCreate, AgentRead, AgentUpdate
+from app.services.realtime_bus import realtime_bus
 
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -141,6 +142,16 @@ async def arm_agent(
     agent.updated_at = datetime.now(UTC)
     await session.commit()
     await session.refresh(agent)
+    await realtime_bus.publish(
+        current_user.user_id,
+        "agent.state_changed",
+        {
+            "agent_id": agent.agent_id,
+            "device_id": agent.device_id,
+            "state": agent.state,
+            "enabled": agent.enabled,
+        },
+    )
     return {"data": AgentRead.model_validate(agent).model_dump(mode="json")}
 
 
@@ -155,4 +166,14 @@ async def disarm_agent(
     agent.updated_at = datetime.now(UTC)
     await session.commit()
     await session.refresh(agent)
+    await realtime_bus.publish(
+        current_user.user_id,
+        "agent.state_changed",
+        {
+            "agent_id": agent.agent_id,
+            "device_id": agent.device_id,
+            "state": agent.state,
+            "enabled": agent.enabled,
+        },
+    )
     return {"data": AgentRead.model_validate(agent).model_dump(mode="json")}

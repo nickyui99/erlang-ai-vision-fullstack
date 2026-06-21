@@ -26,6 +26,7 @@ from app.schemas.media import (
 )
 from app.core.config import settings
 from app.services.media_url_service import media_url_service
+from app.services.realtime_bus import realtime_bus
 
 
 router = APIRouter(prefix="/edge", tags=["edge"])
@@ -49,6 +50,12 @@ async def edge_heartbeat(
     edge_device: Device = Depends(get_edge_device),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
+    previous = {
+        "health_status": edge_device.health_status,
+        "rssi": edge_device.rssi,
+        "fps": edge_device.fps,
+        "current_pan": edge_device.current_pan,
+    }
     edge_device.health_status = payload.health_status
     edge_device.rssi = payload.rssi
     edge_device.fps = payload.fps
@@ -57,6 +64,25 @@ async def edge_heartbeat(
     edge_device.updated_at = edge_device.last_seen
     await session.commit()
     await session.refresh(edge_device)
+    current = {
+        "health_status": edge_device.health_status,
+        "rssi": edge_device.rssi,
+        "fps": edge_device.fps,
+        "current_pan": edge_device.current_pan,
+    }
+    if current != previous:
+        await realtime_bus.publish(
+            edge_device.user_id,
+            "device.health_changed",
+            {
+                "device_id": edge_device.device_id,
+                "health_status": edge_device.health_status,
+                "rssi": edge_device.rssi,
+                "fps": edge_device.fps,
+                "current_pan": edge_device.current_pan,
+                "last_seen": edge_device.last_seen,
+            },
+        )
     return {"data": DeviceRead.model_validate(edge_device).model_dump(mode="json")}
 
 
@@ -130,6 +156,19 @@ async def create_edge_event(
     session.add(event)
     await session.commit()
     await session.refresh(event)
+    await realtime_bus.publish(
+        event.user_id,
+        "event.created",
+        {
+            "event_id": event.event_id,
+            "device_id": event.device_id,
+            "agent_id": event.agent_id,
+            "severity": event.severity,
+            "status": event.status,
+            "timestamp": event.timestamp,
+            "summary": event.summary,
+        },
+    )
     return {"data": EventRead.model_validate(event).model_dump(mode="json")}
 
 
@@ -239,6 +278,17 @@ async def complete_clip_upload(
     clip.updated_at = now
     await session.commit()
     await session.refresh(clip)
+    await realtime_bus.publish(
+        clip.user_id,
+        "clip.available",
+        {
+            "clip_id": clip.clip_id,
+            "event_id": clip.event_id,
+            "device_id": clip.device_id,
+            "status": clip.status,
+            "clip_type": clip.clip_type,
+        },
+    )
     return {"data": ClipRead.model_validate(clip).model_dump(mode="json")}
 
 
