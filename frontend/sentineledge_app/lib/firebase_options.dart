@@ -2,9 +2,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
 class DefaultFirebaseOptions {
-  static const String _webApiKey = String.fromEnvironment('FIREBASE_WEB_API_KEY');
+  static const String _webApiKey = String.fromEnvironment(
+    'FIREBASE_WEB_API_KEY',
+  );
   static const String _webAppId = String.fromEnvironment('FIREBASE_WEB_APP_ID');
-  static const String _webMessagingSenderId = String.fromEnvironment('FIREBASE_WEB_MESSAGING_SENDER_ID');
+  static const String _webMessagingSenderId = String.fromEnvironment(
+    'FIREBASE_WEB_MESSAGING_SENDER_ID',
+  );
   static const String _firebaseProjectId = String.fromEnvironment(
     'FIREBASE_PROJECT_ID',
     defaultValue: 'sentineledge-e069b',
@@ -15,7 +19,9 @@ class DefaultFirebaseOptions {
   );
 
   static bool get isConfigured =>
-      _webApiKey.isNotEmpty && _webAppId.isNotEmpty && _webMessagingSenderId.isNotEmpty;
+      _webApiKey.isNotEmpty &&
+      _webAppId.isNotEmpty &&
+      _webMessagingSenderId.isNotEmpty;
 
   static FirebaseOptions get currentPlatform {
     switch (defaultTargetPlatform) {

@@ -11,11 +11,17 @@ class Agent(Base):
     __table_args__ = (
         Index("idx_agents_user_id", "user_id"),
         Index("idx_agents_device_id", "device_id"),
+        Index("idx_agents_parent_agent_id", "parent_agent_id"),
     )
 
     agent_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    device_id: Mapped[str] = mapped_column(String(64), ForeignKey("devices.device_id", ondelete="CASCADE"), nullable=False)
+    device_id: Mapped[str | None] = mapped_column(String(64), ForeignKey("devices.device_id", ondelete="CASCADE"), nullable=True)
+    # Main agents (definitions) have parent_agent_id NULL. Assigning a definition
+    # to a camera creates a sub-agent whose parent_agent_id points back to it.
+    parent_agent_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("agents.agent_id", ondelete="CASCADE"), nullable=True
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     location: Mapped[str | None] = mapped_column(String(255))
     nl_rule: Mapped[str] = mapped_column(Text, nullable=False)

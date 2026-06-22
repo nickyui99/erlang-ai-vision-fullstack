@@ -3,8 +3,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../design/app_colors.dart';
+import '../../design/app_shadows.dart';
+import '../../design/app_spacing.dart';
 import '../../firebase_options.dart';
 import '../../services/backend_auth_client.dart';
+import '../../shared/console_widgets.dart';
 import '../dashboard/workspace_view.dart';
 
 class AuthShell extends StatefulWidget {
@@ -158,49 +162,52 @@ class SignInView extends StatelessWidget {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(AppSpacing.xl),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 960),
+              constraints: const BoxConstraints(maxWidth: 980),
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final wide = constraints.maxWidth >= 760;
 
-                  return Container(
+                  return DecoratedBox(
                     decoration: BoxDecoration(
-                      color: scheme.surfaceContainerLowest,
-                      borderRadius: BorderRadius.circular(12),
+                      color: scheme.surface,
+                      borderRadius: AppRadius.lgAll,
                       border: Border.all(color: scheme.outlineVariant),
+                      boxShadow: AppShadows.overlay(
+                        Theme.of(context).brightness,
+                      ),
                     ),
-                    clipBehavior: Clip.antiAlias,
-                    child: wide
-                        ? IntrinsicHeight(
-                            child: Row(
-                              children: [
-                                const Expanded(flex: 6, child: _BrandPanel()),
-                                const VerticalDivider(width: 1),
-                                Expanded(
-                                  flex: 4,
-                                  child: _LoginPanel(
-                                    error: error,
-                                    isLoading: isLoading,
-                                    onSignIn: onSignIn,
+                    child: ClipRRect(
+                      borderRadius: AppRadius.lgAll,
+                      child: wide
+                          ? IntrinsicHeight(
+                              child: Row(
+                                children: [
+                                  const Expanded(flex: 6, child: _BrandPanel()),
+                                  Expanded(
+                                    flex: 4,
+                                    child: _LoginPanel(
+                                      error: error,
+                                      isLoading: isLoading,
+                                      onSignIn: onSignIn,
+                                    ),
                                   ),
+                                ],
+                              ),
+                            )
+                          : Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const _BrandPanel(),
+                                _LoginPanel(
+                                  error: error,
+                                  isLoading: isLoading,
+                                  onSignIn: onSignIn,
                                 ),
                               ],
                             ),
-                          )
-                        : Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const _BrandPanel(),
-                              const Divider(height: 1),
-                              _LoginPanel(
-                                error: error,
-                                isLoading: isLoading,
-                                onSignIn: onSignIn,
-                              ),
-                            ],
-                          ),
+                    ),
                   );
                 },
               ),
@@ -217,47 +224,52 @@ class _BrandPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(28),
-      color: scheme.surfaceContainerLow,
+      padding: const EdgeInsets.all(AppSpacing.xxl),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.brandDeep, AppColors.primary],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 52,
-            height: 52,
+            width: 56,
+            height: 56,
             decoration: BoxDecoration(
-              color: scheme.primaryContainer,
-              borderRadius: BorderRadius.circular(8),
+              color: Colors.white.withValues(alpha: 0.16),
+              borderRadius: AppRadius.lgAll,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
             ),
-            child: Icon(
+            child: const Icon(
               Icons.shield_outlined,
-              color: scheme.onPrimaryContainer,
+              color: Colors.white,
+              size: 28,
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xl),
           Text(
             'SentinelEdge',
-            style: Theme.of(context).textTheme.displaySmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              height: 1,
-            ),
+            style: theme.textTheme.displaySmall?.copyWith(color: Colors.white),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           Text(
             'Command devices, natural-language agents, and edge sync from a focused security workspace.',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: scheme.onSurfaceVariant,
-              height: 1.35,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: Colors.white.withValues(alpha: 0.85),
+              fontWeight: FontWeight.w400,
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: AppSpacing.xl),
           const Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
             children: [
               _SignalPill(icon: Icons.videocam_outlined, label: 'Devices'),
               _SignalPill(icon: Icons.radar_outlined, label: 'Agents'),
@@ -283,90 +295,49 @@ class _LoginPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.all(AppSpacing.xxl),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Operator sign in',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
+          Text('Operator sign in', style: theme.textTheme.headlineSmall),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             'Use your Google account to start a backend session.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+            style: theme.textTheme.bodyMedium,
           ),
-          const SizedBox(height: 20),
-          if (!DefaultFirebaseOptions.isConfigured) const _SetupNotice(),
-          FilledButton.icon(
-            onPressed: isLoading ? null : onSignIn,
-            icon: isLoading
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.login),
-            label: Text(isLoading ? 'Signing in' : 'Sign in with Google'),
+          const SizedBox(height: AppSpacing.xl),
+          if (!DefaultFirebaseOptions.isConfigured) ...[
+            const AppBanner(
+              tone: StatusTone.warning,
+              icon: Icons.info_outline,
+              text:
+                  'Fill lib/firebase_options.dart with Firebase app settings before using Google sign-in.',
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          AppButton(
+            label: 'Sign in with Google',
+            loadingLabel: 'Signing in',
+            icon: Icons.login,
+            loading: isLoading,
+            onPressed: onSignIn,
+            expand: true,
           ),
           if (error != null) ...[
-            const SizedBox(height: 14),
-            _InlineAlert(text: error!, isError: true),
+            const SizedBox(height: AppSpacing.md),
+            AppBanner(text: error!),
           ],
-          const SizedBox(height: 18),
+          const SizedBox(height: AppSpacing.lg),
           Text(
             'Backend: ${BackendAuthClient.baseUrl}',
             textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            style: theme.textTheme.bodySmall,
           ),
         ],
       ),
-    );
-  }
-}
-
-class _SetupNotice extends StatelessWidget {
-  const _SetupNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.only(bottom: 14),
-      child: _InlineAlert(
-        text:
-            'Fill lib/firebase_options.dart with Firebase app settings before using Google sign-in.',
-        isError: false,
-      ),
-    );
-  }
-}
-
-class _InlineAlert extends StatelessWidget {
-  const _InlineAlert({required this.text, required this.isError});
-
-  final String text;
-  final bool isError;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final color = isError ? scheme.error : const Color(0xFFB68416);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.45)),
-      ),
-      child: Text(text, style: TextStyle(color: color)),
     );
   }
 }
@@ -379,20 +350,26 @@ class _SignalPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: scheme.outlineVariant),
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: AppRadius.pillAll,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: scheme.primary),
+          Icon(icon, size: 16, color: Colors.white),
           const SizedBox(width: 6),
-          Text(label, style: Theme.of(context).textTheme.labelMedium),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(color: Colors.white),
+          ),
         ],
       ),
     );
