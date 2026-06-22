@@ -110,13 +110,27 @@ class SentinelEdgeApiClient {
   }
 
   Future<SurveillanceAgent> createAgent({
-    required String deviceId,
+    required String name,
+    String? location,
+    required String rule,
+    String? deviceId,
+  }) async {
+    final body = await _postObject('/api/v1/agents', {
+      'device_id': ?deviceId,
+      'name': name,
+      'location': _emptyToNull(location),
+      'nl_rule': rule,
+    });
+    return SurveillanceAgent.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  Future<SurveillanceAgent> updateAgent({
+    required String agentId,
     required String name,
     String? location,
     required String rule,
   }) async {
-    final body = await _postObject('/api/v1/agents', {
-      'device_id': deviceId,
+    final body = await _putObject('/api/v1/agents/$agentId', {
       'name': name,
       'location': _emptyToNull(location),
       'nl_rule': rule,
@@ -132,14 +146,23 @@ class SentinelEdgeApiClient {
         .toList();
   }
 
-  Future<SurveillanceAgent> armAgent(String agentId) async {
-    final body = await _postObject('/api/v1/agents/$agentId/arm', null);
+  /// Assigns a main agent (definition) onto a device, creating a per-camera
+  /// sub-agent. Returns the sub-agent.
+  Future<SurveillanceAgent> assignAgent(
+    String agentId, {
+    required String deviceId,
+  }) async {
+    final body = await _postObject('/api/v1/agents/$agentId/assign', {
+      'device_id': deviceId,
+    });
     return SurveillanceAgent.fromJson(body['data'] as Map<String, dynamic>);
   }
 
-  Future<SurveillanceAgent> disarmAgent(String agentId) async {
-    final body = await _postObject('/api/v1/agents/$agentId/disarm', null);
-    return SurveillanceAgent.fromJson(body['data'] as Map<String, dynamic>);
+  /// Unassigns (deletes) the sub-agent for the given definition + device.
+  Future<void> unassignAgent(String agentId, {required String deviceId}) async {
+    await _postObject('/api/v1/agents/$agentId/unassign', {
+      'device_id': deviceId,
+    });
   }
 
   Future<List<EdgeAgentConfig>> activeConfigs(String edgeToken) async {
@@ -361,10 +384,12 @@ class SurveillanceAgent {
     required this.enabled,
     required this.compiledEdgeConfig,
     this.location,
+    this.parentAgentId,
   });
 
   final String agentId;
-  final String deviceId;
+  final String? deviceId;
+  final String? parentAgentId;
   final String name;
   final String? location;
   final String rule;
@@ -372,10 +397,15 @@ class SurveillanceAgent {
   final bool enabled;
   final Map<String, dynamic> compiledEdgeConfig;
 
+  /// A main agent (definition) created in the Agents tab. Sub-agents created by
+  /// assigning to a camera have a [parentAgentId].
+  bool get isDefinition => parentAgentId == null;
+
   factory SurveillanceAgent.fromJson(Map<String, dynamic> json) {
     return SurveillanceAgent(
       agentId: json['agent_id'].toString(),
-      deviceId: json['device_id'].toString(),
+      deviceId: json['device_id']?.toString(),
+      parentAgentId: json['parent_agent_id']?.toString(),
       name: json['name'].toString(),
       location: json['location']?.toString(),
       rule: json['nl_rule'].toString(),

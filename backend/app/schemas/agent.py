@@ -8,7 +8,9 @@ AgentState = Literal["armed", "disarmed"]
 
 
 class AgentCreate(BaseModel):
-    device_id: str = Field(min_length=1, max_length=64)
+    # Agents are device-independent rules; the device is bound when the agent
+    # is armed. device_id remains accepted for backward compatibility.
+    device_id: str | None = Field(default=None, max_length=64)
     name: str = Field(min_length=1, max_length=255)
     location: str | None = Field(default=None, max_length=255)
     nl_rule: str = Field(min_length=1)
@@ -20,10 +22,15 @@ class AgentUpdate(BaseModel):
     nl_rule: str = Field(min_length=1)
 
 
+class AgentAssign(BaseModel):
+    device_id: str = Field(min_length=1, max_length=64)
+
+
 class AgentRead(BaseModel):
     agent_id: str
     user_id: str
-    device_id: str
+    device_id: str | None = None
+    parent_agent_id: str | None = None
     name: str
     location: str | None = None
     nl_rule: str

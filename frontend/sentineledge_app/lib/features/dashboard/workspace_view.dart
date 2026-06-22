@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../../design/app_colors.dart';
+import '../../design/app_motion.dart';
+import '../../design/app_spacing.dart';
+import '../../design/app_typography.dart';
 import '../../services/backend_auth_client.dart';
 import '../../services/realtime/realtime_client.dart';
 import '../../shared/console_widgets.dart';
+import 'agent_templates.dart';
 
 class WorkspaceView extends StatefulWidget {
   const WorkspaceView({
@@ -30,17 +34,6 @@ class WorkspaceView extends StatefulWidget {
 }
 
 class _WorkspaceViewState extends State<WorkspaceView> {
-  final _deviceNameController = TextEditingController(
-    text: 'Front Door Camera',
-  );
-  final _deviceLocationController = TextEditingController(text: 'Front Door');
-  final _agentNameController = TextEditingController(
-    text: 'Night Front Door Watch',
-  );
-  final _agentLocationController = TextEditingController(text: 'Front Door');
-  final _ruleController = TextEditingController(
-    text: 'Alert me if a person is lingering near the front door after 10 PM.',
-  );
   final _edgeTokenController = TextEditingController();
   final _deviceSearchController = TextEditingController();
   final _agentSearchController = TextEditingController();
@@ -55,6 +48,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   String? _selectedDeviceId;
   String? _selectedAgentId;
   String? _selectedEventId;
+  String? _assigningAgentId;
   String? _lastEdgeToken;
   ClipPlaybackUrl? _lastPlaybackUrl;
   String? _error;
@@ -68,6 +62,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   bool _isLoadingEvents = false;
   bool _isLoadingClips = false;
   bool _isRequestingPlayback = false;
+  bool _edgeTokenObscured = true;
 
   bool get _isBusy =>
       _isRefreshing ||
@@ -108,11 +103,6 @@ class _WorkspaceViewState extends State<WorkspaceView> {
 
   @override
   void dispose() {
-    _deviceNameController.dispose();
-    _deviceLocationController.dispose();
-    _agentNameController.dispose();
-    _agentLocationController.dispose();
-    _ruleController.dispose();
     _edgeTokenController.dispose();
     _deviceSearchController.dispose();
     _agentSearchController.dispose();
@@ -271,15 +261,27 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
   }
 
-  Future<void> _registerDevice() async {
+  Future<void> _openRegisterDeviceDialog() async {
+    final result = await showDialog<({String name, String location})>(
+      context: context,
+      builder: (_) => const _DeviceFormDialog(),
+    );
+    if (result == null) return;
+    await _registerDevice(name: result.name, location: result.location);
+    if (_lastEdgeToken != null && mounted) {
+      await _showTokenDialog(_lastEdgeToken!);
+    }
+  }
+
+  Future<void> _registerDevice({required String name, String? location}) async {
     await _run(
       successMessage:
           'Device registered. Copy the edge token now; it is only returned once.',
       setBusy: (value) => _isRegisteringDevice = value,
       action: () async {
         final registration = await widget.apiClient.registerDevice(
-          name: _deviceNameController.text,
-          location: _deviceLocationController.text,
+          name: name,
+          location: location,
         );
         final devices = await widget.apiClient.listDevices();
         if (!mounted) return;
@@ -290,6 +292,33 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           _selectedDeviceId = registration.device.deviceId;
         });
       },
+    );
+  }
+
+  Future<void> _showTokenDialog(String token) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Device edge token'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Copy this token into the edge device now. It is shown only once.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TokenBox(token: token),
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -317,21 +346,46 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
   }
 
-  Future<void> _createAgent() async {
-    final deviceId = _selectedDeviceId;
-    if (deviceId == null) {
-      _showLocalError('Register or select a device before creating an agent.');
-      return;
-    }
+  Future<void> _openCreateAgentDialog() async {
+    final result = await showDialog<_AgentFormResult>(
+      context: context,
+      builder: (_) => const _AgentFormDialog(),
+    );
+    if (result == null) return;
+    await _createAgent(
+      name: result.name,
+      location: result.location,
+      rule: result.rule,
+    );
+  }
+
+  Future<void> _openEditAgentDialog(SurveillanceAgent agent) async {
+    final result = await showDialog<_AgentFormResult>(
+      context: context,
+      builder: (_) => _AgentFormDialog(agent: agent),
+    );
+    if (result == null) return;
+    await _saveAgentEdits(
+      agentId: agent.agentId,
+      name: result.name,
+      location: result.location,
+      rule: result.rule,
+    );
+  }
+
+  Future<void> _createAgent({
+    required String name,
+    String? location,
+    required String rule,
+  }) async {
     await _run(
       successMessage: 'Agent created',
       setBusy: (value) => _isCreatingAgent = value,
       action: () async {
         final agent = await widget.apiClient.createAgent(
-          deviceId: deviceId,
-          name: _agentNameController.text,
-          location: _agentLocationController.text,
-          rule: _ruleController.text,
+          name: name,
+          location: location,
+          rule: rule,
         );
         final agents = await widget.apiClient.listAgents();
         if (!mounted) return;
@@ -343,21 +397,57 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
   }
 
-  Future<void> _setAgentState(bool armed) async {
-    final agentId = _selectedAgentId;
-    if (agentId == null) {
-      _showLocalError('Select an agent first.');
-      return;
-    }
+  Future<void> _saveAgentEdits({
+    required String agentId,
+    required String name,
+    String? location,
+    required String rule,
+  }) async {
     await _run(
-      successMessage: armed ? 'Agent armed' : 'Agent disarmed',
-      setBusy: (value) => _isChangingAgentState = value,
+      successMessage: 'Agent updated',
+      setBusy: (value) => _isCreatingAgent = value,
       action: () async {
-        if (armed) {
-          await widget.apiClient.armAgent(agentId);
-        } else {
-          await widget.apiClient.disarmAgent(agentId);
-        }
+        final agent = await widget.apiClient.updateAgent(
+          agentId: agentId,
+          name: name,
+          location: location,
+          rule: rule,
+        );
+        final agents = await widget.apiClient.listAgents();
+        if (!mounted) return;
+        setState(() {
+          _agents = agents;
+          _selectedAgentId = agent.agentId;
+        });
+      },
+    );
+  }
+
+  Future<void> _assignAgent(String agentId, String deviceId) async {
+    await _run(
+      successMessage: 'Agent assigned',
+      setBusy: (value) {
+        _isChangingAgentState = value;
+        _assigningAgentId = value ? agentId : null;
+      },
+      action: () async {
+        await widget.apiClient.assignAgent(agentId, deviceId: deviceId);
+        final agents = await widget.apiClient.listAgents();
+        if (!mounted) return;
+        setState(() => _agents = agents);
+      },
+    );
+  }
+
+  Future<void> _unassignAgent(String agentId, String deviceId) async {
+    await _run(
+      successMessage: 'Agent unassigned',
+      setBusy: (value) {
+        _isChangingAgentState = value;
+        _assigningAgentId = value ? agentId : null;
+      },
+      action: () async {
+        await widget.apiClient.unassignAgent(agentId, deviceId: deviceId);
         final agents = await widget.apiClient.listAgents();
         if (!mounted) return;
         setState(() => _agents = agents);
@@ -419,10 +509,14 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 760;
+        final width = constraints.maxWidth;
+        final compact = width < AppBreakpoints.compact;
+        final railExtended = width >= AppBreakpoints.medium;
         final destinations = _destinations;
+
         final body = _WorkspaceBody(
           title: destinations[_selectedTab].label,
+          subtitle: destinations[_selectedTab].subtitle,
           user: widget.user,
           isBusy: _isBusy,
           isRefreshing: _isRefreshing,
@@ -430,7 +524,11 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           error: _error,
           onRefresh: () => _refreshAll(),
           onSignOut: widget.onSignOut,
-          child: _selectedContent(compact),
+          onDismissError: () => setState(() => _error = null),
+          child: _AnimatedTabContent(
+            tabIndex: _selectedTab,
+            child: _selectedContent(compact),
+          ),
         );
 
         if (compact) {
@@ -456,28 +554,15 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           body: SafeArea(
             child: Row(
               children: [
-                NavigationRail(
+                _Sidebar(
+                  destinations: destinations,
                   selectedIndex: _selectedTab,
-                  onDestinationSelected: _selectTab,
-                  extended: constraints.maxWidth >= 1120,
-                  leading: Padding(
-                    padding: const EdgeInsets.only(top: 12, bottom: 20),
-                    child: Icon(
-                      Icons.shield_outlined,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  destinations: destinations
-                      .map(
-                        (item) => NavigationRailDestination(
-                          icon: Icon(item.icon),
-                          selectedIcon: Icon(item.selectedIcon),
-                          label: Text(item.label),
-                        ),
-                      )
-                      .toList(),
+                  extended: railExtended,
+                  user: widget.user,
+                  isBusy: _isBusy,
+                  onSelect: _selectTab,
+                  onSignOut: widget.onSignOut,
                 ),
-                const VerticalDivider(width: 1),
                 Expanded(child: body),
               ],
             ),
@@ -501,7 +586,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     final onlineDevices = _devices
         .where((device) => device.healthStatus == 'online')
         .length;
-    final armedAgents = _agents.where((agent) => agent.state == 'armed').length;
+    final activeAssignments = _agents
+        .where((agent) => !agent.isDefinition && agent.state == 'armed')
+        .length;
     final offlineDevices = _devices.length - onlineDevices;
     final metricColumns = compact ? 2 : 4;
     return Column(
@@ -511,12 +598,12 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           crossAxisCount: metricColumns,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: compact ? 1.55 : 1.85,
+          crossAxisSpacing: AppSpacing.md,
+          mainAxisSpacing: AppSpacing.md,
+          childAspectRatio: compact ? 1.35 : 1.55,
           children: [
             MetricTile(
-              label: 'Devices',
+              label: 'Total devices',
               value: _devices.length.toString(),
               icon: Icons.videocam_outlined,
             ),
@@ -524,33 +611,33 @@ class _WorkspaceViewState extends State<WorkspaceView> {
               label: 'Online',
               value: onlineDevices.toString(),
               icon: Icons.sensors_outlined,
-              accent: const Color(0xFF2E8B57),
+              accent: AppColors.success,
             ),
             MetricTile(
               label: 'Offline',
               value: offlineDevices.toString(),
               icon: Icons.signal_wifi_bad_outlined,
-              accent: const Color(0xFFC44732),
+              accent: AppColors.danger,
             ),
             MetricTile(
-              label: 'Armed agents',
-              value: armedAgents.toString(),
+              label: 'Active assignments',
+              value: activeAssignments.toString(),
               icon: Icons.shield_outlined,
-              accent: const Color(0xFFB68416),
+              accent: AppColors.warning,
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
         if (compact) ...[
           _operationsPanel(),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
           _recentConfigPanel(),
         ] else
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(child: _operationsPanel()),
-              const SizedBox(width: 16),
+              const SizedBox(width: AppSpacing.lg),
               Expanded(child: _recentConfigPanel()),
             ],
           ),
@@ -567,6 +654,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         .firstOrNull;
     return ConsolePanel(
       title: 'Operational focus',
+      subtitle: 'What this console is anchored to right now',
       icon: Icons.center_focus_strong_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -577,26 +665,30 @@ class _WorkspaceViewState extends State<WorkspaceView> {
               title: 'No device selected',
               message:
                   'Register or select a camera device to anchor agent operations.',
+              compact: true,
             )
           else
             _FocusRow(
               icon: Icons.videocam_outlined,
               title: selectedDevice.name,
               detail:
-                  '${selectedDevice.location ?? 'No location'} - ${selectedDevice.healthStatus}',
+                  '${selectedDevice.location ?? 'No location'} · ${selectedDevice.healthStatus}',
+              tone: StatusToneColor.fromStatus(selectedDevice.healthStatus),
             ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.sm),
           if (selectedAgent == null)
             const EmptyState(
               icon: Icons.radar_outlined,
               title: 'No agent selected',
               message: 'Create or select an agent to arm surveillance rules.',
+              compact: true,
             )
           else
             _FocusRow(
               icon: Icons.radar_outlined,
               title: selectedAgent.name,
-              detail: '${selectedAgent.state} - ${selectedAgent.rule}',
+              detail: '${selectedAgent.state} · ${selectedAgent.rule}',
+              tone: StatusToneColor.fromStatus(selectedAgent.state),
             ),
         ],
       ),
@@ -606,6 +698,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   Widget _recentConfigPanel() {
     return ConsolePanel(
       title: 'Edge sync state',
+      subtitle: 'Configs last pulled to the edge',
       icon: Icons.hub_outlined,
       child: _activeConfigs.isEmpty
           ? const EmptyState(
@@ -613,6 +706,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
               title: 'No active config synced',
               message:
                   'Arm an agent, paste the edge token, then sync active agents.',
+              compact: true,
             )
           : Column(
               children: _activeConfigs
@@ -632,244 +726,226 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           device.healthStatus.toLowerCase().contains(query);
     }).toList();
 
-    return _responsivePair(
-      compact: compact,
-      first: ConsolePanel(
-        title: 'Register device',
-        icon: Icons.add_circle_outline,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _deviceNameController,
-              decoration: const InputDecoration(labelText: 'Device name'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _deviceLocationController,
-              decoration: const InputDecoration(labelText: 'Location'),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: _isRegisteringDevice ? null : _registerDevice,
-              icon: _isRegisteringDevice
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.add_circle_outline),
-              label: Text(_isRegisteringDevice ? 'Registering' : 'Add device'),
-            ),
-            if (_lastEdgeToken != null) ...[
-              const SizedBox(height: 12),
-              TokenBox(token: _lastEdgeToken!),
-            ],
-          ],
-        ),
-      ),
-      second: ConsolePanel(
-        title: 'Device roster',
-        icon: Icons.videocam_outlined,
-        child: Column(
-          children: [
-            TextField(
-              controller: _deviceSearchController,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                labelText: 'Search devices',
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (_devices.isEmpty)
-              const EmptyState(
-                icon: Icons.videocam_off_outlined,
-                title: 'No devices registered',
-                message:
-                    'Add your first camera or edge device to start the surveillance loop.',
-              )
-            else if (visibleDevices.isEmpty)
-              const EmptyState(
-                icon: Icons.search_off_outlined,
-                title: 'No matching devices',
-                message:
-                    'Clear the search field to show every registered device.',
-              )
-            else
-              ...visibleDevices.map(
-                (device) => SelectableConsoleTile(
-                  selected: _selectedDeviceId == device.deviceId,
-                  title: device.name,
-                  subtitle:
-                      '${device.location ?? 'No location'} - pan ${device.currentPan}',
-                  trailing: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      StatusPill(
-                        label: device.healthStatus,
-                        color: _statusColor(device.healthStatus),
-                      ),
-                      if (device.fps != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          '${device.fps!.toStringAsFixed(1)} fps',
-                          style: Theme.of(context).textTheme.labelSmall,
-                        ),
-                      ],
-                    ],
-                  ),
-                  onTap: () =>
-                      setState(() => _selectedDeviceId = device.deviceId),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ConsolePanel(
+          title: 'Devices',
+          subtitle: '${_devices.length} registered · tap to select',
+          icon: Icons.videocam_outlined,
+          action: AppButton(
+            label: 'Register device',
+            icon: Icons.add_circle_outline,
+            loading: _isRegisteringDevice,
+            loadingLabel: 'Registering',
+            onPressed: _openRegisterDeviceDialog,
+          ),
+          child: Column(
+            children: [
+              TextField(
+                controller: _deviceSearchController,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  hintText: 'Search devices',
                 ),
               ),
-          ],
+              const SizedBox(height: AppSpacing.md),
+              if (_isRefreshing && _devices.isEmpty)
+                const SkeletonList()
+              else if (_devices.isEmpty)
+                EmptyState(
+                  icon: Icons.videocam_off_outlined,
+                  title: 'No devices registered',
+                  message:
+                      'Add your first camera or edge device to start the surveillance loop.',
+                  action: AppButton(
+                    label: 'Register device',
+                    icon: Icons.add_circle_outline,
+                    onPressed: _openRegisterDeviceDialog,
+                  ),
+                )
+              else if (visibleDevices.isEmpty)
+                const EmptyState(
+                  icon: Icons.search_off_outlined,
+                  title: 'No matching devices',
+                  message:
+                      'Clear the search field to show every registered device.',
+                  compact: true,
+                )
+              else
+                ...visibleDevices.map(
+                  (device) => SelectableConsoleTile(
+                    selected: _selectedDeviceId == device.deviceId,
+                    title: device.name,
+                    subtitle:
+                        '${device.location ?? 'No location'} · pan ${device.currentPan}°',
+                    leading: IconChip(icon: Icons.videocam_outlined, size: 34),
+                    trailing: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        StatusPill.fromStatus(device.healthStatus),
+                        if (device.fps != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            '${device.fps!.toStringAsFixed(1)} fps',
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                        ],
+                      ],
+                    ),
+                    onTap: () =>
+                        setState(() => _selectedDeviceId = device.deviceId),
+                  ),
+                ),
+            ],
+          ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.lg),
+        _armingPanel(),
+      ],
     );
   }
 
+  Widget _armingPanel() {
+    final selectedDevice = _devices
+        .where((device) => device.deviceId == _selectedDeviceId)
+        .firstOrNull;
+    final definitions = _definitions;
+    return ConsolePanel(
+      title: 'Assign agents',
+      subtitle: selectedDevice == null
+          ? 'Select a device to assign agents to it'
+          : 'Assign agents to ${selectedDevice.name}',
+      icon: Icons.shield_outlined,
+      child: selectedDevice == null
+          ? const EmptyState(
+              icon: Icons.videocam_off_outlined,
+              title: 'No device selected',
+              message:
+                  'Pick a device from the list above, then assign any agent to it.',
+              compact: true,
+            )
+          : definitions.isEmpty
+          ? const EmptyState(
+              icon: Icons.radar_outlined,
+              title: 'No agents yet',
+              message:
+                  'Create an agent in the Agents tab, then assign it to this device here.',
+              compact: true,
+            )
+          : Column(
+              children: definitions.map((agent) {
+                return _AssignAgentTile(
+                  agent: agent,
+                  assigned: _isAssigned(agent.agentId, selectedDevice.deviceId),
+                  assignmentCount: _assignmentCount(agent.agentId),
+                  busy: _assigningAgentId == agent.agentId,
+                  enabled: !_isChangingAgentState,
+                  onChanged: (assign) => assign
+                      ? _assignAgent(agent.agentId, selectedDevice.deviceId)
+                      : _unassignAgent(agent.agentId, selectedDevice.deviceId),
+                );
+              }).toList(),
+            ),
+    );
+  }
+
+  List<SurveillanceAgent> get _definitions =>
+      _agents.where((agent) => agent.isDefinition).toList();
+
+  Iterable<SurveillanceAgent> _subsForDefinition(String definitionId) =>
+      _agents.where((agent) => agent.parentAgentId == definitionId);
+
+  int _assignmentCount(String definitionId) =>
+      _subsForDefinition(definitionId).length;
+
+  bool _isAssigned(String definitionId, String deviceId) => _subsForDefinition(
+    definitionId,
+  ).any((agent) => agent.deviceId == deviceId);
+
   Widget _agentPanel(bool compact) {
     final query = _agentSearchController.text.trim().toLowerCase();
-    final visibleAgents = _agents.where((agent) {
+    final definitions = _definitions;
+    final visibleAgents = definitions.where((agent) {
       if (query.isEmpty) return true;
       return agent.name.toLowerCase().contains(query) ||
-          agent.rule.toLowerCase().contains(query) ||
-          agent.state.toLowerCase().contains(query);
+          agent.rule.toLowerCase().contains(query);
     }).toList();
 
-    return _responsivePair(
-      compact: compact,
-      first: ConsolePanel(
-        title: 'Create agent',
+    return ConsolePanel(
+      title: 'Agents',
+      subtitle: '${definitions.length} agents · tap to edit',
+      icon: Icons.radar_outlined,
+      action: AppButton(
+        label: 'Create agent',
         icon: Icons.add_task_outlined,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            DropdownButtonFormField<String>(
-              initialValue: _selectedDeviceId,
-              items: _devices
-                  .map(
-                    (device) => DropdownMenuItem(
-                      value: device.deviceId,
-                      child: Text(device.name, overflow: TextOverflow.ellipsis),
-                    ),
-                  )
-                  .toList(),
-              onChanged: _devices.isEmpty
-                  ? null
-                  : (value) => setState(() => _selectedDeviceId = value),
-              decoration: const InputDecoration(labelText: 'Linked device'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _agentNameController,
-              decoration: const InputDecoration(labelText: 'Agent name'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _agentLocationController,
-              decoration: const InputDecoration(labelText: 'Location'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _ruleController,
-              minLines: 4,
-              maxLines: 6,
-              decoration: const InputDecoration(
-                labelText: 'Natural language rule',
-              ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: _isCreatingAgent ? null : _createAgent,
-              icon: _isCreatingAgent
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.add_task_outlined),
-              label: Text(_isCreatingAgent ? 'Creating' : 'New agent'),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _isChangingAgentState
-                        ? null
-                        : () => _setAgentState(true),
-                    icon: const Icon(Icons.play_arrow_outlined),
-                    label: const Text('Arm'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _isChangingAgentState
-                        ? null
-                        : () => _setAgentState(false),
-                    icon: const Icon(Icons.pause_outlined),
-                    label: const Text('Disarm'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+        loading: _isCreatingAgent,
+        loadingLabel: 'Saving',
+        onPressed: _openCreateAgentDialog,
       ),
-      second: ConsolePanel(
-        title: 'Agent roster',
-        icon: Icons.radar_outlined,
-        child: Column(
-          children: [
-            TextField(
-              controller: _agentSearchController,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                labelText: 'Search agents',
-              ),
+      child: Column(
+        children: [
+          TextField(
+            controller: _agentSearchController,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search),
+              hintText: 'Search agents',
             ),
-            const SizedBox(height: 12),
-            if (_agents.isEmpty)
-              const EmptyState(
-                icon: Icons.radar_outlined,
-                title: 'No agents created',
-                message:
-                    'Create an agent and describe what SentinelEdge should watch for.',
-              )
-            else if (visibleAgents.isEmpty)
-              const EmptyState(
-                icon: Icons.search_off_outlined,
-                title: 'No matching agents',
-                message:
-                    'Clear the search field to show every surveillance rule.',
-              )
-            else
-              ...visibleAgents.map(
-                (agent) => SelectableConsoleTile(
-                  selected: _selectedAgentId == agent.agentId,
-                  title: agent.name,
-                  subtitle: agent.rule,
-                  trailing: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      StatusPill(
-                        label: agent.state,
-                        color: _statusColor(agent.state),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        agent.enabled ? 'enabled' : 'disabled',
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                    ],
-                  ),
-                  onTap: () => setState(() => _selectedAgentId = agent.agentId),
-                ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (_isRefreshing && definitions.isEmpty)
+            const SkeletonList()
+          else if (definitions.isEmpty)
+            EmptyState(
+              icon: Icons.radar_outlined,
+              title: 'No agents created',
+              message:
+                  'Create an agent from a template or your own rule, then assign it to a camera in the Devices tab.',
+              action: AppButton(
+                label: 'Create agent',
+                icon: Icons.add_task_outlined,
+                onPressed: _openCreateAgentDialog,
               ),
-          ],
-        ),
+            )
+          else if (visibleAgents.isEmpty)
+            const EmptyState(
+              icon: Icons.search_off_outlined,
+              title: 'No matching agents',
+              message:
+                  'Clear the search field to show every surveillance rule.',
+              compact: true,
+            )
+          else
+            ...visibleAgents.map((agent) {
+              final count = _assignmentCount(agent.agentId);
+              return SelectableConsoleTile(
+                selected: false,
+                title: agent.name,
+                subtitle: agent.rule,
+                leading: IconChip(icon: Icons.radar_outlined, size: 34),
+                trailing: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    StatusPill(
+                      label: count > 0
+                          ? '$count ${count == 1 ? 'camera' : 'cameras'}'
+                          : 'unassigned',
+                      tone: count > 0 ? StatusTone.success : StatusTone.neutral,
+                    ),
+                    const SizedBox(height: 4),
+                    Icon(
+                      Icons.edit_outlined,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+                onTap: () => _openEditAgentDialog(agent),
+              );
+            }),
+        ],
       ),
     );
   }
@@ -877,47 +953,52 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   Widget _edgePanel() {
     return ConsolePanel(
       title: 'Edge setup',
+      subtitle: 'Authenticate and sync the device fleet',
       icon: Icons.hub_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TextField(
             controller: _edgeTokenController,
-            decoration: const InputDecoration(labelText: 'Edge token'),
-            obscureText: true,
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              FilledButton.icon(
-                onPressed: _isSendingHeartbeat ? null : _sendHeartbeat,
-                icon: _isSendingHeartbeat
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.favorite_border),
-                label: Text(
-                  _isSendingHeartbeat ? 'Checking' : 'Check connection',
+            decoration: InputDecoration(
+              labelText: 'Edge token',
+              prefixIcon: const Icon(Icons.key_outlined),
+              suffixIcon: IconButton(
+                tooltip: _edgeTokenObscured ? 'Show token' : 'Hide token',
+                icon: Icon(
+                  _edgeTokenObscured
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
                 ),
+                onPressed: () =>
+                    setState(() => _edgeTokenObscured = !_edgeTokenObscured),
               ),
-              OutlinedButton.icon(
-                onPressed: _isSyncingConfigs ? null : _pullActiveConfigs,
-                icon: _isSyncingConfigs
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.download_outlined),
-                label: Text(
-                  _isSyncingConfigs ? 'Syncing' : 'Sync active agents',
-                ),
+            ),
+            obscureText: _edgeTokenObscured,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            children: [
+              AppButton(
+                label: 'Check connection',
+                loadingLabel: 'Checking',
+                icon: Icons.favorite_border,
+                loading: _isSendingHeartbeat,
+                onPressed: _sendHeartbeat,
+              ),
+              AppButton(
+                label: 'Sync active agents',
+                loadingLabel: 'Syncing',
+                icon: Icons.download_outlined,
+                variant: AppButtonVariant.secondary,
+                loading: _isSyncingConfigs,
+                onPressed: _pullActiveConfigs,
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
           if (_activeConfigs.isEmpty)
             const EmptyState(
               icon: Icons.settings_input_component_outlined,
@@ -942,6 +1023,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       compact: compact,
       first: ConsolePanel(
         title: 'Event review',
+        subtitle: '${_events.length} detections',
         icon: Icons.warning_amber_outlined,
         action: IconButton.filledTonal(
           onPressed: _isLoadingEvents ? null : () => _loadEvents(),
@@ -956,7 +1038,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_events.isEmpty)
+            if (_isLoadingEvents && _events.isEmpty)
+              const SkeletonList(rows: 4)
+            else if (_events.isEmpty)
               const EmptyState(
                 icon: Icons.event_busy_outlined,
                 title: 'No events yet',
@@ -971,18 +1055,16 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                       ? event.summary!
                       : event.eventType,
                   subtitle:
-                      '${_formatDate(event.timestamp)} - ${event.deviceId} - ${event.agentId}',
-                  leading: Icon(
-                    Icons.warning_amber_outlined,
-                    color: _statusColor(event.severity),
+                      '${_formatDate(event.timestamp)} · ${event.deviceId}',
+                  leading: IconChip(
+                    icon: Icons.warning_amber_outlined,
+                    size: 34,
+                    color: StatusToneColor.fromStatus(event.severity).base,
                   ),
                   trailing: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      StatusPill(
-                        label: event.severity,
-                        color: _statusColor(event.severity),
-                      ),
+                      StatusPill.fromStatus(event.severity),
                       const SizedBox(height: 4),
                       Text(
                         event.status,
@@ -1004,6 +1086,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       ),
       second: ConsolePanel(
         title: 'Event detail',
+        subtitle: 'Stage results and media',
         icon: Icons.manage_search_outlined,
         child: selectedEvent == null
             ? const EmptyState(
@@ -1032,14 +1115,18 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     if (compact) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [first, const SizedBox(height: 16), second],
+        children: [
+          first,
+          const SizedBox(height: AppSpacing.lg),
+          second,
+        ],
       );
     }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(child: first),
-        const SizedBox(width: 16),
+        const SizedBox(width: AppSpacing.lg),
         Expanded(child: second),
       ],
     );
@@ -1048,30 +1135,344 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   static const _destinations = [
     _Destination(
       label: 'Overview',
+      subtitle: 'Fleet status at a glance',
       icon: Icons.dashboard_outlined,
       selectedIcon: Icons.dashboard,
     ),
     _Destination(
       label: 'Devices',
+      subtitle: 'Cameras, edge nodes and arming',
       icon: Icons.videocam_outlined,
       selectedIcon: Icons.videocam,
     ),
     _Destination(
       label: 'Agents',
+      subtitle: 'Author and edit surveillance rules',
       icon: Icons.radar_outlined,
       selectedIcon: Icons.radar,
     ),
     _Destination(
       label: 'Events',
+      subtitle: 'Detections and media review',
       icon: Icons.warning_amber_outlined,
       selectedIcon: Icons.warning_amber,
     ),
     _Destination(
       label: 'Edge',
+      subtitle: 'Device authentication and sync',
       icon: Icons.hub_outlined,
       selectedIcon: Icons.hub,
     ),
   ];
+}
+
+// ---------------------------------------------------------------------------
+// Shell
+// ---------------------------------------------------------------------------
+
+class _Sidebar extends StatelessWidget {
+  const _Sidebar({
+    required this.destinations,
+    required this.selectedIndex,
+    required this.extended,
+    required this.user,
+    required this.isBusy,
+    required this.onSelect,
+    required this.onSignOut,
+  });
+
+  final List<_Destination> destinations;
+  final int selectedIndex;
+  final bool extended;
+  final BackendUser user;
+  final bool isBusy;
+  final ValueChanged<int> onSelect;
+  final Future<void> Function() onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final width = extended ? 252.0 : 76.0;
+
+    return AnimatedContainer(
+      duration: AppMotion.duration(context, AppMotion.base),
+      curve: AppMotion.easeOut,
+      width: width,
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(right: BorderSide(color: scheme.outlineVariant)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Brand lockup
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              extended ? AppSpacing.lg : 0,
+              AppSpacing.xl,
+              extended ? AppSpacing.lg : 0,
+              AppSpacing.lg,
+            ),
+            child: Row(
+              mainAxisAlignment: extended
+                  ? MainAxisAlignment.start
+                  : MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.primary, AppColors.brandDeep],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: const Icon(
+                    Icons.shield_outlined,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                if (extended) ...[
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      'SentinelEdge',
+                      style: theme.textTheme.titleMedium,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // Destinations
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              children: [
+                for (var i = 0; i < destinations.length; i++)
+                  _NavItem(
+                    destination: destinations[i],
+                    selected: i == selectedIndex,
+                    extended: extended,
+                    onTap: () => onSelect(i),
+                  ),
+              ],
+            ),
+          ),
+          Divider(color: scheme.outlineVariant, height: 1),
+          // Account
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: _AccountRow(
+              user: user,
+              extended: extended,
+              isBusy: isBusy,
+              onSignOut: onSignOut,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({
+    required this.destination,
+    required this.selected,
+    required this.extended,
+    required this.onTap,
+  });
+
+  final _Destination destination;
+  final bool selected;
+  final bool extended;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final fg = selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
+    final item = Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: extended ? AppSpacing.md : 0,
+        vertical: AppSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        color: selected ? scheme.primaryContainer : Colors.transparent,
+        borderRadius: AppRadius.mdAll,
+      ),
+      child: Row(
+        mainAxisAlignment: extended
+            ? MainAxisAlignment.start
+            : MainAxisAlignment.center,
+        children: [
+          Icon(
+            selected ? destination.selectedIcon : destination.icon,
+            size: 22,
+            color: fg,
+          ),
+          if (extended) ...[
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                destination.label,
+                style:
+                    (selected
+                            ? theme.textTheme.labelLarge
+                            : theme.textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w500,
+                              ))
+                        ?.copyWith(color: selected ? scheme.onSurface : fg),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+
+    final tappable = Material(
+      color: Colors.transparent,
+      child: InkWell(borderRadius: AppRadius.mdAll, onTap: onTap, child: item),
+    );
+
+    return extended
+        ? tappable
+        : Tooltip(message: destination.label, child: tappable);
+  }
+}
+
+class _AccountRow extends StatelessWidget {
+  const _AccountRow({
+    required this.user,
+    required this.extended,
+    required this.isBusy,
+    required this.onSignOut,
+  });
+
+  final BackendUser user;
+  final bool extended;
+  final bool isBusy;
+  final Future<void> Function() onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final avatar = _Avatar(user: user);
+
+    if (!extended) {
+      return Column(
+        children: [
+          avatar,
+          const SizedBox(height: AppSpacing.sm),
+          IconButton(
+            tooltip: 'Sign out',
+            onPressed: isBusy ? null : onSignOut,
+            icon: const Icon(Icons.logout, size: 20),
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        avatar,
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                user.displayName ?? user.email,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall,
+              ),
+              Text(
+                user.role,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: 'Sign out',
+          onPressed: isBusy ? null : onSignOut,
+          icon: const Icon(Icons.logout, size: 20),
+          color: scheme.onSurfaceVariant,
+        ),
+      ],
+    );
+  }
+}
+
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.user});
+
+  final BackendUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final url = user.avatarUrl;
+    final source = (user.displayName?.isNotEmpty == true)
+        ? user.displayName!
+        : user.email;
+    final initials = source.trim().isEmpty
+        ? '?'
+        : source.trim()[0].toUpperCase();
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: scheme.primaryContainer,
+      foregroundImage: (url != null && url.isNotEmpty)
+          ? NetworkImage(url)
+          : null,
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: scheme.onPrimaryContainer,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedTabContent extends StatelessWidget {
+  const _AnimatedTabContent({required this.tabIndex, required this.child});
+
+  final int tabIndex;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: AppMotion.duration(context, AppMotion.base),
+      switchInCurve: AppMotion.easeOut,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.02),
+            end: Offset.zero,
+          ).animate(animation),
+          child: child,
+        ),
+      ),
+      child: KeyedSubtree(key: ValueKey(tabIndex), child: child),
+    );
+  }
 }
 
 class _EventDetail extends StatelessWidget {
@@ -1095,24 +1496,22 @@ class _EventDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: [
-            StatusPill(
-              label: event.severity,
-              color: _statusColor(event.severity),
-            ),
-            StatusPill(label: event.status, color: _statusColor(event.status)),
+            StatusPill.fromStatus(event.severity),
+            StatusPill.fromStatus(event.status),
             if (event.degraded)
-              const StatusPill(label: 'degraded', color: Color(0xFFB68416)),
+              const StatusPill(label: 'degraded', tone: StatusTone.warning),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         _DetailLine(label: 'Event', value: event.eventId),
         _DetailLine(label: 'Type', value: event.eventType),
         _DetailLine(label: 'Device', value: event.deviceId),
@@ -1125,28 +1524,16 @@ class _EventDetail extends StatelessWidget {
           ),
         if (event.summary != null)
           _DetailLine(label: 'Summary', value: event.summary!),
-        const SizedBox(height: 12),
-        Text(
-          'Stage results',
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 8),
-        _JsonBlock(label: 'Stage 1', value: event.stage1Result),
-        _JsonBlock(label: 'Stage 2', value: event.stage2Verdict),
-        _JsonBlock(label: 'Stage 3', value: event.stage3Verdict),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
+        Text('Stage results', style: theme.textTheme.titleSmall),
+        const SizedBox(height: AppSpacing.sm),
+        CodeBlock(label: 'Stage 1', value: event.stage1Result?.toString()),
+        CodeBlock(label: 'Stage 2', value: event.stage2Verdict?.toString()),
+        CodeBlock(label: 'Stage 3', value: event.stage3Verdict?.toString()),
+        const SizedBox(height: AppSpacing.md),
         Row(
           children: [
-            Expanded(
-              child: Text(
-                'Clips',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-              ),
-            ),
+            Expanded(child: Text('Clips', style: theme.textTheme.titleSmall)),
             IconButton.filledTonal(
               onPressed: isLoadingClips ? null : onRefreshClips,
               tooltip: 'Refresh clips',
@@ -1159,12 +1546,13 @@ class _EventDetail extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sm),
         if (clips.isEmpty)
           const EmptyState(
             icon: Icons.movie_outlined,
             title: 'No clips attached',
             message: 'Register a clip from the edge service for this event.',
+            compact: true,
           )
         else
           ...clips.map(
@@ -1172,25 +1560,26 @@ class _EventDetail extends StatelessWidget {
               selected: false,
               title: clip.clipType,
               subtitle:
-                  '${clip.status} - ${clip.mimeType ?? 'media'} - ${clip.durationSeconds ?? 0}s',
-              leading: Icon(Icons.movie_outlined, color: scheme.primary),
-              trailing: OutlinedButton.icon(
+                  '${clip.status} · ${clip.mimeType ?? 'media'} · ${clip.durationSeconds ?? 0}s',
+              leading: IconChip(icon: Icons.movie_outlined, size: 34),
+              trailing: AppButton(
+                label: 'URL',
+                icon: Icons.link,
+                variant: AppButtonVariant.secondary,
                 onPressed: isRequestingPlayback || clip.status != 'available'
                     ? null
                     : () => onPlayback(clip),
-                icon: const Icon(Icons.link),
-                label: const Text('URL'),
               ),
               onTap: () {},
             ),
           ),
         if (playbackUrl != null) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
               color: scheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: AppRadius.mdAll,
               border: Border.all(color: scheme.outlineVariant),
             ),
             child: Column(
@@ -1201,33 +1590,24 @@ class _EventDetail extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Playback URL',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                        style: theme.textTheme.titleSmall,
                       ),
                     ),
-                    IconButton(
-                      onPressed: () {
-                        Clipboard.setData(
-                          ClipboardData(text: playbackUrl!.playbackUrl),
-                        );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Playback URL copied')),
-                        );
-                      },
+                    CopyIconButton(
+                      value: playbackUrl!.playbackUrl,
                       tooltip: 'Copy playback URL',
-                      icon: const Icon(Icons.copy),
                     ),
                   ],
                 ),
-                SelectableText(playbackUrl!.playbackUrl),
+                SelectableText(
+                  playbackUrl!.playbackUrl,
+                  style: AppTypography.mono(color: scheme.onSurface),
+                ),
                 if (playbackUrl!.expiresAt != null) ...[
                   const SizedBox(height: 6),
                   Text(
                     'Expires ${_formatDate(playbackUrl!.expiresAt)}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                    style: theme.textTheme.bodySmall,
                   ),
                 ],
               ],
@@ -1247,48 +1627,25 @@ class _DetailLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 82,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+            width: 84,
+            child: Text(label, style: theme.textTheme.labelMedium),
+          ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface,
               ),
             ),
           ),
-          Expanded(child: SelectableText(value)),
         ],
-      ),
-    );
-  }
-}
-
-class _JsonBlock extends StatelessWidget {
-  const _JsonBlock({required this.label, required this.value});
-
-  final String label;
-  final Map<String, dynamic>? value;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Text(
-        '$label: ${value?.toString() ?? 'not provided'}',
-        style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
       ),
     );
   }
@@ -1297,6 +1654,7 @@ class _JsonBlock extends StatelessWidget {
 class _WorkspaceBody extends StatelessWidget {
   const _WorkspaceBody({
     required this.title,
+    required this.subtitle,
     required this.user,
     required this.isBusy,
     required this.isRefreshing,
@@ -1304,10 +1662,12 @@ class _WorkspaceBody extends StatelessWidget {
     required this.error,
     required this.onRefresh,
     required this.onSignOut,
+    required this.onDismissError,
     required this.child,
   });
 
   final String title;
+  final String subtitle;
   final BackendUser user;
   final bool isBusy;
   final bool isRefreshing;
@@ -1315,33 +1675,34 @@ class _WorkspaceBody extends StatelessWidget {
   final String? error;
   final VoidCallback onRefresh;
   final Future<void> Function() onSignOut;
+  final VoidCallback onDismissError;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     return CustomScrollView(
       slivers: [
         SliverAppBar(
           pinned: true,
-          titleSpacing: 20,
+          titleSpacing: AppSpacing.xl,
+          toolbarHeight: 72,
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+              Text(title, style: theme.textTheme.headlineSmall),
               Text(
-                '${user.displayName ?? user.email} - ${BackendAuthClient.baseUrl}',
+                subtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                style: theme.textTheme.bodySmall,
               ),
             ],
           ),
           actions: [
             _RealtimeStatusPill(status: realtimeStatus),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.sm),
             IconButton.filledTonal(
               onPressed: isRefreshing ? null : onRefresh,
               tooltip: 'Refresh',
@@ -1352,27 +1713,38 @@ class _WorkspaceBody extends StatelessWidget {
                     )
                   : const Icon(Icons.refresh),
             ),
-            const SizedBox(width: 6),
-            IconButton.outlined(
-              onPressed: isBusy ? null : onSignOut,
-              tooltip: 'Sign out',
-              icon: const Icon(Icons.logout),
-            ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.lg),
           ],
         ),
         SliverPadding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.sm,
+            AppSpacing.xl,
+            AppSpacing.xxl,
+          ),
           sliver: SliverToBoxAdapter(
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1180),
+                constraints: const BoxConstraints(
+                  maxWidth: AppBreakpoints.contentMaxWidth,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (error != null) ...[
-                      _ErrorBanner(text: error!),
-                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(child: AppBanner(text: error!)),
+                          IconButton(
+                            tooltip: 'Dismiss',
+                            iconSize: 18,
+                            onPressed: onDismissError,
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.md),
                     ],
                     child,
                   ],
@@ -1386,26 +1758,6 @@ class _WorkspaceBody extends StatelessWidget {
   }
 }
 
-class _ErrorBanner extends StatelessWidget {
-  const _ErrorBanner({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: scheme.errorContainer,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: scheme.error.withValues(alpha: 0.35)),
-      ),
-      child: Text(text, style: TextStyle(color: scheme.onErrorContainer)),
-    );
-  }
-}
-
 class _RealtimeStatusPill extends StatelessWidget {
   const _RealtimeStatusPill({required this.status});
 
@@ -1413,15 +1765,15 @@ class _RealtimeStatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (label, color) = switch (status) {
-      RealtimeStatus.live => ('Live', const Color(0xFF2E8B57)),
-      RealtimeStatus.connecting => ('Connecting', const Color(0xFFB68416)),
-      RealtimeStatus.reconnecting => ('Reconnecting', const Color(0xFFB68416)),
-      RealtimeStatus.offline => ('Offline', const Color(0xFFC44732)),
+    final (label, tone) = switch (status) {
+      RealtimeStatus.live => ('Live', StatusTone.success),
+      RealtimeStatus.connecting => ('Connecting', StatusTone.warning),
+      RealtimeStatus.reconnecting => ('Reconnecting', StatusTone.warning),
+      RealtimeStatus.offline => ('Offline', StatusTone.danger),
     };
     return Tooltip(
       message: 'Realtime connection: $label',
-      child: StatusPill(label: label, color: color),
+      child: StatusPill(label: label, tone: tone),
     );
   }
 }
@@ -1431,26 +1783,29 @@ class _FocusRow extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.detail,
+    required this.tone,
   });
 
   final IconData icon;
   final String title;
   final String detail;
+  final StatusTone tone;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppRadius.mdAll,
         border: Border.all(color: scheme.outlineVariant),
       ),
       child: Row(
         children: [
-          Icon(icon, color: scheme.primary),
-          const SizedBox(width: 10),
+          IconChip(icon: icon, color: tone.base),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1459,20 +1814,389 @@ class _FocusRow extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                  style: theme.textTheme.titleSmall,
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   detail,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: scheme.onSurfaceVariant),
+                  style: theme.textTheme.bodySmall,
                 ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TemplateChip extends StatelessWidget {
+  const _TemplateChip({
+    required this.template,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AgentTemplate template;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Tooltip(
+      message: template.description,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: AppRadius.pillAll,
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: AppMotion.duration(context, AppMotion.fast),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+            decoration: BoxDecoration(
+              color: selected
+                  ? scheme.primaryContainer
+                  : scheme.surfaceContainerLow,
+              borderRadius: AppRadius.pillAll,
+              border: Border.all(
+                color: selected ? scheme.primary : scheme.outlineVariant,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  template.icon,
+                  size: 16,
+                  color: selected ? scheme.onPrimaryContainer : scheme.primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  template.label,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: selected
+                        ? scheme.onPrimaryContainer
+                        : scheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AssignAgentTile extends StatelessWidget {
+  const _AssignAgentTile({
+    required this.agent,
+    required this.assigned,
+    required this.assignmentCount,
+    required this.busy,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final SurveillanceAgent agent;
+  final bool assigned;
+  final int assignmentCount;
+  final bool busy;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final elsewhere = assignmentCount - (assigned ? 1 : 0);
+    final subtitle = elsewhere > 0
+        ? '${agent.rule}  ·  also on $elsewhere other ${elsewhere == 1 ? 'camera' : 'cameras'}'
+        : agent.rule;
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLowest,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          IconChip(
+            icon: Icons.radar_outlined,
+            size: 34,
+            color: assigned ? AppColors.success : scheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  agent.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          if (busy)
+            const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            Switch(value: assigned, onChanged: enabled ? onChanged : null),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgentFormResult {
+  const _AgentFormResult({
+    required this.name,
+    this.location,
+    required this.rule,
+  });
+
+  final String name;
+  final String? location;
+  final String rule;
+}
+
+class _DeviceFormDialog extends StatefulWidget {
+  const _DeviceFormDialog();
+
+  @override
+  State<_DeviceFormDialog> createState() => _DeviceFormDialogState();
+}
+
+class _DeviceFormDialogState extends State<_DeviceFormDialog> {
+  final _nameController = TextEditingController();
+  final _locationController = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _locationController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'Device name is required.');
+      return;
+    }
+    Navigator.of(
+      context,
+    ).pop((name: name, location: _locationController.text.trim()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Register device'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _nameController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Device name',
+                prefixIcon: Icon(Icons.badge_outlined),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _locationController,
+              decoration: const InputDecoration(
+                labelText: 'Location (optional)',
+                prefixIcon: Icon(Icons.place_outlined),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              AppBanner(text: _error!),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Register')),
+      ],
+    );
+  }
+}
+
+class _AgentFormDialog extends StatefulWidget {
+  const _AgentFormDialog({this.agent});
+
+  final SurveillanceAgent? agent;
+
+  @override
+  State<_AgentFormDialog> createState() => _AgentFormDialogState();
+}
+
+class _AgentFormDialogState extends State<_AgentFormDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _locationController;
+  late final TextEditingController _ruleController;
+  String? _activeTemplate;
+  String? _error;
+
+  bool get _isEditing => widget.agent != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final agent = widget.agent;
+    _nameController = TextEditingController(text: agent?.name ?? '');
+    _locationController = TextEditingController(text: agent?.location ?? '');
+    _ruleController = TextEditingController(text: agent?.rule ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _locationController.dispose();
+    _ruleController.dispose();
+    super.dispose();
+  }
+
+  void _applyTemplate(AgentTemplate template) {
+    setState(() {
+      _activeTemplate = template.label;
+      _nameController.text = template.name;
+      _ruleController.text = template.rule;
+    });
+  }
+
+  void _submit() {
+    final name = _nameController.text.trim();
+    final rule = _ruleController.text.trim();
+    if (name.isEmpty || rule.isEmpty) {
+      setState(() => _error = 'Agent name and rule are both required.');
+      return;
+    }
+    Navigator.of(context).pop(
+      _AgentFormResult(
+        name: name,
+        location: _locationController.text.trim(),
+        rule: rule,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: Text(_isEditing ? 'Edit agent' : 'Create agent'),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!_isEditing) ...[
+                Text(
+                  'Start from a template',
+                  style: theme.textTheme.labelMedium,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: kAgentTemplates
+                      .map(
+                        (template) => _TemplateChip(
+                          template: template,
+                          selected: _activeTemplate == template.label,
+                          onTap: () => _applyTemplate(template),
+                        ),
+                      )
+                      .toList(),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Agent name',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _locationController,
+                decoration: const InputDecoration(
+                  labelText: 'Location (optional)',
+                  prefixIcon: Icon(Icons.place_outlined),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _ruleController,
+                minLines: 4,
+                maxLines: 8,
+                onChanged: (_) {
+                  if (_activeTemplate != null) {
+                    setState(() => _activeTemplate = null);
+                  }
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Natural language rule',
+                  alignLabelWithHint: true,
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                AppBanner(text: _error!),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(_isEditing ? 'Save changes' : 'Create agent'),
+        ),
+      ],
     );
   }
 }
@@ -1489,22 +2213,13 @@ class _ActiveConfigTile extends StatelessWidget {
     final ruleText =
         config.config['rule_text']?.toString() ?? 'Active surveillance rule';
     final confidence = config.config['min_confidence']?.toString() ?? 'default';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: SelectableConsoleTile(
-        selected: false,
-        title: 'Active config for ${config.agentId}',
-        subtitle: '$detectors - confidence $confidence - $ruleText',
-        leading: Icon(
-          Icons.tune_outlined,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-        trailing: StatusPill(
-          label: config.state,
-          color: _statusColor(config.state),
-        ),
-        onTap: () {},
-      ),
+    return SelectableConsoleTile(
+      selected: false,
+      title: 'Active config · ${config.agentId}',
+      subtitle: '$detectors · confidence $confidence · $ruleText',
+      leading: IconChip(icon: Icons.tune_outlined, size: 34),
+      trailing: StatusPill.fromStatus(config.state),
+      onTap: () {},
     );
   }
 }
@@ -1512,11 +2227,13 @@ class _ActiveConfigTile extends StatelessWidget {
 class _Destination {
   const _Destination({
     required this.label,
+    required this.subtitle,
     required this.icon,
     required this.selectedIcon,
   });
 
   final String label;
+  final String subtitle;
   final IconData icon;
   final IconData selectedIcon;
 }
@@ -1527,21 +2244,6 @@ String? _chooseExisting(String? current, Iterable<String> candidates) {
     return current;
   }
   return values.isEmpty ? null : values.first;
-}
-
-Color _statusColor(String value) {
-  final normalized = value.toLowerCase();
-  if (normalized == 'online' ||
-      normalized == 'armed' ||
-      normalized == 'active') {
-    return const Color(0xFF2E8B57);
-  }
-  if (normalized == 'offline' ||
-      normalized == 'error' ||
-      normalized == 'disabled') {
-    return const Color(0xFFC44732);
-  }
-  return const Color(0xFFB68416);
 }
 
 String _formatDate(DateTime? value) {
