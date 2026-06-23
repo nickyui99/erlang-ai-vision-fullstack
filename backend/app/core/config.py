@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     session_cookie_name: str = Field(default="sentineledge_session", validation_alias="SESSION_COOKIE_NAME")
     session_expire_minutes: int = Field(default=1440, validation_alias="SESSION_EXPIRE_MINUTES")
 
+    alerts_enabled: bool = Field(default=True, validation_alias="ALERTS_ENABLED")
+    alert_min_severity: str = Field(default="high", validation_alias="ALERT_MIN_SEVERITY")
+
     signed_url_ttl_seconds: int = Field(default=900, validation_alias="SIGNED_URL_TTL_SECONDS")
     media_retention_days: int = Field(default=7, validation_alias="MEDIA_RETENTION_DAYS")
     daily_recording_retention_hours: int = Field(

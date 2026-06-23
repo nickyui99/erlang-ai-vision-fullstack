@@ -1,10 +1,10 @@
 # SentinelEdge Fullstack
 
-SentinelEdge is a surveillance backend and edge-integration project. The current implementation is focused on the backend foundation and database layer: FastAPI, SQLite local database connectivity, health checks, SQLAlchemy models, Alembic migrations, and backend documentation.
+SentinelEdge is a surveillance backend and edge-integration project spanning a FastAPI backend and a Flutter app. It covers user auth, device and agent management, edge event ingestion, media metadata, realtime updates, two-axis camera control, and push alerts — backed by SQLAlchemy models, Alembic migrations, and the documentation under `docs/`.
 
 ## Current Status
 
-Milestones 1 through 7 are complete:
+Milestones 1 through 8 are complete:
 
 - FastAPI app scaffold
 - environment-based configuration
@@ -24,6 +24,11 @@ Milestones 1 through 7 are complete:
 - backend session cookie authentication
 - current-user and logout endpoints
 - edge-token hashing and authentication dependency
+- device registration, heartbeat, and agent arm/disarm loop
+- edge event ingestion with idempotency and clip/recording metadata
+- realtime updates over SSE (`event.created`, `clip.available`, `device.health_changed`, `alert.created`)
+- edge command relay over WebSocket: two-axis SG90 gimbal control (pan + tilt) and live snapshot
+- Firebase Cloud Messaging (FCM) push alerts for high-severity events (Milestone 8)
 
 Implemented HTTP endpoints:
 
@@ -38,6 +43,7 @@ Implemented HTTP endpoints:
 - `GET /api/v1/devices/{device_id}`
 - `PUT /api/v1/devices/{device_id}`
 - `POST /api/v1/devices/{device_id}/pan`
+- `POST /api/v1/devices/{device_id}/tilt`
 - `POST /api/v1/devices/{device_id}/snapshot`
 - `POST /api/v1/agents`
 - `GET /api/v1/agents`
@@ -55,10 +61,12 @@ Implemented HTTP endpoints:
 - `GET /api/v1/events/{event_id}`
 - `GET /api/v1/events/{event_id}/clips`
 - `POST /api/v1/clips/{clip_id}/signed-url`
+- `POST /api/v1/notifications/tokens`
+- `DELETE /api/v1/notifications/tokens/{token}`
 - `GET /api/v1/stream/events`
 - `WS /api/v1/edge/ws`
 
-Alert, Qwen, MCP, retention, and deployment work is documented as planned API surface and will be implemented in later milestones.
+Qwen verification, MCP tooling, retention, and deployment work is documented as planned API surface and will be implemented in later milestones.
 
 ## Repository Layout
 
@@ -160,6 +168,7 @@ events
 clips
 recordings
 alerts
+push_tokens
 tool_audit
 ```
 
@@ -188,22 +197,29 @@ POST http://localhost:8000/api/v1/auth/logout
 GET  http://localhost:8000/api/v1/users/me
 ```
 
-<<Device, agent, and edge loop endpoints:
+Device, agent, edge loop, camera control, and notification endpoints:
 
 ```text
-POST http://localhost:8000/api/v1/devices
-GET  http://localhost:8000/api/v1/devices
-GET  http://localhost:8000/api/v1/devices/{device_id}
-PUT  http://localhost:8000/api/v1/devices/{device_id}
-POST http://localhost:8000/api/v1/agents
-GET  http://localhost:8000/api/v1/agents
-GET  http://localhost:8000/api/v1/agents/{agent_id}
-PUT  http://localhost:8000/api/v1/agents/{agent_id}
-POST http://localhost:8000/api/v1/agents/{agent_id}/arm
-POST http://localhost:8000/api/v1/agents/{agent_id}/disarm
-POST http://localhost:8000/api/v1/edge/heartbeat
-GET  http://localhost:8000/api/v1/edge/agents/active
+POST   http://localhost:8000/api/v1/devices
+GET    http://localhost:8000/api/v1/devices
+GET    http://localhost:8000/api/v1/devices/{device_id}
+PUT    http://localhost:8000/api/v1/devices/{device_id}
+POST   http://localhost:8000/api/v1/devices/{device_id}/pan
+POST   http://localhost:8000/api/v1/devices/{device_id}/tilt
+POST   http://localhost:8000/api/v1/devices/{device_id}/snapshot
+POST   http://localhost:8000/api/v1/agents
+GET    http://localhost:8000/api/v1/agents
+GET    http://localhost:8000/api/v1/agents/{agent_id}
+PUT    http://localhost:8000/api/v1/agents/{agent_id}
+POST   http://localhost:8000/api/v1/agents/{agent_id}/arm
+POST   http://localhost:8000/api/v1/agents/{agent_id}/disarm
+POST   http://localhost:8000/api/v1/edge/heartbeat
+GET    http://localhost:8000/api/v1/edge/agents/active
+POST   http://localhost:8000/api/v1/notifications/tokens
+DELETE http://localhost:8000/api/v1/notifications/tokens/{token}
 ```
+
+Pan and tilt drive the two SG90 servos of the camera gimbal (each `0–180°`, centered at `90°`); the edge reports `current_pan` and `current_tilt` back through the heartbeat. Push alerts are delivered via Firebase Cloud Messaging — register a client's FCM token with `POST /api/v1/notifications/tokens`, and the backend pushes a notification when the edge submits an event at or above `ALERT_MIN_SEVERITY` (default `high`).
 
 Firebase Auth is used for Google login. The frontend signs in with Firebase, gets a Firebase ID token, and sends it to the backend:
 
@@ -318,6 +334,7 @@ alerts
 clips
 devices
 events
+push_tokens
 recordings
 tool_audit
 users
@@ -341,7 +358,7 @@ Invoke-RestMethod -Method Post http://localhost:8000/api/v1/auth/firebase/login
 
 Expected result without a bearer token is `401 not_authenticated`. With a fake bearer token and missing Firebase settings, expected result is `503 firebase_not_configured`.
 
-<<Milestone 3 is complete when Firebase Google login succeeds from the Flutter app and `/api/v1/users/me` returns the current user using the backend session cookie.
+Milestone 3 is complete when Firebase Google login succeeds from the Flutter app and `/api/v1/users/me` returns the current user using the backend session cookie.
 
 ## Milestone 4 Validation
 
@@ -356,7 +373,7 @@ Invoke-RestMethod -Method Post http://localhost:8000/api/v1/devices -ContentType
 Save the returned `edge_token`, then send heartbeat as the edge service:
 
 ```powershell
-Invoke-RestMethod -Method Post http://localhost:8000/api/v1/edge/heartbeat -Headers @{ Authorization = "Bearer <edge_token>" } -ContentType 'application/json' -Body '{"health_status":"online","rssi":-58.2,"fps":15.0,"current_pan":90}'
+Invoke-RestMethod -Method Post http://localhost:8000/api/v1/edge/heartbeat -Headers @{ Authorization = "Bearer <edge_token>" } -ContentType 'application/json' -Body '{"health_status":"online","rssi":-58.2,"fps":15.0,"current_pan":90,"current_tilt":90}'
 ```
 
 Create and arm an agent for the device:
@@ -374,13 +391,20 @@ Invoke-RestMethod http://localhost:8000/api/v1/edge/agents/active -Headers @{ Au
 
 ## Next Milestone
 
-Milestone 8 is the alert loop:
+Milestone 8 (alert loop) is complete, delivered as Firebase Cloud Messaging push:
 
-- add alert service interface
-- add the first alert adapter
-- suppress duplicate alerts
-- store alert delivery results
-- push alert status through SSE
+- alert service interface (`backend/app/services/alert_service.py`)
+- first alert adapter — FCM push (`backend/app/services/notification_service.py`)
+- duplicate alerts suppressed per event + channel
+- alert delivery results stored on `alerts.status`
+- alert status pushed through SSE (`alert.created`)
+
+Milestone 9 is next — AI verification and the MCP tool layer:
+
+- add the Qwen client wrapper and verification schema
+- validate or repair model output and store `stage3_verdict`
+- add MCP tool permissions and audit logging
+- enforce pan/tilt limits and high-risk tool rules
 
 
 

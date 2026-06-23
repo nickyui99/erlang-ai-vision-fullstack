@@ -25,6 +25,7 @@ from app.schemas.media import (
     RecordingRead,
 )
 from app.core.config import settings
+from app.services import alert_service
 from app.services.media_url_service import media_url_service
 from app.services.edge_command_hub import edge_command_hub
 from app.services.realtime_bus import realtime_bus
@@ -82,11 +83,13 @@ async def edge_heartbeat(
         "rssi": edge_device.rssi,
         "fps": edge_device.fps,
         "current_pan": edge_device.current_pan,
+        "current_tilt": edge_device.current_tilt,
     }
     edge_device.health_status = payload.health_status
     edge_device.rssi = payload.rssi
     edge_device.fps = payload.fps
     edge_device.current_pan = payload.current_pan
+    edge_device.current_tilt = payload.current_tilt
     edge_device.last_seen = datetime.now(UTC)
     edge_device.updated_at = edge_device.last_seen
     await session.commit()
@@ -96,6 +99,7 @@ async def edge_heartbeat(
         "rssi": edge_device.rssi,
         "fps": edge_device.fps,
         "current_pan": edge_device.current_pan,
+        "current_tilt": edge_device.current_tilt,
     }
     if current != previous:
         await realtime_bus.publish(
@@ -107,6 +111,7 @@ async def edge_heartbeat(
                 "rssi": edge_device.rssi,
                 "fps": edge_device.fps,
                 "current_pan": edge_device.current_pan,
+                "current_tilt": edge_device.current_tilt,
                 "last_seen": edge_device.last_seen,
             },
         )
@@ -196,6 +201,12 @@ async def create_edge_event(
             "summary": event.summary,
         },
     )
+    # Fire a push alert for qualifying events. Alerting must never break
+    # ingestion, so any failure is swallowed.
+    try:
+        await alert_service.maybe_alert_for_event(session, event)
+    except Exception:  # noqa: BLE001 - alerting is best-effort
+        pass
     return {"data": EventRead.model_validate(event).model_dump(mode="json")}
 
 

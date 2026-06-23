@@ -89,12 +89,40 @@ class SentinelEdgeApiClient {
     return EdgeDevice.fromJson(body['data'] as Map<String, dynamic>);
   }
 
+  Future<EdgeDevice> getDevice(String deviceId) async {
+    final body = await _getObject('/api/v1/devices/$deviceId');
+    return EdgeDevice.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  /// Relays a pan command (0–180°) to the edge device and returns the result.
+  Future<DeviceCommandResult> panDevice(String deviceId, int angle) async {
+    final body = await _postObject('/api/v1/devices/$deviceId/pan', {
+      'angle': angle,
+    });
+    return DeviceCommandResult.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  /// Relays a tilt command (0–180°) to the edge device and returns the result.
+  Future<DeviceCommandResult> tiltDevice(String deviceId, int angle) async {
+    final body = await _postObject('/api/v1/devices/$deviceId/tilt', {
+      'angle': angle,
+    });
+    return DeviceCommandResult.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  /// Requests a live snapshot from the edge device.
+  Future<DeviceCommandResult> snapshotDevice(String deviceId) async {
+    final body = await _postObject('/api/v1/devices/$deviceId/snapshot', null);
+    return DeviceCommandResult.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
   Future<EdgeDevice> sendHeartbeat({
     required String edgeToken,
     required String healthStatus,
     required double rssi,
     required double fps,
     required int currentPan,
+    int currentTilt = 90,
   }) async {
     final body = await _postObject(
       '/api/v1/edge/heartbeat',
@@ -103,6 +131,7 @@ class SentinelEdgeApiClient {
         'rssi': rssi,
         'fps': fps,
         'current_pan': currentPan,
+        'current_tilt': currentTilt,
       },
       headers: {'Authorization': 'Bearer $edgeToken'},
     );
@@ -329,6 +358,7 @@ class EdgeDevice {
     required this.name,
     required this.healthStatus,
     required this.currentPan,
+    required this.currentTilt,
     this.location,
     this.rssi,
     this.fps,
@@ -340,6 +370,7 @@ class EdgeDevice {
   final String? location;
   final String healthStatus;
   final int currentPan;
+  final int currentTilt;
   final double? rssi;
   final double? fps;
   final DateTime? lastSeen;
@@ -351,6 +382,7 @@ class EdgeDevice {
       location: json['location']?.toString(),
       healthStatus: json['health_status'].toString(),
       currentPan: int.tryParse(json['current_pan'].toString()) ?? 90,
+      currentTilt: int.tryParse(json['current_tilt'].toString()) ?? 90,
       rssi: _tryDouble(json['rssi']),
       fps: _tryDouble(json['fps']),
       lastSeen: json['last_seen'] == null
@@ -370,6 +402,31 @@ class DeviceRegistration {
     return DeviceRegistration(
       device: EdgeDevice.fromJson(json['device'] as Map<String, dynamic>),
       edgeToken: json['edge_token'].toString(),
+    );
+  }
+}
+
+/// Result of relaying a command (pan, snapshot, …) to an edge device.
+class DeviceCommandResult {
+  const DeviceCommandResult({
+    required this.requestId,
+    required this.status,
+    required this.payload,
+  });
+
+  final String requestId;
+  final String status;
+  final Map<String, dynamic> payload;
+
+  bool get ok => status == 'ok' || status == 'success';
+
+  factory DeviceCommandResult.fromJson(Map<String, dynamic> json) {
+    return DeviceCommandResult(
+      requestId: json['request_id'].toString(),
+      status: json['status'].toString(),
+      payload: Map<String, dynamic>.from(
+        json['payload'] as Map? ?? const {},
+      ),
     );
   }
 }

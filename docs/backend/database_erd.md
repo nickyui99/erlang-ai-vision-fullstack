@@ -1,6 +1,6 @@
 # SentinelEdge Database ERD
 
-This schema is implemented by SQLAlchemy models in `backend/app/models/` and the initial Alembic revision `20260620_0001_create_core_tables.py`.
+This schema is implemented by SQLAlchemy models in `backend/app/models/`, starting from the core Alembic revision `20260620_0001_create_core_tables.py` and extended by later revisions (e.g. `20260623_0004_device_tilt.py` adds `devices.current_tilt`, `20260623_0005_push_tokens.py` adds the `push_tokens` table).
 
 ```mermaid
 erDiagram
@@ -10,6 +10,7 @@ erDiagram
     USERS ||--o{ CLIPS : owns
     USERS ||--o{ RECORDINGS : owns
     USERS ||--o{ ALERTS : receives
+    USERS ||--o{ PUSH_TOKENS : registers
     USERS ||--o{ TOOL_AUDIT : performs
 
     DEVICES ||--o{ AGENTS : assigned_to
@@ -47,6 +48,7 @@ erDiagram
         float rssi
         float fps
         int current_pan
+        int current_tilt
         datetime last_seen
         datetime created_at
         datetime updated_at
@@ -149,6 +151,16 @@ erDiagram
         datetime created_at
     }
 
+    PUSH_TOKENS {
+        string token_id PK
+        string user_id FK
+        string token UK
+        string platform
+        datetime created_at
+        datetime updated_at
+        datetime last_used_at
+    }
+
     TOOL_AUDIT {
         string audit_id PK
         string event_id FK
@@ -199,7 +211,8 @@ erDiagram
 | `health_status` | Current health state, such as `online`, `offline`, `degraded`, or `unknown`. |
 | `rssi` | Latest signal strength reported by the device or edge service, if available. |
 | `fps` | Latest measured frames per second from the camera stream. |
-| `current_pan` | Current servo pan angle, usually clamped between 0 and 180. |
+| `current_pan` | Current pan servo angle of the SG90 gimbal (horizontal axis), clamped 0–180, centered at 90. |
+| `current_tilt` | Current tilt servo angle of the SG90 gimbal (vertical axis), clamped 0–180, centered at 90. |
 | `last_seen` | Last heartbeat or successful contact time from the device/edge service. |
 | `created_at` | Time the device was registered. |
 | `updated_at` | Time the device row was last updated. |
@@ -305,11 +318,27 @@ erDiagram
 | `alert_id` | Primary key for an alert delivery attempt or alert record. |
 | `event_id` | Event that caused the alert. |
 | `user_id` | User who receives the alert. |
-| `channel` | Delivery channel, such as `telegram`, `email`, `web_push`, or `local_lan`. |
+| `channel` | Delivery channel. Currently `fcm` (Firebase Cloud Messaging push); `email`/`local_lan` are reserved for future adapters. |
 | `sent_at` | Time the alert was sent, if successful. |
-| `status` | Alert state, such as `pending`, `sent`, `failed`, or `suppressed`. |
-| `dedupe_key` | Key used to suppress duplicate alerts for the same event/channel/window. |
+| `status` | Alert state: `pending`, `sent`, `failed`, or `no_recipients` (no FCM tokens registered for the user). |
+| `dedupe_key` | Key used to suppress duplicate alerts for the same event/channel. Format: `{event_id}:{channel}`. |
 | `created_at` | Time the alert row was created. |
+
+### PUSH_TOKENS
+
+Firebase Cloud Messaging registration tokens for a user's client installs. One
+user may have several (web, Android, iOS); all receive push alerts. Distinct
+from the camera `DEVICES` table.
+
+| Field | Description |
+|---|---|
+| `token_id` | Internal primary key for the registered token. |
+| `user_id` | Owner of the token. |
+| `token` | The FCM registration token. Globally unique; re-registering re-points it to the current user. |
+| `platform` | Client platform: `web`, `android`, or `ios`. |
+| `created_at` | Time the token was first registered. |
+| `updated_at` | Time the token row was last updated. |
+| `last_used_at` | Time the token was last (re-)registered or refreshed. |
 
 ### TOOL_AUDIT
 

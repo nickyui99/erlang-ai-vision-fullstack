@@ -10,6 +10,7 @@ class Device(Base):
     __tablename__ = "devices"
     __table_args__ = (
         CheckConstraint("current_pan >= 0 AND current_pan <= 180", name="ck_devices_current_pan_range"),
+        CheckConstraint("current_tilt >= 0 AND current_tilt <= 180", name="ck_devices_current_tilt_range"),
         Index("idx_devices_user_id", "user_id"),
     )
 
@@ -21,7 +22,10 @@ class Device(Base):
     health_status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="unknown")
     rssi: Mapped[float | None] = mapped_column(Float)
     fps: Mapped[float | None] = mapped_column(Float)
+    # SG90 two-axis gimbal: pan (horizontal servo) and tilt (vertical servo),
+    # each 0–180°, centered at 90°.
     current_pan: Mapped[int] = mapped_column(Integer, nullable=False, server_default="90")
+    current_tilt: Mapped[int] = mapped_column(Integer, nullable=False, server_default="90")
     last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
