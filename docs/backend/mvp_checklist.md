@@ -97,6 +97,26 @@ Notes:
 - FCM reuses the Firebase Admin SDK already configured for auth. Delivery is best-effort and never blocks event ingestion.
 - Flutter client integration (requesting/registering the token, displaying notifications) is intentionally deferred.
 
+## Milestone 8.5: Flutter Smart Camera UX
+
+- [x] Make Cameras the primary frontend tab.
+- [x] Replace the device list with smart-camera style cards.
+- [x] Add a camera control screen with live/snapshot surface and quick action dock.
+- [x] Add disabled placeholders for unsupported market-style controls: record, mute, talk, alarm, light, resolution, fullscreen.
+- [x] Redesign PTZ as a circular controller.
+- [x] Add UI-only favorite/preset chips and PTZ correction entry point.
+- [x] Reframe agent assignment as camera Protection / Detection Rules.
+- [x] Convert event review into a timeline-style camera app view.
+- [x] Keep event IDs and stage output behind Technical details.
+- [x] Add Flutter widget coverage for camera-first dashboard, camera controls, disabled placeholders, PTZ access, and snapshot display.
+
+Remaining frontend work:
+- [ ] Register FCM tokens from Flutter and display push notifications.
+- [ ] Add backend + UI support for recording, audio mute/talk, alarm, fill light, resolution switching, and fullscreen live video.
+- [ ] Persist camera presets/favorites and PTZ correction once backend APIs exist.
+- [ ] Add real live stream rendering when an edge stream endpoint is available.
+- [ ] Run mobile/emulator visual QA for the camera screens.
+
 ## Milestone 9: AI Verification and MCP
 
 - [ ] Add Qwen client wrapper.
@@ -121,15 +141,17 @@ Notes:
 
 ## MVP Done Definition
 
-- [ ] User can log in with Firebase Google sign-in.
-- [ ] User can register a device.
-- [ ] Edge can authenticate with device token.
-- [ ] User can create and arm an agent.
-- [ ] Edge can fetch active agent config.
-- [ ] Edge can submit an event.
-- [ ] Backend stores event and clip metadata.
-- [ ] User can list events.
-- [ ] User can request signed clip playback URL.
+- [x] User can log in with Firebase Google sign-in.
+- [x] User can register a device.
+- [x] Edge can authenticate with device token.
+- [x] User can create and arm an agent.
+- [x] Edge can fetch active agent config.
+- [x] Edge can submit an event.
+- [x] Backend stores event and clip metadata.
+- [x] User can list events.
+- [x] User can request signed clip playback URL.
 - [x] Backend can send a push alert (FCM) for a high-severity event.
-- [ ] Backend passes `/healthz` and `/readyz`.
+- [x] Backend passes `/healthz` and `/readyz`.
+
+
 

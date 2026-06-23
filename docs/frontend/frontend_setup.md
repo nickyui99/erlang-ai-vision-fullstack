@@ -4,15 +4,27 @@ The SentinelEdge frontend is a Flutter app at `frontend/sentineledge_app`.
 
 ## Current Scope
 
-The app currently implements the Milestone 3 authentication flow:
+The app currently covers the authenticated smart-camera console flow:
 
 - Firebase Google sign-in in Flutter.
 - Firebase ID token retrieval from the signed-in user.
 - Backend login through `POST /api/v1/auth/firebase/login`.
 - Display of the backend user profile returned by SentinelEdge.
 - Logout through Firebase Auth and the backend session.
+- Camera-first dashboard with smart-camera style device cards.
+- Device registration and one-time edge-token display.
+- Agent creation and camera Protection / Detection Rule toggles.
+- Event timeline review with clip playback URL requests.
+- Realtime status updates through the backend event stream.
+- Edge controls for pan, tilt, and snapshot commands.
+- Market-style camera affordances shown as disabled placeholders where backend APIs do not exist yet.
 
-Device registration, agent creation, event review, media playback, realtime updates, and edge controls are planned for later milestones.
+Remaining frontend work:
+
+- Register FCM tokens from Flutter and display push notifications.
+- Add real backend + UI support for recording, audio mute/talk, alarm, fill light, resolution switching, fullscreen live video, presets, and PTZ correction.
+- Render a live stream once an edge stream endpoint is available.
+- Run mobile/emulator visual QA for the camera screens.
 
 ## Firebase Client Config
 
@@ -119,5 +131,6 @@ Manual validation:
 3. Google sign-in succeeds.
 4. The app shows the backend user profile.
 5. Backend logs show `POST /api/v1/auth/firebase/login` returning success.
+
 
 
