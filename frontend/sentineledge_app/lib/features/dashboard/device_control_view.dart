@@ -72,9 +72,8 @@ class _DeviceControlViewState extends State<DeviceControlView> {
   int _assignmentCount(String definitionId) =>
       _subsForDefinition(definitionId).length;
 
-  int get _armedHere => _definitions
-      .where((agent) => _isAssigned(agent.agentId))
-      .length;
+  int get _armedHere =>
+      _definitions.where((agent) => _isAssigned(agent.agentId)).length;
 
   Future<void> _refreshAgents() async {
     try {
@@ -283,6 +282,8 @@ class _DeviceControlViewState extends State<DeviceControlView> {
                   isSnapshotting: _isSnapshotting,
                   onSnapshot: _takeSnapshot,
                 ),
+                const SizedBox(height: AppSpacing.md),
+                _quickActionDock(),
                 const SizedBox(height: AppSpacing.lg),
                 _telemetry(compact),
                 const SizedBox(height: AppSpacing.lg),
@@ -294,6 +295,72 @@ class _DeviceControlViewState extends State<DeviceControlView> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _quickActionDock() {
+    return AppCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _CameraActionButton(
+              icon: _isSnapshotting
+                  ? Icons.hourglass_top_outlined
+                  : Icons.camera_alt_outlined,
+              label: _isSnapshotting ? 'Capturing' : 'Snapshot',
+              onTap: _isSnapshotting ? null : _takeSnapshot,
+              active: true,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            const _CameraActionButton(
+              icon: Icons.videocam_outlined,
+              label: 'Record',
+              disabledReason: 'Recording is not connected yet',
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            const _CameraActionButton(
+              icon: Icons.volume_off_outlined,
+              label: 'Mute',
+              disabledReason: 'Audio streaming is not connected yet',
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            const _CameraActionButton(
+              icon: Icons.mic_none_outlined,
+              label: 'Talk',
+              disabledReason: 'Two-way audio is not connected yet',
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            const _CameraActionButton(
+              icon: Icons.notifications_active_outlined,
+              label: 'Alarm',
+              disabledReason: 'Alarm control is not connected yet',
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            const _CameraActionButton(
+              icon: Icons.light_mode_outlined,
+              label: 'Light',
+              disabledReason: 'Light control is not connected yet',
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            const _CameraActionButton(
+              icon: Icons.hd_outlined,
+              label: 'Auto',
+              disabledReason: 'Resolution switching is not connected yet',
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            const _CameraActionButton(
+              icon: Icons.fullscreen_outlined,
+              label: 'Full',
+              disabledReason: 'Fullscreen live video is not connected yet',
+            ),
+          ],
         ),
       ),
     );
@@ -341,8 +408,8 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     final busy = _isMoving;
     final theme = Theme.of(context);
     return ConsolePanel(
-      title: 'Pan & Tilt',
-      subtitle: 'Two-axis SG90 gimbal · pan and tilt, 0–180°',
+      title: 'PTZ control',
+      subtitle: 'Directional control, presets and correction',
       icon: Icons.control_camera_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -363,8 +430,13 @@ class _DeviceControlViewState extends State<DeviceControlView> {
               ),
             ],
           ),
+          const SizedBox(height: AppSpacing.md),
+          _PresetStrip(
+            onPreset: (name) => _toast(
+              'Preset $name is a UI placeholder until camera presets are connected.',
+            ),
+          ),
           const SizedBox(height: AppSpacing.lg),
-          // D-pad: ◀ ▶ drive the pan servo, ▲ ▼ the tilt servo.
           _DirectionPad(
             busy: busy,
             canTiltUp: _tiltAngle < 180,
@@ -408,9 +480,9 @@ class _DeviceControlViewState extends State<DeviceControlView> {
       child: definitions.isEmpty
           ? const EmptyState(
               icon: Icons.radar_outlined,
-              title: 'No agents yet',
+              title: 'No detection rules yet',
               message:
-                  'Create an agent, then toggle it on here to arm this camera.',
+                  'Create a detection rule, then toggle it on here to arm this camera.',
               compact: true,
             )
           : Column(
@@ -483,6 +555,112 @@ String _formatTimestamp(DateTime? value) {
   return value.toLocal().toString().split('.').first;
 }
 
+class _CameraActionButton extends StatelessWidget {
+  const _CameraActionButton({
+    required this.icon,
+    required this.label,
+    this.onTap,
+    this.disabledReason,
+    this.active = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final String? disabledReason;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final enabled = onTap != null;
+    final fg = enabled
+        ? (active ? scheme.onPrimary : scheme.onSurface)
+        : scheme.onSurfaceVariant;
+    final bg = enabled
+        ? (active ? scheme.primary : scheme.surfaceContainerLow)
+        : scheme.surfaceContainerHighest;
+
+    return Tooltip(
+      message: enabled ? label : (disabledReason ?? '$label unavailable'),
+      child: InkWell(
+        borderRadius: AppRadius.mdAll,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          width: 76,
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: AppRadius.mdAll,
+            border: Border.all(
+              color: enabled && active ? scheme.primary : scheme.outlineVariant,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 22, color: fg),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: fg,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PresetStrip extends StatelessWidget {
+  const _PresetStrip({required this.onPreset});
+
+  final ValueChanged<String> onPreset;
+
+  static const _presets = ['Front Gate', 'Driveway', 'Door', 'Custom'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Favorites', style: Theme.of(context).textTheme.labelMedium),
+        const SizedBox(height: AppSpacing.sm),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: _presets
+                .map(
+                  (preset) => Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.sm),
+                    child: ActionChip(
+                      avatar: const Icon(Icons.bookmark_border, size: 16),
+                      label: Text(preset),
+                      onPressed: () => onPreset(preset),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        OutlinedButton.icon(
+          onPressed: () => onPreset('Pan & Tilt Correction'),
+          icon: const Icon(Icons.tune_outlined, size: 18),
+          label: const Text('Pan & Tilt correction'),
+        ),
+      ],
+    );
+  }
+}
 // ---------------------------------------------------------------------------
 // Live view
 // ---------------------------------------------------------------------------
@@ -652,7 +830,7 @@ class _GlassChip extends StatelessWidget {
 // Controls
 // ---------------------------------------------------------------------------
 
-/// Cross-shaped pad: ◀ ▶ drive the pan servo, ▲ ▼ the tilt servo, center
+/// Circular PTZ pad: ◀ ▶ drive the pan servo, ▲ ▼ the tilt servo, center
 /// recenters both to 90°.
 class _DirectionPad extends StatelessWidget {
   const _DirectionPad({
@@ -681,44 +859,59 @@ class _DirectionPad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _PadButton(
-            icon: Icons.keyboard_arrow_up,
-            tooltip: 'Tilt up',
-            onPressed: busy || !canTiltUp ? null : onTiltUp,
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _PadButton(
+      child: Container(
+        width: 214,
+        height: 214,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: scheme.surfaceContainerLow,
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Positioned(
+              top: AppSpacing.md,
+              child: _PadButton(
+                icon: Icons.keyboard_arrow_up,
+                tooltip: 'Tilt up',
+                onPressed: busy || !canTiltUp ? null : onTiltUp,
+              ),
+            ),
+            Positioned(
+              left: AppSpacing.md,
+              child: _PadButton(
                 icon: Icons.keyboard_arrow_left,
                 tooltip: 'Pan left',
                 onPressed: busy || !canPanLeft ? null : onPanLeft,
               ),
-              const SizedBox(width: AppSpacing.sm),
-              _PadButton(
-                icon: Icons.center_focus_strong_outlined,
-                tooltip: 'Center (90° / 90°)',
-                onPressed: busy ? null : onCenter,
-                filled: true,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              _PadButton(
+            ),
+            _PadButton(
+              icon: Icons.center_focus_strong_outlined,
+              tooltip: 'Center camera',
+              onPressed: busy ? null : onCenter,
+              filled: true,
+            ),
+            Positioned(
+              right: AppSpacing.md,
+              child: _PadButton(
                 icon: Icons.keyboard_arrow_right,
                 tooltip: 'Pan right',
                 onPressed: busy || !canPanRight ? null : onPanRight,
               ),
-            ],
-          ),
-          _PadButton(
-            icon: Icons.keyboard_arrow_down,
-            tooltip: 'Tilt down',
-            onPressed: busy || !canTiltDown ? null : onTiltDown,
-          ),
-        ],
+            ),
+            Positioned(
+              bottom: AppSpacing.md,
+              child: _PadButton(
+                icon: Icons.keyboard_arrow_down,
+                tooltip: 'Tilt down',
+                onPressed: busy || !canTiltDown ? null : onTiltDown,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
