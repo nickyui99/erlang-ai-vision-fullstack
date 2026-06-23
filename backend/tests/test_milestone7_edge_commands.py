@@ -165,6 +165,42 @@ def test_pan_command_relay_result_and_audit() -> None:
     assert audits[0].result["status"] == "ok"
 
 
+def test_tilt_command_relay_result_and_audit() -> None:
+    client = _client()
+
+    with client.websocket_connect("/api/v1/edge/ws", headers=EDGE_HEADERS) as websocket:
+        response_holder: dict[str, object] = {}
+
+        def post_tilt() -> None:
+            response_holder["response"] = client.post("/api/v1/devices/dev_m7/tilt", json={"angle": 120})
+
+        thread = threading.Thread(target=post_tilt)
+        thread.start()
+        command = websocket.receive_json()
+        websocket.send_json(
+            {
+                "type": "response.command_result",
+                "request_id": command["request_id"],
+                "status": "ok",
+                "payload": {"angle": 120},
+            }
+        )
+        thread.join(timeout=3)
+
+    response = response_holder["response"]
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "ok"
+    assert response.json()["data"]["payload"]["angle"] == 120
+    assert command["type"] == "command.tilt_camera"
+    assert command["device_id"] == "dev_m7"
+    assert command["payload"] == {"angle": 120}
+
+    audits = asyncio.run(_audit_rows())
+    assert len(audits) == 1
+    assert audits[0].tool_name == "tilt_camera"
+    assert audits[0].called_by == "user"
+
+
 def test_snapshot_command_relay_result() -> None:
     client = _client()
 

@@ -19,6 +19,7 @@ Currently implemented endpoints:
 | `GET` | `/api/v1/devices/{device_id}` | Implemented |
 | `PUT` | `/api/v1/devices/{device_id}` | Implemented |
 | `POST` | `/api/v1/devices/{device_id}/pan` | Implemented |
+| `POST` | `/api/v1/devices/{device_id}/tilt` | Implemented |
 | `POST` | `/api/v1/devices/{device_id}/snapshot` | Implemented |
 | `POST` | `/api/v1/agents` | Implemented |
 | `GET` | `/api/v1/agents` | Implemented |
@@ -28,10 +29,21 @@ Currently implemented endpoints:
 | `POST` | `/api/v1/agents/{agent_id}/disarm` | Implemented |
 | `POST` | `/api/v1/edge/heartbeat` | Implemented |
 | `GET` | `/api/v1/edge/agents/active` | Implemented |
+| `POST` | `/api/v1/notifications/tokens` | Implemented |
+| `DELETE` | `/api/v1/notifications/tokens/{token}` | Implemented |
 | `GET` | `/api/v1/stream/events` | Implemented |
 | `WS` | `/api/v1/edge/ws` | Implemented |
 
-Event, clip, recording, SSE, WebSocket, pan command, and snapshot command endpoints are implemented. Alert, Qwen, MCP, and broader tool endpoints are planned for later milestones.
+Event, clip, recording, SSE, WebSocket, pan command, snapshot command, and Firebase Cloud Messaging (FCM) push-alert endpoints are implemented. Qwen, MCP, and broader tool endpoints are planned for later milestones.
+
+### Push alerts (Milestone 8)
+
+Alerts are delivered through Firebase Cloud Messaging. Clients register their FCM
+registration token with `POST /api/v1/notifications/tokens` (`{ "token": "…", "platform": "web" }`)
+and remove it on logout with `DELETE /api/v1/notifications/tokens/{token}`. When the
+edge submits an event whose severity is at or above `ALERT_MIN_SEVERITY` (default `high`),
+the backend deduplicates per event, sends a push to all of the owner's tokens, stores the
+result in `alerts`, and emits an `alert.created` SSE event. Set `ALERTS_ENABLED=false` to disable.
 
 Base API prefix:
 
@@ -134,7 +146,8 @@ Example `GET /api/v1/users/me` response:
 | `GET` | `/api/v1/devices/{device_id}` | User session | Get device details. |
 | `PUT` | `/api/v1/devices/{device_id}` | User session | Update device metadata. |
 | `POST` | `/api/v1/edge/heartbeat` | Edge token | Implemented. Update authenticated edge device health status. |
-| `POST` | `/api/v1/devices/{device_id}/pan` | User session | Implemented. Request camera pan through edge relay. |
+| `POST` | `/api/v1/devices/{device_id}/pan` | User session | Implemented. Request camera pan (SG90 horizontal axis, 0–180°) through edge relay. |
+| `POST` | `/api/v1/devices/{device_id}/tilt` | User session | Implemented. Request camera tilt (SG90 vertical axis, 0–180°) through edge relay. |
 | `POST` | `/api/v1/devices/{device_id}/snapshot` | User session | Implemented. Request a fresh snapshot through edge relay. |
 
 Example `POST /api/v1/devices` request:
@@ -183,6 +196,8 @@ Example `POST /api/v1/devices/{device_id}/pan` request:
   "angle": 90
 }
 ```
+
+`POST /api/v1/devices/{device_id}/tilt` takes the same `{ "angle": 0–180 }` body and response shape, driving the gimbal's vertical (tilt) SG90 servo. Pan and tilt together form the two-axis SG90 gimbal; the edge reports both `current_pan` and `current_tilt` back via heartbeat.
 
 Example command response:
 

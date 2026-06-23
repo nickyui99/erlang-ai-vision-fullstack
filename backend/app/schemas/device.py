@@ -22,6 +22,8 @@ class DeviceHeartbeat(BaseModel):
     rssi: float | None = None
     fps: float | None = Field(default=None, ge=0)
     current_pan: int = Field(ge=0, le=180)
+    # Defaulted for backward compatibility with edges that don't report tilt yet.
+    current_tilt: int = Field(default=90, ge=0, le=180)
 
 
 class DeviceRead(BaseModel):
@@ -33,6 +35,7 @@ class DeviceRead(BaseModel):
     rssi: float | None = None
     fps: float | None = None
     current_pan: int
+    current_tilt: int = 90
     last_seen: datetime | None = None
     created_at: datetime
     updated_at: datetime

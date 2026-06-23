@@ -56,9 +56,14 @@ Example request:
   "health_status": "online",
   "rssi": -58.2,
   "fps": 15.0,
-  "current_pan": 90
+  "current_pan": 90,
+  "current_tilt": 90
 }
 ```
+
+`current_pan` and `current_tilt` report the two SG90 gimbal servo angles
+(horizontal and vertical, each `0–180°`). `current_tilt` defaults to `90` for
+backward compatibility with edges that do not yet report it.
 
 The backend updates `devices.last_seen`, health fields, and emits `device.health_changed` through SSE when needed.
 
@@ -133,6 +138,11 @@ Example request:
 ```
 
 The backend should enforce uniqueness on `(device_id, idempotency_key)`.
+
+Events submitted at or above the configured alert threshold (`ALERT_MIN_SEVERITY`,
+default `high`) trigger a Firebase Cloud Messaging push to the device owner's
+registered clients. Alerting is best-effort on the backend side and never blocks
+or fails event submission, so the edge does not need to handle it.
 
 ## Clip Upload Flow
 
@@ -220,7 +230,13 @@ Authenticate with the same device-bound edge token used by heartbeat, event, cli
 Authorization: Bearer <edge_token>
 ```
 
-Command example:
+The gimbal is a two-axis SG90 rig: `command.pan_camera` drives the horizontal
+servo and `command.tilt_camera` the vertical servo, each with an `angle` of
+`0–180°`. The edge should clamp angles to the servo range and report the
+resulting position back through the next heartbeat (`current_pan` /
+`current_tilt`).
+
+Pan command example:
 
 ```json
 {
@@ -229,6 +245,19 @@ Command example:
   "device_id": "dev_frontdoor_001",
   "payload": {
     "angle": 90
+  }
+}
+```
+
+Tilt command example:
+
+```json
+{
+  "type": "command.tilt_camera",
+  "request_id": "cmd_002",
+  "device_id": "dev_frontdoor_001",
+  "payload": {
+    "angle": 120
   }
 }
 ```
@@ -248,7 +277,7 @@ Snapshot command example:
 ```json
 {
   "type": "command.get_live_snapshot",
-  "request_id": "cmd_002",
+  "request_id": "cmd_003",
   "device_id": "dev_frontdoor_001",
   "payload": {}
 }

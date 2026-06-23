@@ -13,7 +13,7 @@ from app.core.security import generate_edge_token, hash_edge_token
 from app.models.device import Device
 from app.models.tool_audit import ToolAudit
 from app.models.user import User
-from app.schemas.command import DeviceCommandResult, DevicePanCommand
+from app.schemas.command import DeviceCommandResult, DevicePanCommand, DeviceTiltCommand
 from app.schemas.device import DeviceCreate, DeviceRead, DeviceRegistrationRead, DeviceUpdate
 from app.services.edge_command_hub import EdgeCommandTimeoutError, EdgeNotConnectedError, edge_command_hub
 
@@ -125,6 +125,25 @@ async def pan_device(
         device=device,
         tool_name="pan_camera",
         command_type="command.pan_camera",
+        payload={"angle": payload.angle},
+    )
+    return {"data": result.model_dump(mode="json")}
+
+
+@router.post("/{device_id}/tilt")
+async def tilt_device(
+    device_id: str,
+    payload: DeviceTiltCommand,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    device = await _get_owned_device(session, current_user.user_id, device_id)
+    result = await _send_audited_device_command(
+        session=session,
+        user=current_user,
+        device=device,
+        tool_name="tilt_camera",
+        command_type="command.tilt_camera",
         payload={"angle": payload.angle},
     )
     return {"data": result.model_dump(mode="json")}

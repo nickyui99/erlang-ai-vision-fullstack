@@ -8,6 +8,7 @@ import '../../services/backend_auth_client.dart';
 import '../../services/realtime/realtime_client.dart';
 import '../../shared/console_widgets.dart';
 import 'agent_templates.dart';
+import 'device_control_view.dart';
 
 class WorkspaceView extends StatefulWidget {
   const WorkspaceView({
@@ -258,6 +259,22 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         if (!mounted) return;
         setState(() => _lastPlaybackUrl = playback);
       },
+    );
+  }
+
+  Future<void> _openDeviceControl(EdgeDevice device) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DeviceControlView(
+          device: device,
+          apiClient: widget.apiClient,
+          agents: _agents,
+          onChanged: () async {
+            await _refreshDevicesOnly();
+            await _refreshAgentsOnly();
+          },
+        ),
+      ),
     );
   }
 
@@ -731,7 +748,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       children: [
         ConsolePanel(
           title: 'Devices',
-          subtitle: '${_devices.length} registered · tap to select',
+          subtitle: '${_devices.length} registered · tap to open controls',
           icon: Icons.videocam_outlined,
           action: AppButton(
             label: 'Register device',
@@ -781,21 +798,33 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                     subtitle:
                         '${device.location ?? 'No location'} · pan ${device.currentPan}°',
                     leading: IconChip(icon: Icons.videocam_outlined, size: 34),
-                    trailing: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        StatusPill.fromStatus(device.healthStatus),
-                        if (device.fps != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            '${device.fps!.toStringAsFixed(1)} fps',
-                            style: Theme.of(context).textTheme.labelSmall,
-                          ),
-                        ],
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            StatusPill.fromStatus(device.healthStatus),
+                            if (device.fps != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                '${device.fps!.toStringAsFixed(1)} fps',
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Icon(
+                          Icons.chevron_right,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ],
                     ),
-                    onTap: () =>
-                        setState(() => _selectedDeviceId = device.deviceId),
+                    onTap: () {
+                      setState(() => _selectedDeviceId = device.deviceId);
+                      _openDeviceControl(device);
+                    },
                   ),
                 ),
             ],

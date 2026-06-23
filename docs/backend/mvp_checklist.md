@@ -85,11 +85,17 @@ This checklist turns the backend plan into a practical implementation sequence.
 
 ## Milestone 8: Alerts
 
-- [ ] Add alert service interface.
-- [ ] Add first alert adapter.
-- [ ] Add alert deduplication.
-- [ ] Store alert result.
-- [ ] Push alert status through SSE.
+- [x] Add alert service interface. (`services/alert_service.py`)
+- [x] Add first alert adapter. (Firebase Cloud Messaging push — `services/notification_service.py`)
+- [x] Add alert deduplication. (one alert per `event_id` + channel via `uq_alerts_dedupe_key`)
+- [x] Store alert result. (`alerts.status`: `sent` / `failed` / `no_recipients`)
+- [x] Push alert status through SSE. (`alert.created` on the realtime bus)
+
+Notes:
+- Alerts fire on edge event submission for severity `>= ALERT_MIN_SEVERITY` (default `high`); toggle with `ALERTS_ENABLED`.
+- Clients register an FCM token via `POST /api/v1/notifications/tokens` and remove it via `DELETE /api/v1/notifications/tokens/{token}`.
+- FCM reuses the Firebase Admin SDK already configured for auth. Delivery is best-effort and never blocks event ingestion.
+- Flutter client integration (requesting/registering the token, displaying notifications) is intentionally deferred.
 
 ## Milestone 9: AI Verification and MCP
 
@@ -124,5 +130,6 @@ This checklist turns the backend plan into a practical implementation sequence.
 - [ ] Backend stores event and clip metadata.
 - [ ] User can list events.
 - [ ] User can request signed clip playback URL.
+- [x] Backend can send a push alert (FCM) for a high-severity event.
 - [ ] Backend passes `/healthz` and `/readyz`.
 
