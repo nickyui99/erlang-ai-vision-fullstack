@@ -4,7 +4,7 @@ SentinelEdge is a surveillance backend and edge-integration project spanning a F
 
 ## Current Status
 
-Milestones 1 through 8 are complete:
+Milestones 1 through 8.5 are complete:
 
 - FastAPI app scaffold
 - environment-based configuration
@@ -29,6 +29,7 @@ Milestones 1 through 8 are complete:
 - realtime updates over SSE (`event.created`, `clip.available`, `device.health_changed`, `alert.created`)
 - edge command relay over WebSocket: two-axis SG90 gimbal control (pan + tilt) and live snapshot
 - Firebase Cloud Messaging (FCM) push alerts for high-severity events (Milestone 8)
+- Flutter smart-camera UX pass: camera-first dashboard, live/snapshot control surface, quick actions, PTZ controller, protection toggles, and event timeline (Milestone 8.5)
 
 Implemented HTTP endpoints:
 
@@ -66,7 +67,7 @@ Implemented HTTP endpoints:
 - `GET /api/v1/stream/events`
 - `WS /api/v1/edge/ws`
 
-Qwen verification, MCP tooling, retention, and deployment work is documented as planned API surface and will be implemented in later milestones.
+Remaining work is tracked in later milestones: Flutter push-notification registration and native camera affordances, Qwen verification, MCP tooling, retention, and deployment.
 
 ## Repository Layout
 
@@ -394,17 +395,29 @@ Invoke-RestMethod http://localhost:8000/api/v1/edge/agents/active -Headers @{ Au
 Milestone 8 (alert loop) is complete, delivered as Firebase Cloud Messaging push:
 
 - alert service interface (`backend/app/services/alert_service.py`)
-- first alert adapter — FCM push (`backend/app/services/notification_service.py`)
+- first alert adapter - FCM push (`backend/app/services/notification_service.py`)
 - duplicate alerts suppressed per event + channel
 - alert delivery results stored on `alerts.status`
 - alert status pushed through SSE (`alert.created`)
 
-Milestone 9 is next — AI verification and the MCP tool layer:
+Milestone 8.5 (Flutter smart-camera UX) is complete:
+
+- Cameras are now the primary frontend tab.
+- Device rows are replaced with smart-camera style cards.
+- The camera control screen now has a live/snapshot surface, quick action dock, circular PTZ control, favorite position chips, protection toggles, and recent activity.
+- Event review now uses a camera-app timeline, with technical event IDs and stage output behind an expander.
+- Unsupported market-style actions remain visible but disabled until backend APIs exist: recording, mute, talk, alarm, fill light, resolution switching, fullscreen stream, presets, and PTZ correction.
+
+Milestone 9 is next - AI verification and the MCP tool layer:
 
 - add the Qwen client wrapper and verification schema
 - validate or repair model output and store `stage3_verdict`
 - add MCP tool permissions and audit logging
 - enforce pan/tilt limits and high-risk tool rules
 
+Remaining parallel frontend work:
 
-
+- register FCM tokens from Flutter and display push notifications
+- add backend + UI support for recording, audio mute/talk, alarm, fill light, resolution switching, fullscreen live video, presets, and PTZ correction
+- add real live stream rendering when an edge stream endpoint exists
+- run mobile/emulator visual QA for the camera screens
