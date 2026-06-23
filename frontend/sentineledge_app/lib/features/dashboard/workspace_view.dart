@@ -591,8 +591,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
 
   Widget _selectedContent(bool compact) {
     return switch (_selectedTab) {
-      0 => _overviewPanel(compact),
-      1 => _devicePanel(compact),
+      0 => _devicePanel(compact),
+      1 => _overviewPanel(compact),
       2 => _agentPanel(compact),
       3 => _eventsPanel(compact),
       _ => _edgePanel(),
@@ -679,7 +679,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           if (selectedDevice == null)
             const EmptyState(
               icon: Icons.videocam_off_outlined,
-              title: 'No device selected',
+              title: 'No camera selected',
               message:
                   'Register or select a camera device to anchor agent operations.',
               compact: true,
@@ -747,11 +747,12 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ConsolePanel(
-          title: 'Devices',
-          subtitle: '${_devices.length} registered · tap to open controls',
+          title: 'Cameras',
+          subtitle:
+              '${_devices.length} registered - tap a card for live controls',
           icon: Icons.videocam_outlined,
           action: AppButton(
-            label: 'Register device',
+            label: 'Add camera',
             icon: Icons.add_circle_outline,
             loading: _isRegisteringDevice,
             loadingLabel: 'Registering',
@@ -764,7 +765,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                 onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.search),
-                  hintText: 'Search devices',
+                  hintText: 'Search cameras',
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
@@ -773,11 +774,11 @@ class _WorkspaceViewState extends State<WorkspaceView> {
               else if (_devices.isEmpty)
                 EmptyState(
                   icon: Icons.videocam_off_outlined,
-                  title: 'No devices registered',
+                  title: 'No cameras registered',
                   message:
                       'Add your first camera or edge device to start the surveillance loop.',
                   action: AppButton(
-                    label: 'Register device',
+                    label: 'Add camera',
                     icon: Icons.add_circle_outline,
                     onPressed: _openRegisterDeviceDialog,
                   ),
@@ -785,47 +786,33 @@ class _WorkspaceViewState extends State<WorkspaceView> {
               else if (visibleDevices.isEmpty)
                 const EmptyState(
                   icon: Icons.search_off_outlined,
-                  title: 'No matching devices',
+                  title: 'No matching cameras',
                   message:
                       'Clear the search field to show every registered device.',
                   compact: true,
                 )
               else
-                ...visibleDevices.map(
-                  (device) => SelectableConsoleTile(
-                    selected: _selectedDeviceId == device.deviceId,
-                    title: device.name,
-                    subtitle:
-                        '${device.location ?? 'No location'} · pan ${device.currentPan}°',
-                    leading: IconChip(icon: Icons.videocam_outlined, size: 34),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            StatusPill.fromStatus(device.healthStatus),
-                            if (device.fps != null) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                '${device.fps!.toStringAsFixed(1)} fps',
-                                style: Theme.of(context).textTheme.labelSmall,
-                              ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Icon(
-                          Icons.chevron_right,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ],
-                    ),
-                    onTap: () {
-                      setState(() => _selectedDeviceId = device.deviceId);
-                      _openDeviceControl(device);
-                    },
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: visibleDevices.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: compact ? 1 : 2,
+                    crossAxisSpacing: AppSpacing.md,
+                    mainAxisSpacing: AppSpacing.md,
+                    childAspectRatio: compact ? 1.28 : 1.38,
                   ),
+                  itemBuilder: (context, index) {
+                    final device = visibleDevices[index];
+                    return _CameraDeviceCard(
+                      device: device,
+                      selected: _selectedDeviceId == device.deviceId,
+                      onTap: () {
+                        setState(() => _selectedDeviceId = device.deviceId);
+                        _openDeviceControl(device);
+                      },
+                    );
+                  },
                 ),
             ],
           ),
@@ -842,25 +829,25 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         .firstOrNull;
     final definitions = _definitions;
     return ConsolePanel(
-      title: 'Assign agents',
+      title: 'Protection',
       subtitle: selectedDevice == null
-          ? 'Select a device to assign agents to it'
-          : 'Assign agents to ${selectedDevice.name}',
+          ? 'Select a camera to arm detection rules'
+          : 'Detection rules for ${selectedDevice.name}',
       icon: Icons.shield_outlined,
       child: selectedDevice == null
           ? const EmptyState(
               icon: Icons.videocam_off_outlined,
-              title: 'No device selected',
+              title: 'No camera selected',
               message:
-                  'Pick a device from the list above, then assign any agent to it.',
+                  'Pick a camera above, then arm the detection rules that should watch it.',
               compact: true,
             )
           : definitions.isEmpty
           ? const EmptyState(
               icon: Icons.radar_outlined,
-              title: 'No agents yet',
+              title: 'No detection rules yet',
               message:
-                  'Create an agent in the Agents tab, then assign it to this device here.',
+                  'Create a rule in the Agents tab, then arm it for this camera.',
               compact: true,
             )
           : Column(
@@ -1078,29 +1065,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
               )
             else
               ..._events.map(
-                (event) => SelectableConsoleTile(
+                (event) => _EventTimelineCard(
+                  event: event,
                   selected: _selectedEventId == event.eventId,
-                  title: event.summary?.isNotEmpty == true
-                      ? event.summary!
-                      : event.eventType,
-                  subtitle:
-                      '${_formatDate(event.timestamp)} · ${event.deviceId}',
-                  leading: IconChip(
-                    icon: Icons.warning_amber_outlined,
-                    size: 34,
-                    color: StatusToneColor.fromStatus(event.severity).base,
-                  ),
-                  trailing: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      StatusPill.fromStatus(event.severity),
-                      const SizedBox(height: 4),
-                      Text(
-                        event.status,
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                    ],
-                  ),
                   onTap: () {
                     setState(() {
                       _selectedEventId = event.eventId;
@@ -1163,20 +1130,20 @@ class _WorkspaceViewState extends State<WorkspaceView> {
 
   static const _destinations = [
     _Destination(
+      label: 'Cameras',
+      subtitle: 'Live views, PTZ and protection',
+      icon: Icons.videocam_outlined,
+      selectedIcon: Icons.videocam,
+    ),
+    _Destination(
       label: 'Overview',
       subtitle: 'Fleet status at a glance',
       icon: Icons.dashboard_outlined,
       selectedIcon: Icons.dashboard,
     ),
     _Destination(
-      label: 'Devices',
-      subtitle: 'Cameras, edge nodes and arming',
-      icon: Icons.videocam_outlined,
-      selectedIcon: Icons.videocam,
-    ),
-    _Destination(
       label: 'Agents',
-      subtitle: 'Author and edit surveillance rules',
+      subtitle: 'Author and edit detection rules',
       icon: Icons.radar_outlined,
       selectedIcon: Icons.radar,
     ),
@@ -1195,6 +1162,190 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   ];
 }
 
+class _CameraDeviceCard extends StatelessWidget {
+  const _CameraDeviceCard({
+    required this.device,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final EdgeDevice device;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final online = device.healthStatus == 'online';
+    final signal = device.rssi != null
+        ? '${device.rssi!.toStringAsFixed(0)} dBm'
+        : 'No signal';
+    final fps = device.fps != null
+        ? '${device.fps!.toStringAsFixed(1)} fps'
+        : 'No stream';
+
+    return AppCard(
+      selected: selected,
+      hoverable: true,
+      padding: EdgeInsets.zero,
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(AppRadius.lg),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: online
+                            ? const [Color(0xFF10231F), Color(0xFF091311)]
+                            : const [Color(0xFF2A3036), Color(0xFF171B20)],
+                      ),
+                    ),
+                  ),
+                  Center(
+                    child: Icon(
+                      online
+                          ? Icons.videocam_outlined
+                          : Icons.videocam_off_outlined,
+                      size: 46,
+                      color: Colors.white.withValues(alpha: 0.62),
+                    ),
+                  ),
+                  Positioned(
+                    left: AppSpacing.md,
+                    top: AppSpacing.md,
+                    child: _CameraGlassLabel(
+                      icon: online ? Icons.circle : Icons.circle_outlined,
+                      label: online ? 'Live ready' : 'Offline',
+                    ),
+                  ),
+                  Positioned(
+                    right: AppSpacing.md,
+                    bottom: AppSpacing.md,
+                    child: _CameraGlassLabel(
+                      icon: Icons.control_camera_outlined,
+                      label: 'P ${device.currentPan} / T ${device.currentTilt}',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        device.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium,
+                      ),
+                    ),
+                    StatusPill.fromStatus(device.healthStatus),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  device.location ?? 'No location',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _CameraMeta(icon: Icons.wifi, label: signal),
+                    ),
+                    Expanded(
+                      child: _CameraMeta(icon: Icons.speed, label: fps),
+                    ),
+                    Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CameraGlassLabel extends StatelessWidget {
+  const _CameraGlassLabel({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.46),
+        borderRadius: AppRadius.pillAll,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: Colors.white.withValues(alpha: 0.86)),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CameraMeta extends StatelessWidget {
+  const _CameraMeta({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: scheme.onSurfaceVariant),
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall,
+          ),
+        ),
+      ],
+    );
+  }
+}
 // ---------------------------------------------------------------------------
 // Shell
 // ---------------------------------------------------------------------------
@@ -1504,6 +1655,109 @@ class _AnimatedTabContent extends StatelessWidget {
   }
 }
 
+class _EventTimelineCard extends StatelessWidget {
+  const _EventTimelineCard({
+    required this.event,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final SecurityEvent event;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final tone = StatusToneColor.fromStatus(event.severity);
+    final title = event.summary?.isNotEmpty == true
+        ? event.summary!
+        : event.eventType;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: AppCard(
+        selected: selected,
+        hoverable: true,
+        padding: EdgeInsets.zero,
+        onTap: onTap,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 92,
+                decoration: BoxDecoration(
+                  color: tone.base.withValues(alpha: 0.12),
+                  borderRadius: const BorderRadius.horizontal(
+                    left: Radius.circular(AppRadius.lg),
+                  ),
+                ),
+                child: Icon(
+                  Icons.photo_camera_back_outlined,
+                  color: tone.base,
+                  size: 30,
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall,
+                            ),
+                          ),
+                          StatusPill.fromStatus(event.severity),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        _formatDate(event.timestamp),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.videocam_outlined,
+                            size: 15,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              event.deviceId,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelSmall,
+                            ),
+                          ),
+                          StatusPill.fromStatus(event.status),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _EventDetail extends StatelessWidget {
   const _EventDetail({
     required this.event,
@@ -1541,24 +1795,47 @@ class _EventDetail extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        _DetailLine(label: 'Event', value: event.eventId),
-        _DetailLine(label: 'Type', value: event.eventType),
-        _DetailLine(label: 'Device', value: event.deviceId),
-        _DetailLine(label: 'Agent', value: event.agentId),
-        _DetailLine(label: 'Time', value: _formatDate(event.timestamp)),
-        if (event.confidence != null)
-          _DetailLine(
-            label: 'Confidence',
-            value: '${(event.confidence! * 100).toStringAsFixed(1)}%',
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: AppRadius.mdAll,
+            border: Border.all(color: scheme.outlineVariant),
           ),
-        if (event.summary != null)
-          _DetailLine(label: 'Summary', value: event.summary!),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                event.summary?.isNotEmpty == true
+                    ? event.summary!
+                    : event.eventType,
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _DetailLine(label: 'Camera', value: event.deviceId),
+              _DetailLine(label: 'Time', value: _formatDate(event.timestamp)),
+              if (event.confidence != null)
+                _DetailLine(
+                  label: 'Confidence',
+                  value: '${(event.confidence! * 100).toStringAsFixed(1)}%',
+                ),
+            ],
+          ),
+        ),
         const SizedBox(height: AppSpacing.md),
-        Text('Stage results', style: theme.textTheme.titleSmall),
-        const SizedBox(height: AppSpacing.sm),
-        CodeBlock(label: 'Stage 1', value: event.stage1Result?.toString()),
-        CodeBlock(label: 'Stage 2', value: event.stage2Verdict?.toString()),
-        CodeBlock(label: 'Stage 3', value: event.stage3Verdict?.toString()),
+        ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: EdgeInsets.zero,
+          title: Text('Technical details', style: theme.textTheme.titleSmall),
+          children: [
+            _DetailLine(label: 'Event', value: event.eventId),
+            _DetailLine(label: 'Type', value: event.eventType),
+            _DetailLine(label: 'Agent', value: event.agentId),
+            CodeBlock(label: 'Stage 1', value: event.stage1Result?.toString()),
+            CodeBlock(label: 'Stage 2', value: event.stage2Verdict?.toString()),
+            CodeBlock(label: 'Stage 3', value: event.stage3Verdict?.toString()),
+          ],
+        ),
         const SizedBox(height: AppSpacing.md),
         Row(
           children: [
