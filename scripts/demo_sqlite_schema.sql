@@ -23,17 +23,20 @@ CREATE TABLE IF NOT EXISTS devices (
     rssi REAL,
     fps REAL,
     current_pan INTEGER NOT NULL DEFAULT 90,
+    current_tilt INTEGER NOT NULL DEFAULT 90,
     last_seen TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
-    CHECK (current_pan >= 0 AND current_pan <= 180)
+    CHECK (current_pan >= 0 AND current_pan <= 180),
+    CHECK (current_tilt >= 0 AND current_tilt <= 180)
 );
 
 CREATE TABLE IF NOT EXISTS agents (
     agent_id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
-    device_id TEXT NOT NULL,
+    device_id TEXT,
+    parent_agent_id TEXT,
     name TEXT NOT NULL,
     location TEXT,
     nl_rule TEXT NOT NULL,
@@ -44,7 +47,8 @@ CREATE TABLE IF NOT EXISTS agents (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
-    FOREIGN KEY (device_id) REFERENCES devices (device_id) ON DELETE CASCADE
+    FOREIGN KEY (device_id) REFERENCES devices (device_id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_agent_id) REFERENCES agents (agent_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS events (
@@ -142,6 +146,18 @@ CREATE TABLE IF NOT EXISTS alerts (
     UNIQUE (dedupe_key)
 );
 
+CREATE TABLE IF NOT EXISTS push_tokens (
+    token_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    token TEXT NOT NULL,
+    platform TEXT NOT NULL DEFAULT 'web',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
+    UNIQUE (token)
+);
+
 CREATE TABLE IF NOT EXISTS tool_audit (
     audit_id TEXT PRIMARY KEY,
     event_id TEXT,
@@ -160,6 +176,7 @@ CREATE TABLE IF NOT EXISTS tool_audit (
 CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices (user_id);
 CREATE INDEX IF NOT EXISTS idx_agents_user_id ON agents (user_id);
 CREATE INDEX IF NOT EXISTS idx_agents_device_id ON agents (device_id);
+CREATE INDEX IF NOT EXISTS idx_agents_parent_agent_id ON agents (parent_agent_id);
 CREATE INDEX IF NOT EXISTS idx_events_user_timestamp ON events (user_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_events_device_timestamp ON events (device_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_events_status ON events (status);
@@ -167,4 +184,7 @@ CREATE INDEX IF NOT EXISTS idx_clips_event_id ON clips (event_id);
 CREATE INDEX IF NOT EXISTS idx_clips_user_id ON clips (user_id);
 CREATE INDEX IF NOT EXISTS idx_recordings_user_start ON recordings (user_id, start_time DESC);
 CREATE INDEX IF NOT EXISTS idx_alerts_user_id ON alerts (user_id);
+CREATE INDEX IF NOT EXISTS idx_push_tokens_user_id ON push_tokens (user_id);
 CREATE INDEX IF NOT EXISTS idx_tool_audit_user_timestamp ON tool_audit (user_id, timestamp DESC);
+
+

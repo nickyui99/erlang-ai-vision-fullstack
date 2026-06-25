@@ -7,6 +7,7 @@ import '../../design/app_typography.dart';
 import '../../services/backend_auth_client.dart';
 import '../../services/realtime/realtime_client.dart';
 import '../../shared/console_widgets.dart';
+import 'add_camera_wizard.dart';
 import 'agent_templates.dart';
 import 'device_control_view.dart';
 
@@ -50,12 +51,13 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   String? _selectedAgentId;
   String? _selectedEventId;
   String? _assigningAgentId;
-  String? _lastEdgeToken;
   ClipPlaybackUrl? _lastPlaybackUrl;
   String? _error;
   int _selectedTab = 0;
   bool _isRefreshing = false;
-  bool _isRegisteringDevice = false;
+  // Registration now happens in the full-screen AddCameraWizard, which manages
+  // its own busy state; this stays false so the launcher button never spins.
+  final bool _isRegisteringDevice = false;
   bool _isSendingHeartbeat = false;
   bool _isCreatingAgent = false;
   bool _isChangingAgentState = false;
@@ -131,6 +133,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       }
     } catch (error) {
       if (!mounted) return;
+      if (_shouldReturnToSignIn(error)) {
+        await widget.onSignOut();
+        return;
+      }
       setState(() => _error = error.toString());
       ScaffoldMessenger.of(
         context,
@@ -183,6 +189,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       });
     } catch (error) {
       if (!mounted) return;
+      if (_shouldReturnToSignIn(error)) {
+        await widget.onSignOut();
+        return;
+      }
       setState(() => _error = error.toString());
     }
   }
@@ -200,6 +210,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       });
     } catch (error) {
       if (!mounted) return;
+      if (_shouldReturnToSignIn(error)) {
+        await widget.onSignOut();
+        return;
+      }
       setState(() => _error = error.toString());
     }
   }
@@ -279,64 +293,15 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   }
 
   Future<void> _openRegisterDeviceDialog() async {
-    final result = await showDialog<({String name, String location})>(
-      context: context,
-      builder: (_) => const _DeviceFormDialog(),
-    );
-    if (result == null) return;
-    await _registerDevice(name: result.name, location: result.location);
-    if (_lastEdgeToken != null && mounted) {
-      await _showTokenDialog(_lastEdgeToken!);
-    }
-  }
-
-  Future<void> _registerDevice({required String name, String? location}) async {
-    await _run(
-      successMessage:
-          'Device registered. Copy the edge token now; it is only returned once.',
-      setBusy: (value) => _isRegisteringDevice = value,
-      action: () async {
-        final registration = await widget.apiClient.registerDevice(
-          name: name,
-          location: location,
-        );
-        final devices = await widget.apiClient.listDevices();
-        if (!mounted) return;
-        setState(() {
-          _lastEdgeToken = registration.edgeToken;
-          _edgeTokenController.text = registration.edgeToken;
-          _devices = devices;
-          _selectedDeviceId = registration.device.deviceId;
-        });
-      },
-    );
-  }
-
-  Future<void> _showTokenDialog(String token) {
-    return showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Device edge token'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Copy this token into the edge device now. It is shown only once.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TokenBox(token: token),
-          ],
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Done'),
-          ),
-        ],
+    final added = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => AddCameraWizard(apiClient: widget.apiClient),
+        fullscreenDialog: true,
       ),
     );
+    if (added == true && mounted) {
+      await _refreshAll(showSuccess: false);
+    }
   }
 
   Future<void> _sendHeartbeat() async {
@@ -487,6 +452,12 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         setState(() => _activeConfigs = configs);
       },
     );
+  }
+
+  bool _shouldReturnToSignIn(Object error) {
+    return error is BackendAuthException &&
+        (error.code == 'not_authenticated' ||
+            error.code == 'invalid_session');
   }
 
   void _showLocalError(String text) {
@@ -689,7 +660,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
               icon: Icons.videocam_outlined,
               title: selectedDevice.name,
               detail:
-                  '${selectedDevice.location ?? 'No location'} · ${selectedDevice.healthStatus}',
+                  '${selectedDevice.location ?? 'No location'} ?? ${selectedDevice.healthStatus}',
               tone: StatusToneColor.fromStatus(selectedDevice.healthStatus),
             ),
           const SizedBox(height: AppSpacing.sm),
@@ -704,7 +675,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             _FocusRow(
               icon: Icons.radar_outlined,
               title: selectedAgent.name,
-              detail: '${selectedAgent.state} · ${selectedAgent.rule}',
+              detail: '${selectedAgent.state} ?? ${selectedAgent.rule}',
               tone: StatusToneColor.fromStatus(selectedAgent.state),
             ),
         ],
@@ -891,7 +862,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
 
     return ConsolePanel(
       title: 'Agents',
-      subtitle: '${definitions.length} agents · tap to edit',
+      subtitle: '${definitions.length} agents ?? tap to edit',
       icon: Icons.radar_outlined,
       action: AppButton(
         label: 'Create agent',
@@ -1866,7 +1837,7 @@ class _EventDetail extends StatelessWidget {
               selected: false,
               title: clip.clipType,
               subtitle:
-                  '${clip.status} · ${clip.mimeType ?? 'media'} · ${clip.durationSeconds ?? 0}s',
+                  '${clip.status} ?? ${clip.mimeType ?? 'media'} ?? ${clip.durationSeconds ?? 0}s',
               leading: IconChip(icon: Icons.movie_outlined, size: 34),
               trailing: AppButton(
                 label: 'URL',
@@ -2225,7 +2196,7 @@ class _AssignAgentTile extends StatelessWidget {
     final scheme = theme.colorScheme;
     final elsewhere = assignmentCount - (assigned ? 1 : 0);
     final subtitle = elsewhere > 0
-        ? '${agent.rule}  ·  also on $elsewhere other ${elsewhere == 1 ? 'camera' : 'cameras'}'
+        ? '${agent.rule}  ??  also on $elsewhere other ${elsewhere == 1 ? 'camera' : 'cameras'}'
         : agent.rule;
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -2287,80 +2258,6 @@ class _AgentFormResult {
   final String name;
   final String? location;
   final String rule;
-}
-
-class _DeviceFormDialog extends StatefulWidget {
-  const _DeviceFormDialog();
-
-  @override
-  State<_DeviceFormDialog> createState() => _DeviceFormDialogState();
-}
-
-class _DeviceFormDialogState extends State<_DeviceFormDialog> {
-  final _nameController = TextEditingController();
-  final _locationController = TextEditingController();
-  String? _error;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _locationController.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      setState(() => _error = 'Device name is required.');
-      return;
-    }
-    Navigator.of(
-      context,
-    ).pop((name: name, location: _locationController.text.trim()));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Register device'),
-      content: SizedBox(
-        width: 380,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _nameController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Device name',
-                prefixIcon: Icon(Icons.badge_outlined),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: _locationController,
-              decoration: const InputDecoration(
-                labelText: 'Location (optional)',
-                prefixIcon: Icon(Icons.place_outlined),
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              AppBanner(text: _error!),
-            ],
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(onPressed: _submit, child: const Text('Register')),
-      ],
-    );
-  }
 }
 
 class _AgentFormDialog extends StatefulWidget {
@@ -2521,8 +2418,8 @@ class _ActiveConfigTile extends StatelessWidget {
     final confidence = config.config['min_confidence']?.toString() ?? 'default';
     return SelectableConsoleTile(
       selected: false,
-      title: 'Active config · ${config.agentId}',
-      subtitle: '$detectors · confidence $confidence · $ruleText',
+      title: 'Active config ?? ${config.agentId}',
+      subtitle: '$detectors ?? confidence $confidence ?? $ruleText',
       leading: IconChip(icon: Icons.tune_outlined, size: 34),
       trailing: StatusPill.fromStatus(config.state),
       onTap: () {},
@@ -2558,3 +2455,4 @@ String _formatDate(DateTime? value) {
   }
   return value.toLocal().toString().split('.').first;
 }
+

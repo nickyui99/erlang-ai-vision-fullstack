@@ -46,6 +46,8 @@ Implemented HTTP endpoints:
 - `POST /api/v1/devices/{device_id}/pan`
 - `POST /api/v1/devices/{device_id}/tilt`
 - `POST /api/v1/devices/{device_id}/snapshot`
+- `POST /api/v1/devices/{device_id}/stream-url`
+- `GET /api/v1/devices/{device_id}/stream`
 - `POST /api/v1/agents`
 - `GET /api/v1/agents`
 - `GET /api/v1/agents/{agent_id}`
@@ -65,7 +67,9 @@ Implemented HTTP endpoints:
 - `POST /api/v1/notifications/tokens`
 - `DELETE /api/v1/notifications/tokens/{token}`
 - `GET /api/v1/stream/events`
+- `GET /api/v1/system/network`
 - `WS /api/v1/edge/ws`
+- `WS /api/v1/edge/stream`
 
 Remaining work is tracked in later milestones: Flutter push-notification registration and native camera affordances, Qwen verification, MCP tooling, retention, and deployment.
 
@@ -221,6 +225,73 @@ DELETE http://localhost:8000/api/v1/notifications/tokens/{token}
 ```
 
 Pan and tilt drive the two SG90 servos of the camera gimbal (each `0–180°`, centered at `90°`); the edge reports `current_pan` and `current_tilt` back through the heartbeat. Push alerts are delivered via Firebase Cloud Messaging — register a client's FCM token with `POST /api/v1/notifications/tokens`, and the backend pushes a notification when the edge submits an event at or above `ALERT_MIN_SEVERITY` (default `high`).
+
+## Live Video (Push Relay)
+
+The edge device pushes JPEG frames to the backend over a WebSocket; the backend
+fans them out to browser viewers as MJPEG. This works through home NAT because
+the device makes the outbound connection — no inbound port or public camera IP.
+
+```text
+ESP32-CAM  ──WS binary JPEG──>  backend broker  ──MJPEG──>  Flutter <img>
+(WS /api/v1/edge/stream)        (in-memory)      (GET /api/v1/devices/{id}/stream)
+```
+
+- Device side: connect to `WS /api/v1/edge/stream` with `Authorization: Bearer <edge_token>` and send one JPEG per binary message.
+- Frontend: `POST /api/v1/devices/{device_id}/stream-url` mints a short-lived signed URL (a query-string token is used because a cross-origin `<img>` does not carry the session cookie), which the camera control screen feeds to the live view when the camera is `online`.
+
+### Test live video locally (no hardware)
+
+Register a device in the app and copy its `edge_token` from the "Device edge
+token" dialog, then run the simulator — it pretends to be an ESP32-CAM, sends
+heartbeats (so the camera shows online), and pushes an animated test pattern.
+Only the edge token is needed; the backend identifies the device from it.
+
+```powershell
+pip install websockets pillow
+python scripts\stream_simulator.py --edge-token se_edge_xxx
+```
+
+Open that camera in the Flutter app and the live view shows the moving pattern.
+
+### Test with a real USB camera bridge
+
+To drive the live view from an actual ESP32 over USB instead of the simulator,
+use the device-tier bridge in `SentinelEdge_IOT/`. The bridge forwards the
+camera's frames into `WS /api/v1/edge/stream` exactly like the simulator, so the
+backend and frontend are unchanged.
+
+1. In the app, **Cameras → Add camera**, and copy the `edge_token` from the
+   "Device edge token" dialog.
+2. In `SentinelEdge_IOT/`, flash the USB-CDC build and run the bridge pointed at
+   this backend with that token:
+
+   ```powershell
+   cd SentinelEdge_IOT\firmware
+   pio run -e usb_stream -t upload
+   cd ..\receiver
+   python edge_bridge.py --serial-port COM5 `
+       --api-base-url http://localhost:8000 --edge-token se_edge_xxx
+   ```
+
+3. Open that camera in the app — the live view shows the USB camera, and the
+   heartbeat flips it to `online`.
+
+For isolating the device→bridge hop, the bridge also serves a direct preview at
+`http://localhost:8766/video.mjpg` (and `/health`, `/snapshot.jpg`). See
+`SentinelEdge_IOT/README.md` → "Testing the stream end to end" and
+`SentinelEdge_IOT/docs/USB_PIVOT_PLAN.md` for the USB transport design.
+
+### Pair a real camera (QR onboarding)
+
+The app's **Cameras → Add camera** wizard is a market-style flow: name the
+camera, enter Wi-Fi + the receiver (laptop) address, then a pairing QR is shown
+for the ESP32 camera to scan with its own lens. The QR carries Wi-Fi + the
+laptop/bridge address (LAN IP pre-filled from `GET /api/v1/system/network`,
+port `8765`); the edge token is shown separately to start the bridge — it is not
+in the QR. The device firmware (QR provisioning) and the bridge live in the
+device-tier repo `SentinelEdge_IOT/` (`firmware/` + `receiver/edge_bridge.py`),
+which forwards the camera's frames into this backend's `/api/v1/edge/stream`.
 
 Firebase Auth is used for Google login. The frontend signs in with Firebase, gets a Firebase ID token, and sends it to the backend:
 
@@ -419,5 +490,5 @@ Remaining parallel frontend work:
 
 - register FCM tokens from Flutter and display push notifications
 - add backend + UI support for recording, audio mute/talk, alarm, fill light, resolution switching, fullscreen live video, presets, and PTZ correction
-- add real live stream rendering when an edge stream endpoint exists
+- live video is delivered as an MJPEG push relay (see "Live Video"); remaining: fullscreen surface and resolution switching
 - run mobile/emulator visual QA for the camera screens

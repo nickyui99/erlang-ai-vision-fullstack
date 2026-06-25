@@ -5,6 +5,10 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_SQLITE_URL = f"sqlite+aiosqlite:///{(REPO_ROOT / 'data' / 'sentineledge_demo.db').as_posix()}"
+
+
 class Settings(BaseSettings):
     app_env: str = Field(default="development", validation_alias="APP_ENV")
     app_name: str = Field(default="SentinelEdge Backend", validation_alias="APP_NAME")
@@ -20,7 +24,7 @@ class Settings(BaseSettings):
     )
 
     database_url: str = Field(
-        default="sqlite+aiosqlite:///./data/sentineledge_demo.db",
+        default=DEFAULT_SQLITE_URL,
         validation_alias="DATABASE_URL",
     )
 
@@ -42,7 +46,7 @@ class Settings(BaseSettings):
     )
 
     model_config = SettingsConfigDict(
-        env_file=Path(__file__).resolve().parents[3] / ".env",
+        env_file=REPO_ROOT / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -58,3 +62,4 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+

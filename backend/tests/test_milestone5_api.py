@@ -11,7 +11,6 @@ os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///C:/tmp/sentineledge_m5_pytest.db"
 
 from fastapi.testclient import TestClient  # noqa: E402
-from sqlalchemy import delete  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
 
 from app.core.security import create_session_token, hash_edge_token  # noqa: E402
@@ -19,10 +18,7 @@ from app.db.base import Base  # noqa: E402
 from app.db.session import engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.agent import Agent  # noqa: E402
-from app.models.clip import Clip  # noqa: E402
 from app.models.device import Device  # noqa: E402
-from app.models.event import Event  # noqa: E402
-from app.models.recording import Recording  # noqa: E402
 from app.models.user import User  # noqa: E402
 
 

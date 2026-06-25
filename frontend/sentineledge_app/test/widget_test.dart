@@ -45,7 +45,7 @@ void main() {
 
     expect(find.text('Snapshot'), findsWidgets);
     expect(find.text('Record'), findsOneWidget);
-    expect(find.text('Talk'), findsOneWidget);
+    expect(find.text('Mute'), findsOneWidget);
 
     await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();

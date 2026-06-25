@@ -29,6 +29,7 @@ from app.services import alert_service
 from app.services.media_url_service import media_url_service
 from app.services.edge_command_hub import edge_command_hub
 from app.services.realtime_bus import realtime_bus
+from app.services.video_stream_broker import video_stream_broker
 
 
 router = APIRouter(prefix="/edge", tags=["edge"])
@@ -70,6 +71,39 @@ async def edge_websocket(
     except ValueError:
         await edge_command_hub.disconnect(edge_device.device_id, websocket)
         await websocket.close(code=1003)
+
+
+@router.websocket("/stream")
+async def edge_stream_ingest(
+    websocket: WebSocket,
+    authorization: str | None = Header(default=None),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Receive a push video stream from an edge device as binary JPEG frames.
+
+    Each WebSocket message is one full JPEG frame. The frames are fanned out to
+    browser viewers as MJPEG by the device stream endpoint.
+    """
+    try:
+        edge_device = await get_edge_device_from_authorization(session, authorization)
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+    await video_stream_broker.start_publishing(edge_device.device_id)
+    try:
+        while True:
+            frame = await websocket.receive_bytes()
+            if frame:
+                await video_stream_broker.publish(edge_device.device_id, frame)
+    except WebSocketDisconnect:
+        pass
+    except KeyError:
+        # receive_bytes raises KeyError on a non-binary frame; reject it.
+        await websocket.close(code=1003)
+    finally:
+        await video_stream_broker.stop_publishing(edge_device.device_id)
 
 
 @router.post("/heartbeat")
