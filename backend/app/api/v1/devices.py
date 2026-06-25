@@ -1,21 +1,29 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import asyncio
+from datetime import UTC, datetime, timedelta
 import secrets
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db_session
-from app.core.security import generate_edge_token, hash_edge_token
+from app.core.config import settings
+from app.core.security import create_signed_token, generate_edge_token, hash_edge_token, verify_signed_token
 from app.models.device import Device
 from app.models.tool_audit import ToolAudit
 from app.models.user import User
 from app.schemas.command import DeviceCommandResult, DevicePanCommand, DeviceTiltCommand
-from app.schemas.device import DeviceCreate, DeviceRead, DeviceRegistrationRead, DeviceUpdate
+from app.schemas.device import DeviceCreate, DeviceRead, DeviceRegistrationRead, DeviceUpdate, LiveStreamUrlRead
 from app.services.edge_command_hub import EdgeCommandTimeoutError, EdgeNotConnectedError, edge_command_hub
+from app.services.video_stream_broker import video_stream_broker
+
+
+_STREAM_TOKEN_PURPOSE = "live_stream"
+_MJPEG_BOUNDARY = "frame"
 
 
 router = APIRouter(prefix="/devices", tags=["devices"])
@@ -168,6 +176,122 @@ async def get_device_snapshot(
     return {"data": result.model_dump(mode="json")}
 
 
+@router.post("/{device_id}/stream-url")
+async def create_device_stream_url(
+    device_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Mint a short-lived signed URL the frontend `<img>` can use to pull the
+    device's live MJPEG stream. A query-string token is used because a
+    cross-origin image request does not carry the session cookie."""
+    device = await _get_owned_device(session, current_user.user_id, device_id)
+    ttl = settings.signed_url_ttl_seconds
+    token = create_signed_token(
+        {"device_id": device.device_id, "user_id": current_user.user_id},
+        _STREAM_TOKEN_PURPOSE,
+        ttl,
+    )
+    base = str(request.base_url).rstrip("/")
+    stream_url = f"{base}{settings.api_prefix}/devices/{device.device_id}/stream?token={token}"
+    data = LiveStreamUrlRead(
+        stream_url=stream_url,
+        expires_at=datetime.now(UTC) + timedelta(seconds=ttl),
+    )
+    return {"data": data.model_dump(mode="json")}
+
+
+
+@router.get("/{device_id}/stream-frame", name="stream_device_latest_frame")
+async def stream_device_latest_frame(
+    device_id: str,
+    token: str = Query(...),
+    session: AsyncSession = Depends(get_db_session),
+) -> Response:
+    """Return the latest pushed JPEG frame as a single image response.
+
+    This uses the same signed token as the MJPEG stream and gives Flutter web a
+    reliable polling fallback when the browser/platform-view does not repaint an
+    MJPEG <img> continuously.
+    """
+    payload = verify_signed_token(token, _STREAM_TOKEN_PURPOSE)
+    if payload is None or payload.get("device_id") != device_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "invalid_stream_token", "message": "Stream token is invalid or expired"},
+        )
+    user_id = payload.get("user_id")
+    if not isinstance(user_id, str):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "invalid_stream_token", "message": "Stream token is invalid or expired"},
+        )
+    await _get_owned_device(session, user_id, device_id)
+
+    frame = video_stream_broker.latest_frame(device_id)
+    if not frame:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "no_stream_frame", "message": "No video frame is available yet"},
+        )
+    return Response(
+        content=frame,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
+
+@router.get("/{device_id}/stream", name="stream_device_video")
+async def stream_device_video(
+    device_id: str,
+    request: Request,
+    token: str = Query(...),
+    session: AsyncSession = Depends(get_db_session),
+) -> StreamingResponse:
+    """Stream the device's pushed JPEG frames to the browser as MJPEG."""
+    payload = verify_signed_token(token, _STREAM_TOKEN_PURPOSE)
+    if payload is None or payload.get("device_id") != device_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "invalid_stream_token", "message": "Stream token is invalid or expired"},
+        )
+    user_id = payload.get("user_id")
+    if not isinstance(user_id, str):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "invalid_stream_token", "message": "Stream token is invalid or expired"},
+        )
+    await _get_owned_device(session, user_id, device_id)
+
+    queue = await video_stream_broker.subscribe(device_id)
+
+    async def frame_generator():
+        try:
+            while not await request.is_disconnected():
+                try:
+                    frame = await asyncio.wait_for(queue.get(), timeout=10)
+                except asyncio.TimeoutError:
+                    continue
+                header = (
+                    f"--{_MJPEG_BOUNDARY}\r\n"
+                    f"Content-Type: image/jpeg\r\n"
+                    f"Content-Length: {len(frame)}\r\n\r\n"
+                ).encode("ascii")
+                yield header + frame + b"\r\n"
+        finally:
+            await video_stream_broker.unsubscribe(device_id, queue)
+
+    return StreamingResponse(
+        frame_generator(),
+        media_type=f"multipart/x-mixed-replace; boundary={_MJPEG_BOUNDARY}",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 async def _send_audited_device_command(
     *,
     session: AsyncSession,
@@ -225,3 +349,4 @@ async def _send_audited_device_command(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail={"code": "command_timeout", "message": "Edge command timed out"},
         ) from exc
+

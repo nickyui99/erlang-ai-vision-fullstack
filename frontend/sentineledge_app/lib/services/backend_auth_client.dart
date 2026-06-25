@@ -69,6 +69,13 @@ class SentinelEdgeApiClient {
     return DeviceRegistration.fromJson(body['data'] as Map<String, dynamic>);
   }
 
+  /// LAN-reachable host/port for this backend, used to pre-fill the camera
+  /// pairing QR (the camera cannot reach `localhost`).
+  Future<BackendNetworkInfo> networkInfo() async {
+    final body = await _getObject('/api/v1/system/network');
+    return BackendNetworkInfo.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
   Future<List<EdgeDevice>> listDevices() async {
     final body = await _getObject('/api/v1/devices');
     final items = body['data'] as List<dynamic>;
@@ -94,7 +101,7 @@ class SentinelEdgeApiClient {
     return EdgeDevice.fromJson(body['data'] as Map<String, dynamic>);
   }
 
-  /// Relays a pan command (0–180°) to the edge device and returns the result.
+  /// Relays a pan command (0???180??) to the edge device and returns the result.
   Future<DeviceCommandResult> panDevice(String deviceId, int angle) async {
     final body = await _postObject('/api/v1/devices/$deviceId/pan', {
       'angle': angle,
@@ -102,7 +109,7 @@ class SentinelEdgeApiClient {
     return DeviceCommandResult.fromJson(body['data'] as Map<String, dynamic>);
   }
 
-  /// Relays a tilt command (0–180°) to the edge device and returns the result.
+  /// Relays a tilt command (0???180??) to the edge device and returns the result.
   Future<DeviceCommandResult> tiltDevice(String deviceId, int angle) async {
     final body = await _postObject('/api/v1/devices/$deviceId/tilt', {
       'angle': angle,
@@ -114,6 +121,13 @@ class SentinelEdgeApiClient {
   Future<DeviceCommandResult> snapshotDevice(String deviceId) async {
     final body = await _postObject('/api/v1/devices/$deviceId/snapshot', null);
     return DeviceCommandResult.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  /// Mints a short-lived signed URL for the device's live MJPEG stream. The
+  /// returned URL is absolute and can be used directly as an `<img>` source.
+  Future<LiveStreamUrl> liveStreamUrl(String deviceId) async {
+    final body = await _postObject('/api/v1/devices/$deviceId/stream-url', null);
+    return LiveStreamUrl.fromJson(body['data'] as Map<String, dynamic>);
   }
 
   Future<EdgeDevice> sendHeartbeat({
@@ -145,7 +159,7 @@ class SentinelEdgeApiClient {
     String? deviceId,
   }) async {
     final body = await _postObject('/api/v1/agents', {
-      'device_id': ?deviceId,
+      'device_id': _emptyToNull(deviceId),
       'name': name,
       'location': _emptyToNull(location),
       'nl_rule': rule,
@@ -406,7 +420,7 @@ class DeviceRegistration {
   }
 }
 
-/// Result of relaying a command (pan, snapshot, …) to an edge device.
+/// Result of relaying a command (pan, snapshot, ???) to an edge device.
 class DeviceCommandResult {
   const DeviceCommandResult({
     required this.requestId,
@@ -623,6 +637,36 @@ class ClipPlaybackUrl {
   }
 }
 
+class BackendNetworkInfo {
+  const BackendNetworkInfo({this.lanIp, required this.port});
+
+  final String? lanIp;
+  final int port;
+
+  factory BackendNetworkInfo.fromJson(Map<String, dynamic> json) {
+    return BackendNetworkInfo(
+      lanIp: json['lan_ip']?.toString(),
+      port: int.tryParse(json['port'].toString()) ?? 8000,
+    );
+  }
+}
+
+class LiveStreamUrl {
+  const LiveStreamUrl({required this.streamUrl, this.expiresAt});
+
+  final String streamUrl;
+  final DateTime? expiresAt;
+
+  factory LiveStreamUrl.fromJson(Map<String, dynamic> json) {
+    return LiveStreamUrl(
+      streamUrl: json['stream_url'].toString(),
+      expiresAt: json['expires_at'] == null
+          ? null
+          : DateTime.tryParse(json['expires_at'].toString()),
+    );
+  }
+}
+
 double? _tryDouble(Object? value) {
   if (value == null) {
     return null;
@@ -636,3 +680,4 @@ Map<String, dynamic>? _tryMap(Object? value) {
   }
   return null;
 }
+

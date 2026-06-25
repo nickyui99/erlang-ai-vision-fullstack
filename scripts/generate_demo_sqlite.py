@@ -12,6 +12,10 @@ DATA = ROOT / "data"
 DB_PATH = DATA / "sentineledge_demo.db"
 BUILD_DB_PATH = Path("C:/tmp/sentineledge_demo.db")
 SCHEMA_PATH = SCRIPTS / "demo_sqlite_schema.sql"
+sys.path.insert(0, str(ROOT / "backend"))
+from app.core.security import hash_edge_token  # noqa: E402
+
+DEMO_EDGE_TOKEN = "se_edge_demo_frontdoor"
 
 
 def main() -> None:
@@ -50,6 +54,7 @@ def validate_database(path: Path) -> None:
         "recordings",
         "alerts",
         "tool_audit",
+        "push_tokens",
     }
     actual_tables = {
         row[0]
@@ -86,19 +91,20 @@ def seed_demo_data(conn: sqlite3.Connection) -> None:
         """
         INSERT INTO devices (
             device_id, user_id, edge_token_hash, name, location,
-            health_status, rssi, fps, current_pan, last_seen
+            health_status, rssi, fps, current_pan, current_tilt, last_seen
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "dev_frontdoor_001",
             "usr_demo_001",
-            "demo-hashed-edge-token",
+            hash_edge_token(DEMO_EDGE_TOKEN),
             "Front Door Camera",
             "Front Door",
             "online",
             -58.2,
             15.0,
+            90,
             90,
             "2026-06-11T12:45:00Z",
         ),
@@ -107,15 +113,16 @@ def seed_demo_data(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         INSERT INTO agents (
-            agent_id, user_id, device_id, name, location, nl_rule,
+            agent_id, user_id, device_id, parent_agent_id, name, location, nl_rule,
             compiled_prompt, compiled_edge_config, state, enabled
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "agt_frontdoor_night",
             "usr_demo_001",
             "dev_frontdoor_001",
+            None,
             "Night Front Door Watch",
             "Front Door",
             "Alert me if a person is lingering near the front door after 10 PM.",
@@ -263,3 +270,7 @@ def seed_demo_data(conn: sqlite3.Connection) -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+

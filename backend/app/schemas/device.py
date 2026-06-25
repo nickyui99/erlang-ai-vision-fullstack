@@ -46,3 +46,8 @@ class DeviceRead(BaseModel):
 class DeviceRegistrationRead(BaseModel):
     device: DeviceRead
     edge_token: str
+
+
+class LiveStreamUrlRead(BaseModel):
+    stream_url: str
+    expires_at: datetime

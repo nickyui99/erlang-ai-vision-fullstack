@@ -5,6 +5,7 @@ import '../../design/app_spacing.dart';
 import '../../design/app_typography.dart';
 import '../../services/backend_auth_client.dart';
 import '../../shared/console_widgets.dart';
+import 'live_stream_view.dart';
 
 /// Tapo-style device control screen: live view, pan & tilt, protection
 /// (armed agents) and recent activity for a single camera. Pushed full-screen
@@ -42,6 +43,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
   List<SecurityEvent> _events = const [];
   DeviceCommandResult? _snapshot;
   DateTime? _snapshotAt;
+  String? _streamUrl;
   String? _error;
 
   bool _isMoving = false;
@@ -57,6 +59,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     _panAngle = widget.device.currentPan;
     _tiltAngle = widget.device.currentTilt;
     _loadEvents();
+    _resolveStreamUrl();
   }
 
   List<SurveillanceAgent> get _definitions =>
@@ -112,6 +115,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
         _panAngle = device.currentPan;
         _tiltAngle = device.currentTilt;
       });
+      await _resolveStreamUrl();
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
@@ -219,6 +223,24 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     }
   }
 
+  /// Fetches a short-lived signed MJPEG URL from the backend when the camera is
+  /// online, then feeds it to [LiveStreamView]. Cleared when offline.
+  Future<void> _resolveStreamUrl() async {
+    if (_device.healthStatus != 'online') {
+      if (mounted) setState(() => _streamUrl = null);
+      return;
+    }
+    try {
+      final result = await widget.apiClient.liveStreamUrl(_device.deviceId);
+      if (!mounted) return;
+      setState(() => _streamUrl = result.streamUrl);
+    } catch (_) {
+      // Live view is best-effort; the snapshot fallback still works.
+      if (!mounted) return;
+      setState(() => _streamUrl = null);
+    }
+  }
+
   void _toast(String text) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
@@ -279,6 +301,9 @@ class _DeviceControlViewState extends State<DeviceControlView> {
                   tiltAngle: _tiltAngle,
                   snapshot: _snapshot,
                   snapshotAt: _snapshotAt,
+                  liveStreamUrl: _device.healthStatus == 'online'
+                      ? _streamUrl
+                      : null,
                   isSnapshotting: _isSnapshotting,
                   onSnapshot: _takeSnapshot,
                 ),
@@ -329,24 +354,6 @@ class _DeviceControlViewState extends State<DeviceControlView> {
               icon: Icons.volume_off_outlined,
               label: 'Mute',
               disabledReason: 'Audio streaming is not connected yet',
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            const _CameraActionButton(
-              icon: Icons.mic_none_outlined,
-              label: 'Talk',
-              disabledReason: 'Two-way audio is not connected yet',
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            const _CameraActionButton(
-              icon: Icons.notifications_active_outlined,
-              label: 'Alarm',
-              disabledReason: 'Alarm control is not connected yet',
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            const _CameraActionButton(
-              icon: Icons.light_mode_outlined,
-              label: 'Light',
-              disabledReason: 'Light control is not connected yet',
             ),
             const SizedBox(width: AppSpacing.sm),
             const _CameraActionButton(
@@ -672,6 +679,7 @@ class _LiveView extends StatelessWidget {
     required this.tiltAngle,
     required this.snapshot,
     required this.snapshotAt,
+    required this.liveStreamUrl,
     required this.isSnapshotting,
     required this.onSnapshot,
   });
@@ -681,6 +689,7 @@ class _LiveView extends StatelessWidget {
   final int tiltAngle;
   final DeviceCommandResult? snapshot;
   final DateTime? snapshotAt;
+  final String? liveStreamUrl;
   final bool isSnapshotting;
   final VoidCallback onSnapshot;
 
@@ -689,6 +698,7 @@ class _LiveView extends StatelessWidget {
     final theme = Theme.of(context);
     final online = device.healthStatus == 'online';
     final snapshotPath = snapshot?.payload['snapshot_path']?.toString();
+    final streamUrl = liveStreamUrl;
 
     return ClipRRect(
       borderRadius: AppRadius.lgAll,
@@ -706,8 +716,11 @@ class _LiveView extends StatelessWidget {
                 ),
               ),
             ),
-            Center(
-              child: Column(
+            if (streamUrl != null)
+              LiveStreamView(url: streamUrl),
+            if (streamUrl == null)
+              Center(
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
@@ -749,6 +762,15 @@ class _LiveView extends StatelessWidget {
                 ],
               ),
             ),
+            if (streamUrl != null)
+              Positioned(
+                bottom: AppSpacing.md,
+                left: AppSpacing.md,
+                child: const _GlassChip(
+                  icon: Icons.sensors_outlined,
+                  label: 'Bridge MJPEG',
+                ),
+              ),
             // Top-left: pan indicator.
             Positioned(
               top: AppSpacing.md,
