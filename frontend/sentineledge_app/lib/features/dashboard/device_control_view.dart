@@ -48,7 +48,9 @@ class _DeviceControlViewState extends State<DeviceControlView> {
 
   bool _isMoving = false;
   bool _isSnapshotting = false;
+  bool _isDeleting = false;
   bool _isLoadingEvents = false;
+  int _selectedSecondaryPanel = 0;
   String? _assigningAgentId;
 
   @override
@@ -133,7 +135,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     try {
       final result = await widget.apiClient.panDevice(_device.deviceId, target);
       if (!mounted) return;
-      _toast('Pan to $target° — ${result.status}');
+      _toast('Pan to $target deg - ${result.status}');
       await widget.onChanged();
     } catch (error) {
       if (!mounted) return;
@@ -157,7 +159,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
         target,
       );
       if (!mounted) return;
-      _toast('Tilt to $target° — ${result.status}');
+      _toast('Tilt to $target deg - ${result.status}');
       await widget.onChanged();
     } catch (error) {
       if (!mounted) return;
@@ -185,13 +187,63 @@ class _DeviceControlViewState extends State<DeviceControlView> {
         _snapshot = result;
         _snapshotAt = DateTime.now();
       });
-      _toast('Snapshot — ${result.status}');
+      _toast('Snapshot - ${result.status}');
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
       _toast(error.toString());
     } finally {
       if (mounted) setState(() => _isSnapshotting = false);
+    }
+  }
+
+  /// Confirms, then unregisters this camera. On success pops back to the
+  /// workspace and asks it to refresh, since the device no longer exists.
+  Future<void> _confirmAndDelete() async {
+    final armedCount = _armedHere;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete camera?'),
+        content: Text(
+          'This unregisters "${_device.name}" and removes it for good.'
+          '${armedCount > 0 ? ' Its $armedCount armed ${armedCount == 1 ? 'agent' : 'agents'} and ' : ' Its '}'
+          'recorded events will also be deleted. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.danger,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() {
+      _isDeleting = true;
+      _error = null;
+    });
+    try {
+      await widget.apiClient.deleteDevice(_device.deviceId);
+      await widget.onChanged();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      _toast('Camera "${_device.name}" deleted');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isDeleting = false;
+        _error = error.toString();
+      });
+      _toast(error.toString());
     }
   }
 
@@ -249,6 +301,8 @@ class _DeviceControlViewState extends State<DeviceControlView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final compact = MediaQuery.sizeOf(context).width < AppBreakpoints.compact;
+    final primaryControls = _primaryControls(compact: compact);
+    final secondaryPanels = _secondaryPanels(compact: compact);
 
     return Scaffold(
       appBar: AppBar(
@@ -271,8 +325,27 @@ class _DeviceControlViewState extends State<DeviceControlView> {
           ),
           IconButton(
             tooltip: 'Refresh',
-            onPressed: _refreshDevice,
+            onPressed: _isDeleting ? null : _refreshDevice,
             icon: const Icon(Icons.refresh),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'More',
+            enabled: !_isDeleting,
+            onSelected: (value) {
+              if (value == 'delete') _confirmAndDelete();
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline, color: AppColors.danger),
+                    const SizedBox(width: AppSpacing.sm),
+                    const Text('Delete camera'),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: AppSpacing.sm),
         ],
@@ -284,39 +357,30 @@ class _DeviceControlViewState extends State<DeviceControlView> {
               maxWidth: AppBreakpoints.contentMaxWidth,
             ),
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
+              padding: EdgeInsets.fromLTRB(
+                compact ? AppSpacing.md : AppSpacing.lg,
+                compact ? AppSpacing.sm : AppSpacing.lg,
+                compact ? AppSpacing.md : AppSpacing.lg,
                 AppSpacing.xxl,
               ),
               children: [
                 if (_error != null) ...[
                   AppBanner(text: _error!),
-                  const SizedBox(height: AppSpacing.lg),
+                  const SizedBox(height: AppSpacing.md),
                 ],
-                _LiveView(
-                  device: _device,
-                  panAngle: _panAngle,
-                  tiltAngle: _tiltAngle,
-                  snapshot: _snapshot,
-                  snapshotAt: _snapshotAt,
-                  liveStreamUrl: _device.healthStatus == 'online'
-                      ? _streamUrl
-                      : null,
-                  isSnapshotting: _isSnapshotting,
-                  onSnapshot: _takeSnapshot,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _quickActionDock(),
-                const SizedBox(height: AppSpacing.lg),
-                _telemetry(compact),
-                const SizedBox(height: AppSpacing.lg),
-                _panTiltPanel(),
-                const SizedBox(height: AppSpacing.lg),
-                _protectionPanel(),
-                const SizedBox(height: AppSpacing.lg),
-                _activityPanel(),
+                if (compact) ...[
+                  primaryControls,
+                  const SizedBox(height: AppSpacing.md),
+                  secondaryPanels,
+                ] else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 7, child: primaryControls),
+                      const SizedBox(width: AppSpacing.lg),
+                      Expanded(flex: 5, child: secondaryPanels),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -325,127 +389,47 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     );
   }
 
-  Widget _quickActionDock() {
-    return AppCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _CameraActionButton(
-              icon: _isSnapshotting
-                  ? Icons.hourglass_top_outlined
-                  : Icons.camera_alt_outlined,
-              label: _isSnapshotting ? 'Capturing' : 'Snapshot',
-              onTap: _isSnapshotting ? null : _takeSnapshot,
-              active: true,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            const _CameraActionButton(
-              icon: Icons.videocam_outlined,
-              label: 'Record',
-              disabledReason: 'Recording is not connected yet',
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            const _CameraActionButton(
-              icon: Icons.volume_off_outlined,
-              label: 'Mute',
-              disabledReason: 'Audio streaming is not connected yet',
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            const _CameraActionButton(
-              icon: Icons.hd_outlined,
-              label: 'Auto',
-              disabledReason: 'Resolution switching is not connected yet',
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            const _CameraActionButton(
-              icon: Icons.fullscreen_outlined,
-              label: 'Full',
-              disabledReason: 'Fullscreen live video is not connected yet',
-            ),
-          ],
+  Widget _primaryControls({required bool compact}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _LiveView(
+          device: _device,
+          panAngle: _panAngle,
+          tiltAngle: _tiltAngle,
+          snapshot: _snapshot,
+          snapshotAt: _snapshotAt,
+          liveStreamUrl: _device.healthStatus == 'online' ? _streamUrl : null,
+          isSnapshotting: _isSnapshotting,
+          onSnapshot: _takeSnapshot,
         ),
-      ),
+        const SizedBox(height: AppSpacing.sm),
+        _CameraActionBar(
+          isSnapshotting: _isSnapshotting,
+          onSnapshot: _takeSnapshot,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _compactPtzSurface(compact: compact),
+      ],
     );
   }
 
-  Widget _telemetry(bool compact) {
-    final tiles = [
-      _StatTile(
-        icon: Icons.swap_horiz_outlined,
-        label: 'Pan',
-        value: '$_panAngle°',
-      ),
-      _StatTile(
-        icon: Icons.swap_vert_outlined,
-        label: 'Tilt',
-        value: '$_tiltAngle°',
-      ),
-      _StatTile(
-        icon: Icons.speed_outlined,
-        label: 'Frame rate',
-        value: _device.fps != null
-            ? '${_device.fps!.toStringAsFixed(1)} fps'
-            : '—',
-      ),
-      _StatTile(
-        icon: Icons.wifi_outlined,
-        label: 'Signal',
-        value: _device.rssi != null
-            ? '${_device.rssi!.toStringAsFixed(0)} dBm'
-            : '—',
-      ),
-    ];
-    return GridView.count(
-      crossAxisCount: compact ? 2 : 4,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: AppSpacing.md,
-      mainAxisSpacing: AppSpacing.md,
-      childAspectRatio: compact ? 2.2 : 1.7,
-      children: tiles,
-    );
-  }
-
-  Widget _panTiltPanel() {
+  Widget _compactPtzSurface({required bool compact}) {
     final busy = _isMoving;
     final theme = Theme.of(context);
-    return ConsolePanel(
-      title: 'PTZ control',
-      subtitle: 'Directional control, presets and correction',
-      icon: Icons.control_camera_outlined,
+    return AppCard(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? AppSpacing.md : AppSpacing.lg,
+        vertical: compact ? AppSpacing.sm : AppSpacing.md,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: AppSpacing.sm,
-            children: [
-              StatusPill(
-                label: 'Pan $_panAngle°',
-                tone: StatusTone.info,
-                dot: false,
-              ),
-              StatusPill(
-                label: 'Tilt $_tiltAngle°',
-                tone: StatusTone.info,
-                dot: false,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _PresetStrip(
-            onPreset: (name) => _toast(
-              'Preset $name is a UI placeholder until camera presets are connected.',
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
           _DirectionPad(
             busy: busy,
+            size: compact ? 172 : 190,
+            buttonSize: compact ? 44 : 50,
+            iconSize: compact ? 24 : 26,
             canTiltUp: _tiltAngle < 180,
             canTiltDown: _tiltAngle > 0,
             canPanLeft: _panAngle > 0,
@@ -458,7 +442,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
           ),
           if (busy)
             Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.md),
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -467,7 +451,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  Text('Moving…', style: theme.textTheme.bodySmall),
+                  Text('Moving...', style: theme.textTheme.bodySmall),
                 ],
               ),
             ),
@@ -476,21 +460,65 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     );
   }
 
-  Widget _protectionPanel() {
+  Widget _secondaryPanels({required bool compact}) {
+    if (!compact) {
+      return Column(
+        children: [
+          _protectionPanel(compact: false),
+          const SizedBox(height: AppSpacing.lg),
+          _activityPanel(compact: false),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedButton<int>(
+          segments: const [
+            ButtonSegment<int>(
+              value: 0,
+              icon: Icon(Icons.shield_outlined),
+              label: Text('Protection'),
+            ),
+            ButtonSegment<int>(
+              value: 1,
+              icon: Icon(Icons.history_outlined),
+              label: Text('Activity'),
+            ),
+          ],
+          selected: {_selectedSecondaryPanel},
+          showSelectedIcon: false,
+          onSelectionChanged: (selection) {
+            setState(() => _selectedSecondaryPanel = selection.first);
+          },
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 160),
+          child: _selectedSecondaryPanel == 0
+              ? _protectionPanel(compact: true, key: const ValueKey('protect'))
+              : _activityPanel(compact: true, key: const ValueKey('activity')),
+        ),
+      ],
+    );
+  }
+
+  Widget _protectionPanel({required bool compact, Key? key}) {
     final definitions = _definitions;
     return ConsolePanel(
+      key: key,
       title: 'Protection',
       subtitle: definitions.isEmpty
           ? 'Create an agent in the Agents tab to arm this camera'
           : '$_armedHere of ${definitions.length} armed on this camera',
       icon: Icons.shield_outlined,
       child: definitions.isEmpty
-          ? const EmptyState(
+          ? const _CompactEmptyRow(
               icon: Icons.radar_outlined,
               title: 'No detection rules yet',
               message:
                   'Create a detection rule, then toggle it on here to arm this camera.',
-              compact: true,
             )
           : Column(
               children: definitions.map((agent) {
@@ -507,8 +535,9 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     );
   }
 
-  Widget _activityPanel() {
+  Widget _activityPanel({required bool compact, Key? key}) {
     return ConsolePanel(
+      key: key,
       title: 'Recent activity',
       subtitle: '${_events.length} detections on this camera',
       icon: Icons.history_outlined,
@@ -525,12 +554,11 @@ class _DeviceControlViewState extends State<DeviceControlView> {
       child: _isLoadingEvents && _events.isEmpty
           ? const SkeletonList(rows: 3)
           : _events.isEmpty
-          ? const EmptyState(
+          ? const _CompactEmptyRow(
               icon: Icons.event_busy_outlined,
               title: 'No activity yet',
               message:
                   'Detections from armed agents on this camera show up here.',
-              compact: true,
             )
           : Column(
               children: _events
@@ -562,8 +590,75 @@ String _formatTimestamp(DateTime? value) {
   return value.toLocal().toString().split('.').first;
 }
 
-class _CameraActionButton extends StatelessWidget {
-  const _CameraActionButton({
+
+class _CameraActionBar extends StatelessWidget {
+  const _CameraActionBar({
+    required this.isSnapshotting,
+    required this.onSnapshot,
+  });
+
+  final bool isSnapshotting;
+  final VoidCallback onSnapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _CameraActionChip(
+              icon: isSnapshotting
+                  ? Icons.hourglass_top_outlined
+                  : Icons.camera_alt_outlined,
+              label: isSnapshotting ? 'Capturing' : 'Snapshot',
+              onTap: isSnapshotting ? null : onSnapshot,
+              active: true,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          const Expanded(
+            child: _CameraActionChip(
+              icon: Icons.videocam_outlined,
+              label: 'Record',
+              disabledReason: 'Recording is not connected yet',
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          const Expanded(
+            child: _CameraActionChip(
+              icon: Icons.volume_off_outlined,
+              label: 'Mute',
+              disabledReason: 'Audio streaming is not connected yet',
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          const Expanded(
+            child: _CameraActionChip(
+              icon: Icons.hd_outlined,
+              label: 'Auto',
+              disabledReason: 'Resolution switching is not connected yet',
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          const Expanded(
+            child: _CameraActionChip(
+              icon: Icons.fullscreen_outlined,
+              label: 'Full',
+              disabledReason: 'Fullscreen live video is not connected yet',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CameraActionChip extends StatelessWidget {
+  const _CameraActionChip({
     required this.icon,
     required this.label,
     this.onTap,
@@ -594,10 +689,9 @@ class _CameraActionButton extends StatelessWidget {
       child: InkWell(
         borderRadius: AppRadius.mdAll,
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          width: 76,
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: AppRadius.mdAll,
@@ -606,10 +700,10 @@ class _CameraActionButton extends StatelessWidget {
             ),
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 22, color: fg),
-              const SizedBox(height: 4),
+              Icon(icon, size: 18, color: fg),
+              const SizedBox(height: 2),
               Text(
                 label,
                 maxLines: 1,
@@ -627,47 +721,6 @@ class _CameraActionButton extends StatelessWidget {
   }
 }
 
-class _PresetStrip extends StatelessWidget {
-  const _PresetStrip({required this.onPreset});
-
-  final ValueChanged<String> onPreset;
-
-  static const _presets = ['Front Gate', 'Driveway', 'Door', 'Custom'];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Favorites', style: Theme.of(context).textTheme.labelMedium),
-        const SizedBox(height: AppSpacing.sm),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: _presets
-                .map(
-                  (preset) => Padding(
-                    padding: const EdgeInsets.only(right: AppSpacing.sm),
-                    child: ActionChip(
-                      avatar: const Icon(Icons.bookmark_border, size: 16),
-                      label: Text(preset),
-                      onPressed: () => onPreset(preset),
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        OutlinedButton.icon(
-          onPressed: () => onPreset('Pan & Tilt Correction'),
-          icon: const Icon(Icons.tune_outlined, size: 18),
-          label: const Text('Pan & Tilt correction'),
-        ),
-      ],
-    );
-  }
-}
 // ---------------------------------------------------------------------------
 // Live view
 // ---------------------------------------------------------------------------
@@ -699,6 +752,13 @@ class _LiveView extends StatelessWidget {
     final online = device.healthStatus == 'online';
     final snapshotPath = snapshot?.payload['snapshot_path']?.toString();
     final streamUrl = liveStreamUrl;
+    final fps = device.fps != null
+        ? '${device.fps!.toStringAsFixed(device.fps! % 1 == 0 ? 0 : 1)} fps'
+        : 'fps --';
+    final signal = device.rssi != null
+        ? '${device.rssi!.toStringAsFixed(0)} dBm'
+        : 'signal --';
+    final streamLabel = 'MJPEG \u00B7 $fps \u00B7 $signal';
 
     return ClipRRect(
       borderRadius: AppRadius.lgAll,
@@ -735,7 +795,7 @@ class _LiveView extends StatelessWidget {
                     snapshotPath != null
                         ? 'Latest snapshot'
                         : online
-                        ? 'Live view unavailable — capture a snapshot'
+                        ? 'Live view unavailable - capture a snapshot'
                         : 'Camera offline',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -762,22 +822,25 @@ class _LiveView extends StatelessWidget {
                 ],
               ),
             ),
-            if (streamUrl != null)
-              Positioned(
-                bottom: AppSpacing.md,
-                left: AppSpacing.md,
-                child: const _GlassChip(
+            Positioned(
+              bottom: AppSpacing.md,
+              left: AppSpacing.md,
+              right: 148,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _GlassChip(
                   icon: Icons.sensors_outlined,
-                  label: 'Bridge MJPEG',
+                  label: streamLabel,
                 ),
               ),
+            ),
             // Top-left: pan indicator.
             Positioned(
-              top: AppSpacing.md,
+              top: AppSpacing.sm,
               left: AppSpacing.md,
               child: _GlassChip(
                 icon: Icons.control_camera_outlined,
-                label: 'P $panAngle° · T $tiltAngle°',
+                label: 'P $panAngle\u00B0 \u00B7 T $tiltAngle\u00B0',
               ),
             ),
             // Top-right: capture time.
@@ -812,6 +875,7 @@ class _LiveView extends StatelessWidget {
   }
 }
 
+
 class _GlassChip extends StatelessWidget {
   const _GlassChip({required this.icon, required this.label});
 
@@ -835,11 +899,15 @@ class _GlassChip extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: Colors.white.withValues(alpha: 0.85)),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -852,8 +920,8 @@ class _GlassChip extends StatelessWidget {
 // Controls
 // ---------------------------------------------------------------------------
 
-/// Circular PTZ pad: ◀ ▶ drive the pan servo, ▲ ▼ the tilt servo, center
-/// recenters both to 90°.
+/// Compact PTZ pad. Horizontal buttons drive pan, vertical buttons drive tilt,
+/// and the center button recenters both to 90 degrees.
 class _DirectionPad extends StatelessWidget {
   const _DirectionPad({
     required this.busy,
@@ -866,6 +934,9 @@ class _DirectionPad extends StatelessWidget {
     required this.onPanLeft,
     required this.onPanRight,
     required this.onCenter,
+    this.size = 190,
+    this.buttonSize = 50,
+    this.iconSize = 26,
   });
 
   final bool busy;
@@ -878,14 +949,17 @@ class _DirectionPad extends StatelessWidget {
   final VoidCallback onPanLeft;
   final VoidCallback onPanRight;
   final VoidCallback onCenter;
+  final double size;
+  final double buttonSize;
+  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Center(
       child: Container(
-        width: 214,
-        height: 214,
+        width: size,
+        height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: scheme.surfaceContainerLow,
@@ -895,19 +969,23 @@ class _DirectionPad extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             Positioned(
-              top: AppSpacing.md,
+              top: AppSpacing.sm,
               child: _PadButton(
                 icon: Icons.keyboard_arrow_up,
                 tooltip: 'Tilt up',
                 onPressed: busy || !canTiltUp ? null : onTiltUp,
+                buttonSize: buttonSize,
+                iconSize: iconSize,
               ),
             ),
             Positioned(
-              left: AppSpacing.md,
+              left: AppSpacing.sm,
               child: _PadButton(
                 icon: Icons.keyboard_arrow_left,
                 tooltip: 'Pan left',
                 onPressed: busy || !canPanLeft ? null : onPanLeft,
+                buttonSize: buttonSize,
+                iconSize: iconSize,
               ),
             ),
             _PadButton(
@@ -915,21 +993,27 @@ class _DirectionPad extends StatelessWidget {
               tooltip: 'Center camera',
               onPressed: busy ? null : onCenter,
               filled: true,
+              buttonSize: buttonSize,
+              iconSize: iconSize,
             ),
             Positioned(
-              right: AppSpacing.md,
+              right: AppSpacing.sm,
               child: _PadButton(
                 icon: Icons.keyboard_arrow_right,
                 tooltip: 'Pan right',
                 onPressed: busy || !canPanRight ? null : onPanRight,
+                buttonSize: buttonSize,
+                iconSize: iconSize,
               ),
             ),
             Positioned(
-              bottom: AppSpacing.md,
+              bottom: AppSpacing.sm,
               child: _PadButton(
                 icon: Icons.keyboard_arrow_down,
                 tooltip: 'Tilt down',
                 onPressed: busy || !canTiltDown ? null : onTiltDown,
+                buttonSize: buttonSize,
+                iconSize: iconSize,
               ),
             ),
           ],
@@ -945,12 +1029,16 @@ class _PadButton extends StatelessWidget {
     required this.tooltip,
     required this.onPressed,
     this.filled = false,
+    this.buttonSize = 50,
+    this.iconSize = 26,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
   final bool filled;
+  final double buttonSize;
+  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
@@ -958,64 +1046,63 @@ class _PadButton extends StatelessWidget {
         ? IconButton.filled(
             tooltip: tooltip,
             onPressed: onPressed,
-            iconSize: 28,
+            iconSize: iconSize,
             icon: Icon(icon),
           )
         : IconButton.filledTonal(
             tooltip: tooltip,
             onPressed: onPressed,
-            iconSize: 28,
+            iconSize: iconSize,
             icon: Icon(icon),
           );
     return Padding(
       padding: const EdgeInsets.all(2),
-      child: SizedBox(width: 56, height: 56, child: button),
+      child: SizedBox(width: buttonSize, height: buttonSize, child: button),
     );
   }
 }
 
-class _StatTile extends StatelessWidget {
-  const _StatTile({
+class _CompactEmptyRow extends StatelessWidget {
+  const _CompactEmptyRow({
     required this.icon,
-    required this.label,
-    required this.value,
+    required this.title,
+    required this.message,
   });
 
   final IconData icon;
-  final String label;
-  final String value;
+  final String title;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final color = scheme.primary;
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: scheme.surface,
+        color: scheme.surfaceContainerLow,
         borderRadius: AppRadius.mdAll,
         border: Border.all(color: scheme.outlineVariant),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Row(
         children: [
-          Icon(icon, size: 20, color: color),
-          const Spacer(),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.tabular(
-              theme.textTheme.titleLarge ?? const TextStyle(),
+          IconChip(icon: icon, size: 34),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: theme.textTheme.titleSmall),
+                const SizedBox(height: 2),
+                Text(
+                  message,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
             ),
-          ),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall,
           ),
         ],
       ),
@@ -1046,7 +1133,7 @@ class _AgentToggleTile extends StatelessWidget {
     final scheme = theme.colorScheme;
     final elsewhere = assignmentCount - (assigned ? 1 : 0);
     final subtitle = elsewhere > 0
-        ? '${agent.rule}  ·  also on $elsewhere other ${elsewhere == 1 ? 'camera' : 'cameras'}'
+        ? '${agent.rule} - also on $elsewhere other ${elsewhere == 1 ? 'camera' : 'cameras'}'
         : agent.rule;
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),

@@ -21,6 +21,7 @@ from app.core.security import create_session_token, hash_edge_token  # noqa: E40
 from app.db.base import Base  # noqa: E402
 from app.db.session import engine  # noqa: E402
 from app.main import app  # noqa: E402
+from app.models.agent import Agent  # noqa: E402
 from app.models.device import Device  # noqa: E402
 from app.models.tool_audit import ToolAudit  # noqa: E402
 from app.models.user import User  # noqa: E402
@@ -293,3 +294,68 @@ def test_pan_angle_validation() -> None:
 
     assert too_low.status_code == 422
     assert too_high.status_code == 422
+
+
+async def _seed_agent_for_device(agent_id: str, device_id: str) -> None:
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as session:
+        now = datetime.now(UTC)
+        session.add(
+            Agent(
+                agent_id=agent_id,
+                user_id="usr_m7",
+                device_id=device_id,
+                name="Loiter watch",
+                nl_rule="alert on loitering",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        await session.commit()
+
+
+async def _device_exists(device_id: str) -> bool:
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as session:
+        result = await session.execute(select(Device).where(Device.device_id == device_id))
+        return result.scalar_one_or_none() is not None
+
+
+async def _agent_exists(agent_id: str) -> bool:
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as session:
+        result = await session.execute(select(Agent).where(Agent.agent_id == agent_id))
+        return result.scalar_one_or_none() is not None
+
+
+def test_delete_device_unregisters_and_cascades_agents() -> None:
+    asyncio.run(_seed_agent_for_device("agt_m7", "dev_m7"))
+    client = _client()
+
+    response = client.delete("/api/v1/devices/dev_m7")
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert asyncio.run(_device_exists("dev_m7")) is False
+    # The agent assigned to the camera cascade-deletes with it.
+    assert asyncio.run(_agent_exists("agt_m7")) is False
+
+
+def test_delete_device_requires_authentication() -> None:
+    response = TestClient(app).delete("/api/v1/devices/dev_m7")
+
+    assert response.status_code == 401
+    assert asyncio.run(_device_exists("dev_m7")) is True
+
+
+def test_delete_device_rejects_non_owner() -> None:
+    response = _client("usr_other").delete("/api/v1/devices/dev_m7")
+
+    assert response.status_code == 404
+    assert asyncio.run(_device_exists("dev_m7")) is True
+
+
+def test_delete_unknown_device_returns_404() -> None:
+    response = _client().delete("/api/v1/devices/dev_missing")
+
+    assert response.status_code == 404
