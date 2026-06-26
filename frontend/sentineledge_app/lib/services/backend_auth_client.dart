@@ -101,6 +101,12 @@ class SentinelEdgeApiClient {
     return EdgeDevice.fromJson(body['data'] as Map<String, dynamic>);
   }
 
+  /// Unregisters (deletes) a camera. The backend cascade-deletes any agents
+  /// assigned to it and its recorded events.
+  Future<void> deleteDevice(String deviceId) async {
+    await _delete('/api/v1/devices/$deviceId');
+  }
+
   /// Relays a pan command (0???180??) to the edge device and returns the result.
   Future<DeviceCommandResult> panDevice(String deviceId, int angle) async {
     final body = await _postObject('/api/v1/devices/$deviceId/pan', {
@@ -283,6 +289,19 @@ class SentinelEdgeApiClient {
       body: jsonEncode(payload),
     );
     return _handleObject(response);
+  }
+
+  Future<void> _delete(String path) async {
+    final response = await _httpClient.delete(
+      Uri.parse('${BackendAuthClient.baseUrl}$path'),
+    );
+    // 204 No Content carries an empty body; only parse/validate on failure.
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw BackendAuthException.fromBody(
+        _decodeObject(response),
+        fallback: 'Backend request failed',
+      );
+    }
   }
 
   Map<String, dynamic> _handleObject(http.Response response) {

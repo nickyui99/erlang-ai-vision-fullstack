@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../design/app_colors.dart';
 import '../../design/app_motion.dart';
 import '../../design/app_spacing.dart';
+import '../../app/theme_mode_controller.dart';
 import '../../design/app_typography.dart';
 import '../../services/backend_auth_client.dart';
 import '../../services/realtime/realtime_client.dart';
@@ -19,7 +20,6 @@ class WorkspaceView extends StatefulWidget {
     this.autoLoad = true,
     this.initialDevices = const [],
     this.initialAgents = const [],
-    this.initialActiveConfigs = const [],
     super.key,
   });
 
@@ -29,20 +29,17 @@ class WorkspaceView extends StatefulWidget {
   final bool autoLoad;
   final List<EdgeDevice> initialDevices;
   final List<SurveillanceAgent> initialAgents;
-  final List<EdgeAgentConfig> initialActiveConfigs;
 
   @override
   State<WorkspaceView> createState() => _WorkspaceViewState();
 }
 
 class _WorkspaceViewState extends State<WorkspaceView> {
-  final _edgeTokenController = TextEditingController();
   final _deviceSearchController = TextEditingController();
   final _agentSearchController = TextEditingController();
 
   List<EdgeDevice> _devices = const [];
   List<SurveillanceAgent> _agents = const [];
-  List<EdgeAgentConfig> _activeConfigs = const [];
   List<SecurityEvent> _events = const [];
   List<MediaClip> _eventClips = const [];
   RealtimeConnection? _realtimeConnection;
@@ -58,22 +55,17 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   // Registration now happens in the full-screen AddCameraWizard, which manages
   // its own busy state; this stays false so the launcher button never spins.
   final bool _isRegisteringDevice = false;
-  bool _isSendingHeartbeat = false;
   bool _isCreatingAgent = false;
   bool _isChangingAgentState = false;
-  bool _isSyncingConfigs = false;
   bool _isLoadingEvents = false;
   bool _isLoadingClips = false;
   bool _isRequestingPlayback = false;
-  bool _edgeTokenObscured = true;
 
   bool get _isBusy =>
       _isRefreshing ||
       _isRegisteringDevice ||
-      _isSendingHeartbeat ||
       _isCreatingAgent ||
       _isChangingAgentState ||
-      _isSyncingConfigs ||
       _isLoadingEvents ||
       _isLoadingClips ||
       _isRequestingPlayback;
@@ -83,7 +75,6 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     super.initState();
     _devices = widget.initialDevices;
     _agents = widget.initialAgents;
-    _activeConfigs = widget.initialActiveConfigs;
     _selectedDeviceId = _chooseExisting(
       null,
       _devices.map((device) => device.deviceId),
@@ -106,7 +97,6 @@ class _WorkspaceViewState extends State<WorkspaceView> {
 
   @override
   void dispose() {
-    _edgeTokenController.dispose();
     _deviceSearchController.dispose();
     _agentSearchController.dispose();
     _realtimeConnection?.dispose();
@@ -170,7 +160,6 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             _selectedAgentId,
             agents.map((agent) => agent.agentId),
           );
-          _activeConfigs = const [];
         });
       },
     );
@@ -304,30 +293,6 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     }
   }
 
-  Future<void> _sendHeartbeat() async {
-    final token = _edgeTokenController.text.trim();
-    if (token.isEmpty) {
-      _showLocalError('Paste an edge token before sending heartbeat.');
-      return;
-    }
-    await _run(
-      successMessage: 'Heartbeat accepted',
-      setBusy: (value) => _isSendingHeartbeat = value,
-      action: () async {
-        await widget.apiClient.sendHeartbeat(
-          edgeToken: token,
-          healthStatus: 'online',
-          rssi: -58.2,
-          fps: 15,
-          currentPan: 90,
-        );
-        final devices = await widget.apiClient.listDevices();
-        if (!mounted) return;
-        setState(() => _devices = devices);
-      },
-    );
-  }
-
   Future<void> _openCreateAgentDialog() async {
     final result = await showDialog<_AgentFormResult>(
       context: context,
@@ -437,32 +402,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
   }
 
-  Future<void> _pullActiveConfigs() async {
-    final token = _edgeTokenController.text.trim();
-    if (token.isEmpty) {
-      _showLocalError('Paste an edge token before pulling active configs.');
-      return;
-    }
-    await _run(
-      successMessage: 'Active configs pulled',
-      setBusy: (value) => _isSyncingConfigs = value,
-      action: () async {
-        final configs = await widget.apiClient.activeConfigs(token);
-        if (!mounted) return;
-        setState(() => _activeConfigs = configs);
-      },
-    );
-  }
-
   bool _shouldReturnToSignIn(Object error) {
     return error is BackendAuthException &&
         (error.code == 'not_authenticated' ||
             error.code == 'invalid_session');
-  }
-
-  void _showLocalError(String text) {
-    setState(() => _error = text);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
   void _selectTab(int index) {
@@ -566,7 +509,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       1 => _overviewPanel(compact),
       2 => _agentPanel(compact),
       3 => _eventsPanel(compact),
-      _ => _edgePanel(),
+      _ => _settingsPanel(compact),
     };
   }
 
@@ -616,19 +559,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
-        if (compact) ...[
-          _operationsPanel(),
-          const SizedBox(height: AppSpacing.lg),
-          _recentConfigPanel(),
-        ] else
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: _operationsPanel()),
-              const SizedBox(width: AppSpacing.lg),
-              Expanded(child: _recentConfigPanel()),
-            ],
-          ),
+        _operationsPanel(),
       ],
     );
   }
@@ -680,28 +611,6 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             ),
         ],
       ),
-    );
-  }
-
-  Widget _recentConfigPanel() {
-    return ConsolePanel(
-      title: 'Edge sync state',
-      subtitle: 'Configs last pulled to the edge',
-      icon: Icons.hub_outlined,
-      child: _activeConfigs.isEmpty
-          ? const EmptyState(
-              icon: Icons.download_outlined,
-              title: 'No active config synced',
-              message:
-                  'Arm an agent, paste the edge token, then sync active agents.',
-              compact: true,
-            )
-          : Column(
-              children: _activeConfigs
-                  .take(3)
-                  .map((config) => _ActiveConfigTile(config: config))
-                  .toList(),
-            ),
     );
   }
 
@@ -937,66 +846,140 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
   }
 
-  Widget _edgePanel() {
+  Widget _settingsPanel(bool compact) {
+    final account = _accountPanel();
+    final preferences = _preferencesPanel();
+    final about = _aboutPanel();
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          account,
+          const SizedBox(height: AppSpacing.lg),
+          preferences,
+          const SizedBox(height: AppSpacing.lg),
+          about,
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: account),
+            const SizedBox(width: AppSpacing.lg),
+            Expanded(child: preferences),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        about,
+      ],
+    );
+  }
+
+  Widget _accountPanel() {
+    final theme = Theme.of(context);
+    final user = widget.user;
     return ConsolePanel(
-      title: 'Edge setup',
-      subtitle: 'Authenticate and sync the device fleet',
-      icon: Icons.hub_outlined,
+      title: 'Account',
+      subtitle: 'Signed in to SentinelEdge',
+      icon: Icons.person_outline,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            controller: _edgeTokenController,
-            decoration: InputDecoration(
-              labelText: 'Edge token',
-              prefixIcon: const Icon(Icons.key_outlined),
-              suffixIcon: IconButton(
-                tooltip: _edgeTokenObscured ? 'Show token' : 'Hide token',
-                icon: Icon(
-                  _edgeTokenObscured
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                ),
-                onPressed: () =>
-                    setState(() => _edgeTokenObscured = !_edgeTokenObscured),
-              ),
-            ),
-            obscureText: _edgeTokenObscured,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.md,
+          Row(
             children: [
-              AppButton(
-                label: 'Check connection',
-                loadingLabel: 'Checking',
-                icon: Icons.favorite_border,
-                loading: _isSendingHeartbeat,
-                onPressed: _sendHeartbeat,
+              _Avatar(user: user),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.displayName ?? user.email,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    Text(
+                      user.email,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
               ),
-              AppButton(
-                label: 'Sync active agents',
-                loadingLabel: 'Syncing',
-                icon: Icons.download_outlined,
-                variant: AppButtonVariant.secondary,
-                loading: _isSyncingConfigs,
-                onPressed: _pullActiveConfigs,
-              ),
+              StatusPill(label: user.role, tone: StatusTone.neutral),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          if (_activeConfigs.isEmpty)
-            const EmptyState(
-              icon: Icons.settings_input_component_outlined,
-              title: 'No active agents synced',
-              message:
-                  'Arm an agent, then sync active agents with the device edge token.',
+          AppButton(
+            label: 'Sign out',
+            icon: Icons.logout,
+            variant: AppButtonVariant.secondary,
+            onPressed: _isBusy ? null : () => widget.onSignOut(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _preferencesPanel() {
+    final controller = AppThemeModeScope.maybeOf(context);
+    return ConsolePanel(
+      title: 'Appearance',
+      subtitle: 'Choose how SentinelEdge looks',
+      icon: Icons.palette_outlined,
+      child: controller == null
+          ? const EmptyState(
+              icon: Icons.palette_outlined,
+              title: 'Theme unavailable',
+              message: 'Theme control is not available in this context.',
+              compact: true,
             )
-          else
-            ..._activeConfigs.map(
-              (config) => _ActiveConfigTile(config: config),
+          : ValueListenableBuilder<ThemeMode>(
+              valueListenable: controller,
+              builder: (context, mode, _) {
+                return SegmentedButton<ThemeMode>(
+                  segments: ThemeMode.values
+                      .map(
+                        (themeMode) => ButtonSegment<ThemeMode>(
+                          value: themeMode,
+                          icon: Icon(_themeModeIcon(themeMode)),
+                          label: Text(_themeModeLabel(themeMode)),
+                        ),
+                      )
+                      .toList(),
+                  selected: {mode},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (selection) =>
+                      controller.setMode(selection.first),
+                );
+              },
             ),
+    );
+  }
+
+  Widget _aboutPanel() {
+    final realtimeLabel = switch (_realtimeStatus) {
+      RealtimeStatus.live => 'Live',
+      RealtimeStatus.connecting => 'Connecting',
+      RealtimeStatus.reconnecting => 'Reconnecting',
+      RealtimeStatus.offline => 'Offline',
+    };
+    return ConsolePanel(
+      title: 'About',
+      subtitle: 'Connection and app details',
+      icon: Icons.info_outline,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _DetailLine(label: 'App', value: 'SentinelEdge'),
+          _DetailLine(label: 'Backend', value: BackendAuthClient.baseUrl),
+          _DetailLine(label: 'Realtime', value: realtimeLabel),
         ],
       ),
     );
@@ -1125,10 +1108,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       selectedIcon: Icons.warning_amber,
     ),
     _Destination(
-      label: 'Edge',
-      subtitle: 'Device authentication and sync',
-      icon: Icons.hub_outlined,
-      selectedIcon: Icons.hub,
+      label: 'Settings',
+      subtitle: 'Account and preferences',
+      icon: Icons.settings_outlined,
+      selectedIcon: Icons.settings,
     ),
   ];
 }
@@ -1980,6 +1963,8 @@ class _WorkspaceBody extends StatelessWidget {
           actions: [
             _RealtimeStatusPill(status: realtimeStatus),
             const SizedBox(width: AppSpacing.sm),
+            const _ThemeModeButton(),
+            const SizedBox(width: AppSpacing.sm),
             IconButton.filledTonal(
               onPressed: isRefreshing ? null : onRefresh,
               tooltip: 'Refresh',
@@ -2035,6 +2020,53 @@ class _WorkspaceBody extends StatelessWidget {
   }
 }
 
+class _ThemeModeButton extends StatelessWidget {
+  const _ThemeModeButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = AppThemeModeScope.maybeOf(context);
+    if (controller == null) return const SizedBox.shrink();
+
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: controller,
+      builder: (context, mode, _) {
+        return PopupMenuButton<ThemeMode>(
+          tooltip: 'Theme',
+          initialValue: mode,
+          icon: Icon(_themeModeIcon(mode)),
+          onSelected: controller.setMode,
+          itemBuilder: (context) => ThemeMode.values
+              .map(
+                (themeMode) => PopupMenuItem<ThemeMode>(
+                  value: themeMode,
+                  child: Row(
+                    children: [
+                      Icon(_themeModeIcon(themeMode), size: 18),
+                      const SizedBox(width: AppSpacing.md),
+                      Text(_themeModeLabel(themeMode)),
+                    ],
+                  ),
+                ),
+              )
+              .toList(),
+        );
+      },
+    );
+  }
+}
+
+IconData _themeModeIcon(ThemeMode mode) => switch (mode) {
+  ThemeMode.system => Icons.brightness_auto_outlined,
+  ThemeMode.light => Icons.light_mode_outlined,
+  ThemeMode.dark => Icons.dark_mode_outlined,
+};
+
+String _themeModeLabel(ThemeMode mode) => switch (mode) {
+  ThemeMode.system => 'System',
+  ThemeMode.light => 'Light',
+  ThemeMode.dark => 'Dark',
+};
 class _RealtimeStatusPill extends StatelessWidget {
   const _RealtimeStatusPill({required this.status});
 
@@ -2404,29 +2436,6 @@ class _AgentFormDialogState extends State<_AgentFormDialog> {
   }
 }
 
-class _ActiveConfigTile extends StatelessWidget {
-  const _ActiveConfigTile({required this.config});
-
-  final EdgeAgentConfig config;
-
-  @override
-  Widget build(BuildContext context) {
-    final detectors =
-        (config.config['detectors'] as List?)?.join(', ') ?? 'detector';
-    final ruleText =
-        config.config['rule_text']?.toString() ?? 'Active surveillance rule';
-    final confidence = config.config['min_confidence']?.toString() ?? 'default';
-    return SelectableConsoleTile(
-      selected: false,
-      title: 'Active config ?? ${config.agentId}',
-      subtitle: '$detectors ?? confidence $confidence ?? $ruleText',
-      leading: IconChip(icon: Icons.tune_outlined, size: 34),
-      trailing: StatusPill.fromStatus(config.state),
-      onTap: () {},
-    );
-  }
-}
-
 class _Destination {
   const _Destination({
     required this.label,
@@ -2455,4 +2464,6 @@ String _formatDate(DateTime? value) {
   }
   return value.toLocal().toString().split('.').first;
 }
+
+
 

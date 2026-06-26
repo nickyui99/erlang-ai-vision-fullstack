@@ -119,6 +119,20 @@ async def update_device(
     return {"data": DeviceRead.model_validate(device).model_dump(mode="json")}
 
 
+@router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+async def delete_device(
+    device_id: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> Response:
+    """Unregisters a camera. Assigned agents and recorded events cascade-delete
+    via their device foreign keys (ondelete=CASCADE)."""
+    device = await _get_owned_device(session, current_user.user_id, device_id)
+    await session.delete(device)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/{device_id}/pan")
 async def pan_device(
     device_id: str,
