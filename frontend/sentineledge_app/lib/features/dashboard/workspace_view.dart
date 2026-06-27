@@ -42,6 +42,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   List<SurveillanceAgent> _agents = const [];
   List<SecurityEvent> _events = const [];
   List<MediaClip> _eventClips = const [];
+  List<ToolAuditEntry> _eventAudit = const [];
   RealtimeConnection? _realtimeConnection;
   RealtimeStatus _realtimeStatus = RealtimeStatus.connecting;
   String? _selectedDeviceId;
@@ -59,6 +60,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   bool _isChangingAgentState = false;
   bool _isLoadingEvents = false;
   bool _isLoadingClips = false;
+  bool _isLoadingAudit = false;
   bool _isRequestingPlayback = false;
 
   bool get _isBusy =>
@@ -68,6 +70,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       _isChangingAgentState ||
       _isLoadingEvents ||
       _isLoadingClips ||
+      _isLoadingAudit ||
       _isRequestingPlayback;
 
   @override
@@ -152,6 +155,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           _agents = agents;
           _events = const [];
           _eventClips = const [];
+          _eventAudit = const [];
           _selectedDeviceId = _chooseExisting(
             _selectedDeviceId,
             devices.map((device) => device.deviceId),
@@ -222,11 +226,13 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             events.map((event) => event.eventId),
           );
           _eventClips = const [];
+          _eventAudit = const [];
           _lastPlaybackUrl = null;
         });
         final selected = _selectedEventId;
         if (selected != null) {
           await _loadEventClips(selected, showSuccess: false);
+          await _loadEventAudit(selected, showSuccess: false);
         }
       },
     );
@@ -247,6 +253,22 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           _eventClips = clips;
           _lastPlaybackUrl = null;
         });
+      },
+    );
+  }
+
+  Future<void> _loadEventAudit(
+    String eventId, {
+    bool showSuccess = false,
+  }) async {
+    await _run(
+      successMessage: 'Agent activity refreshed',
+      setBusy: (value) => _isLoadingAudit = value,
+      showSuccess: showSuccess,
+      action: () async {
+        final audit = await widget.apiClient.listEventAudit(eventId);
+        if (!mounted) return;
+        setState(() => _eventAudit = audit);
       },
     );
   }
@@ -420,6 +442,14 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     switch (message.type) {
       case 'event.created':
         _loadEvents(showSuccess: false);
+        break;
+      case 'event.verified':
+        // Verification finished: refresh so the verdict + agent trail update.
+        final eventId = message.data['event_id']?.toString();
+        _loadEvents(showSuccess: false);
+        if (eventId != null && eventId == _selectedEventId) {
+          _loadEventAudit(eventId);
+        }
         break;
       case 'clip.available':
         final eventId = message.data['event_id']?.toString();
@@ -1028,6 +1058,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                       _lastPlaybackUrl = null;
                     });
                     _loadEventClips(event.eventId);
+                    _loadEventAudit(event.eventId);
                   },
                 ),
               ),
@@ -1047,10 +1078,13 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             : _EventDetail(
                 event: selectedEvent,
                 clips: _eventClips,
+                audit: _eventAudit,
                 playbackUrl: _lastPlaybackUrl,
                 isLoadingClips: _isLoadingClips,
+                isLoadingAudit: _isLoadingAudit,
                 isRequestingPlayback: _isRequestingPlayback,
                 onRefreshClips: () => _loadEventClips(selectedEvent.eventId),
+                onRefreshAudit: () => _loadEventAudit(selectedEvent.eventId),
                 onPlayback: _requestPlaybackUrl,
               ),
       ),
@@ -1328,6 +1362,9 @@ class _Sidebar extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final width = extended ? 252.0 : 76.0;
+    final logoAsset = theme.brightness == Brightness.dark
+        ? 'assets/brand/sentineledge-logo-light.png'
+        : 'assets/brand/sentineledge-logo-dark.png';
 
     return AnimatedContainer(
       duration: AppMotion.duration(context, AppMotion.base),
@@ -1357,17 +1394,12 @@ class _Sidebar extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.primary, AppColors.brandDeep],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
                     borderRadius: BorderRadius.circular(11),
                   ),
-                  child: const Icon(
-                    Icons.shield_outlined,
-                    color: Colors.white,
-                    size: 22,
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.asset(
+                    logoAsset,
+                    fit: BoxFit.cover,
                   ),
                 ),
                 if (extended) ...[
@@ -1712,23 +1744,243 @@ class _EventTimelineCard extends StatelessWidget {
   }
 }
 
+/// AI verification verdict (from `stage3_verdict`) plus the agent's tool-call
+/// trail (from `/events/{id}/audit`) — the "what the AI did and decided" story.
+class _AiVerificationSection extends StatelessWidget {
+  const _AiVerificationSection({
+    required this.verdict,
+    required this.audit,
+    required this.isLoadingAudit,
+    required this.onRefresh,
+  });
+
+  final Map<String, dynamic>? verdict;
+  final List<ToolAuditEntry> audit;
+  final bool isLoadingAudit;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome_outlined, size: 18, color: scheme.primary),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text('AI verification', style: theme.textTheme.titleSmall),
+              ),
+              if (isLoadingAudit)
+                const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                IconButton(
+                  tooltip: 'Refresh agent activity',
+                  iconSize: 18,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onRefresh,
+                  icon: const Icon(Icons.refresh),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _verdictBlock(context),
+          const SizedBox(height: AppSpacing.md),
+          Text('Agent activity', style: theme.textTheme.labelLarge),
+          const SizedBox(height: AppSpacing.sm),
+          _activityBlock(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _verdictBlock(BuildContext context) {
+    final theme = Theme.of(context);
+    final data = verdict;
+    if (data == null) {
+      return Text(
+        'Not verified yet.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+    if (data['status'] == 'degraded') {
+      return Row(
+        children: [
+          const StatusPill(label: 'unavailable', tone: StatusTone.warning),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'Verification could not complete${data['reason'] != null ? ' (${data['reason']})' : ''}.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final verified = data['verified'] == true;
+    final confidence = (data['confidence'] as num?)?.toDouble();
+    final action = data['recommended_action']?.toString();
+    final summary = data['summary']?.toString();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            StatusPill(
+              label: verified ? 'verified' : 'not verified',
+              tone: verified ? StatusTone.success : StatusTone.neutral,
+            ),
+            if (action != null && action.isNotEmpty)
+              StatusPill(label: action, tone: StatusTone.neutral),
+            if (confidence != null)
+              StatusPill(
+                label: '${(confidence * 100).toStringAsFixed(0)}% confident',
+                tone: StatusTone.neutral,
+              ),
+          ],
+        ),
+        if (summary != null && summary.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(summary, style: theme.textTheme.bodyMedium),
+        ],
+      ],
+    );
+  }
+
+  Widget _activityBlock(BuildContext context) {
+    final theme = Theme.of(context);
+    if (audit.isEmpty) {
+      return Text(
+        isLoadingAudit ? 'Loading agent activity…' : 'No agent actions for this event.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+    return Column(
+      children: audit.map((entry) => _ToolCallRow(entry: entry)).toList(),
+    );
+  }
+}
+
+class _ToolCallRow extends StatelessWidget {
+  const _ToolCallRow({required this.entry});
+
+  final ToolAuditEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final failed = !entry.ok;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            _toolIcon(entry.toolName),
+            size: 18,
+            color: failed ? AppColors.warning : scheme.primary,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_humanizeToolCall(entry), style: theme.textTheme.bodyMedium),
+                Text(
+                  failed && entry.error != null
+                      ? '${_formatDate(entry.timestamp)} · ${entry.error}'
+                      : _formatDate(entry.timestamp),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: failed ? AppColors.warning : scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _humanizeToolCall(ToolAuditEntry entry) {
+  switch (entry.toolName) {
+    case 'get_live_snapshot':
+      return 'Requested a live snapshot';
+    case 'pan_camera':
+      final angle = entry.arguments?['angle'];
+      return angle != null ? 'Panned the camera to $angle°' : 'Panned the camera';
+    case 'get_device_status':
+      return 'Checked device status';
+    case 'query_recent_events':
+      return 'Reviewed recent events';
+    case 'get_event_clip':
+      return 'Fetched the event clip';
+    default:
+      return entry.toolName;
+  }
+}
+
+IconData _toolIcon(String toolName) {
+  switch (toolName) {
+    case 'get_live_snapshot':
+      return Icons.camera_alt_outlined;
+    case 'pan_camera':
+      return Icons.control_camera_outlined;
+    case 'get_device_status':
+      return Icons.monitor_heart_outlined;
+    case 'query_recent_events':
+      return Icons.history_outlined;
+    case 'get_event_clip':
+      return Icons.movie_outlined;
+    default:
+      return Icons.bolt_outlined;
+  }
+}
+
 class _EventDetail extends StatelessWidget {
   const _EventDetail({
     required this.event,
     required this.clips,
+    required this.audit,
     required this.playbackUrl,
     required this.isLoadingClips,
+    required this.isLoadingAudit,
     required this.isRequestingPlayback,
     required this.onRefreshClips,
+    required this.onRefreshAudit,
     required this.onPlayback,
   });
 
   final SecurityEvent event;
   final List<MediaClip> clips;
+  final List<ToolAuditEntry> audit;
   final ClipPlaybackUrl? playbackUrl;
   final bool isLoadingClips;
+  final bool isLoadingAudit;
   final bool isRequestingPlayback;
   final VoidCallback onRefreshClips;
+  final VoidCallback onRefreshAudit;
   final Future<void> Function(MediaClip clip) onPlayback;
 
   @override
@@ -1775,6 +2027,13 @@ class _EventDetail extends StatelessWidget {
                 ),
             ],
           ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _AiVerificationSection(
+          verdict: event.stage3Verdict,
+          audit: audit,
+          isLoadingAudit: isLoadingAudit,
+          onRefresh: onRefreshAudit,
         ),
         const SizedBox(height: AppSpacing.md),
         ExpansionTile(
