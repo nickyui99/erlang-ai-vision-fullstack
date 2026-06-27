@@ -7,9 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db_session
 from app.models.clip import Clip
 from app.models.event import Event
+from app.models.tool_audit import ToolAudit
 from app.models.user import User
 from app.schemas.event import EventRead
 from app.schemas.media import ClipRead
+from app.schemas.tool import ToolAuditRead
 
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -64,6 +66,24 @@ async def list_event_clips(
     )
     clips = [ClipRead.model_validate(clip).model_dump(mode="json") for clip in result.scalars()]
     return {"data": clips}
+
+
+@router.get("/{event_id}/audit")
+async def list_event_audit(
+    event_id: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Tool-call trail for an event — e.g. the AI agent's snapshot/pan/read
+    actions during verification. Ordered oldest-first to read as a timeline."""
+    await _get_owned_event(session, current_user.user_id, event_id)
+    result = await session.execute(
+        select(ToolAudit)
+        .where(ToolAudit.event_id == event_id, ToolAudit.user_id == current_user.user_id)
+        .order_by(ToolAudit.timestamp.asc())
+    )
+    audits = [ToolAuditRead.model_validate(audit).model_dump(mode="json") for audit in result.scalars()]
+    return {"data": audits}
 
 
 async def _get_owned_event(session: AsyncSession, user_id: str, event_id: str) -> Event:

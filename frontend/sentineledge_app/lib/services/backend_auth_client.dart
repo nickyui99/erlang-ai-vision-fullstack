@@ -246,6 +246,16 @@ class SentinelEdgeApiClient {
         .toList();
   }
 
+  /// The tool-call trail for an event — the AI agent's snapshot/pan/read actions
+  /// during verification, oldest-first.
+  Future<List<ToolAuditEntry>> listEventAudit(String eventId) async {
+    final body = await _getObject('/api/v1/events/$eventId/audit');
+    final items = body['data'] as List<dynamic>;
+    return items
+        .map((item) => ToolAuditEntry.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<ClipPlaybackUrl> signedClipPlaybackUrl(String clipId) async {
     final body = await _postObject('/api/v1/clips/$clipId/signed-url', null);
     return ClipPlaybackUrl.fromJson(body['data'] as Map<String, dynamic>);
@@ -581,6 +591,45 @@ class SecurityEvent {
       summary: json['summary']?.toString(),
       degraded: json['degraded'] == true,
       status: json['status'].toString(),
+    );
+  }
+}
+
+/// One audited tool call. For verification events these are the AI agent's
+/// actions (`called_by == 'agent'`): live snapshot, pan, status/event reads.
+class ToolAuditEntry {
+  const ToolAuditEntry({
+    required this.auditId,
+    required this.toolName,
+    required this.calledBy,
+    this.deviceId,
+    this.arguments,
+    this.result,
+    this.timestamp,
+  });
+
+  final String auditId;
+  final String toolName;
+  final String calledBy;
+  final String? deviceId;
+  final Map<String, dynamic>? arguments;
+  final Map<String, dynamic>? result;
+  final DateTime? timestamp;
+
+  bool get ok => result?['ok'] == true;
+  String? get error => result?['error']?.toString();
+
+  factory ToolAuditEntry.fromJson(Map<String, dynamic> json) {
+    return ToolAuditEntry(
+      auditId: json['audit_id'].toString(),
+      toolName: json['tool_name'].toString(),
+      calledBy: json['called_by'].toString(),
+      deviceId: json['device_id']?.toString(),
+      arguments: _tryMap(json['arguments']),
+      result: _tryMap(json['result']),
+      timestamp: json['timestamp'] == null
+          ? null
+          : DateTime.tryParse(json['timestamp'].toString()),
     );
   }
 }
