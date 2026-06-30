@@ -146,8 +146,13 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     }
   }
 
+  // Tilt is mechanically limited to 60..140 on the rig (firmware SERVO_TILT_MIN/MAX_DEG;
+  // backend rejects out-of-range). Pan spans the full 0..180.
+  static const int _tiltMinDeg = 60;
+  static const int _tiltMaxDeg = 140;
+
   Future<void> _sendTilt(int angle) async {
-    final target = angle.clamp(0, 180);
+    final target = angle.clamp(_tiltMinDeg, _tiltMaxDeg);
     setState(() {
       _isMoving = true;
       _error = null;
@@ -430,8 +435,8 @@ class _DeviceControlViewState extends State<DeviceControlView> {
             size: compact ? 172 : 190,
             buttonSize: compact ? 44 : 50,
             iconSize: compact ? 24 : 26,
-            canTiltUp: _tiltAngle < 180,
-            canTiltDown: _tiltAngle > 0,
+            canTiltUp: _tiltAngle < _tiltMaxDeg,
+            canTiltDown: _tiltAngle > _tiltMinDeg,
             canPanLeft: _panAngle > 0,
             canPanRight: _panAngle < 180,
             onTiltUp: () => _sendTilt(_tiltAngle + _panStep),

@@ -6,5 +6,12 @@ __pycache__/
 venv/
 
 *.db-journal
+*.db-wal
+*.db-shm
 sentineledge_migration_autogen.db
 sentineledge_migration_autogen.db-journal
+
+# local backend run logs / ad-hoc probes
+backend_run.log
+backend_run.err.log
+probe_edge_auth.py
