@@ -28,7 +28,7 @@ class _SentinelEdgeAppState extends State<SentinelEdgeApp> {
         valueListenable: _themeModeController,
         builder: (context, themeMode, _) {
           return MaterialApp(
-            title: 'SentinelEdge',
+            title: 'Erlang AI Vision',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),

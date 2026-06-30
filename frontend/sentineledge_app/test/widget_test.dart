@@ -10,7 +10,7 @@ void main() {
     await tester.pumpWidget(const SentinelEdgeApp());
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('SentinelEdge'), findsOneWidget);
+    expect(find.text('Erlang AI Vision'), findsOneWidget);
     expect(find.text('Sign in with Google'), findsOneWidget);
   });
 
@@ -35,7 +35,7 @@ void main() {
 
     expect(find.text('Cameras'), findsWidgets);
     expect(find.text('Front Door'), findsOneWidget);
-    expect(find.text('Live ready'), findsOneWidget);
+    expect(find.text('Live'), findsOneWidget);
     expect(find.text('Protection'), findsOneWidget);
 
     final cameraTitle = find.text('Front Door');
@@ -50,8 +50,8 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
 
-    expect(find.text('PTZ control'), findsOneWidget);
-    expect(find.text('Front Gate'), findsOneWidget);
+    expect(find.byTooltip('Pan left'), findsOneWidget);
+    expect(find.text('Person detection'), findsOneWidget);
   });
 
   testWidgets(
@@ -76,7 +76,7 @@ void main() {
       await tester.drag(find.byType(ListView), const Offset(0, -500));
       await tester.pumpAndSettle();
 
-      expect(find.text('Pan & Tilt correction'), findsOneWidget);
+      expect(find.byTooltip('Tilt up'), findsOneWidget);
 
       await tester.drag(find.byType(ListView), const Offset(0, 500));
       await tester.pumpAndSettle();
@@ -175,3 +175,4 @@ class _FakeSentinelEdgeApiClient extends SentinelEdgeApiClient {
     required String deviceId,
   }) async {}
 }
+

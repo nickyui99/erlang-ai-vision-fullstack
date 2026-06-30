@@ -1,36 +1,38 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
-/// Raw palette + semantic roles for SentinelEdge.
+/// Raw palette + semantic roles for Erlang AI Vision.
 ///
-/// This is the single source of truth for color. Widgets never hardcode a
-/// `Color(0x...)` — they read from here (directly, via the [ColorScheme] the
-/// theme builds, or via the [AppStatusColors] theme extension).
+/// This is the single source of truth for product color. Widgets should read
+/// from here, via [ColorScheme], or via [AppStatusColors] instead of hardcoding
+/// one-off colors.
 class AppColors {
   AppColors._();
 
-  // --- Neutral ramp (slate) -------------------------------------------------
+  // --- Neutral ramp ---------------------------------------------------------
   static const neutral0 = Color(0xFFFFFFFF);
-  static const neutral50 = Color(0xFFF7F8FA); // app background
+  static const neutral50 = Color(0xFFF7F8FA);
   static const neutral100 = Color(0xFFF1F3F5);
-  static const neutral150 = Color(0xFFEAEDF0);
-  static const neutral200 = Color(0xFFE3E6EA); // hairline borders
-  static const neutral300 = Color(0xFFCBD2D9);
-  static const neutral400 = Color(0xFF9AA5B1);
-  static const neutral500 = Color(0xFF7B8794);
-  static const neutral600 = Color(0xFF616E7C); // secondary text
-  static const neutral700 = Color(0xFF3E4C59);
-  static const neutral800 = Color(0xFF27313B);
-  static const neutral900 = Color(0xFF16202B); // primary text
+  static const neutral150 = Color(0xFFECEFF3);
+  static const neutral200 = Color(0xFFE4E7EC);
+  static const neutral300 = Color(0xFFD0D5DD);
+  static const neutral400 = Color(0xFF98A2B3);
+  static const neutral500 = Color(0xFF667085);
+  static const neutral600 = Color(0xFF475467);
+  static const neutral700 = Color(0xFF344054);
+  static const neutral800 = Color(0xFF1D2939);
+  static const neutral900 = Color(0xFF111820);
 
-  // --- Brand (refined teal-green) ------------------------------------------
-  static const primary = Color(0xFF0E9F6E);
-  static const primaryHover = Color(0xFF0C8A5E);
-  static const primaryPressed = Color(0xFF0A6F4C);
-  static const primaryContainer = Color(0xFFE3F5EC);
-  static const onPrimaryContainer = Color(0xFF065F46);
-  static const brandDeep = Color(0xFF2F6B5F); // legacy brand, used sparingly
+  // --- Brand: Erlang AI Vision ---------------------------------------------
+  static const primary = Color(0xFFF03A24);
+  static const primaryHover = Color(0xFFE2321E);
+  static const primaryPressed = Color(0xFFC91F14);
+  static const primaryContainer = Color(0xFFFFE7E1);
+  static const onPrimaryContainer = Color(0xFF7A170F);
+  static const accentOrange = Color(0xFFFF6A2A);
+  static const brandInk = Color(0xFF111820);
+  static const brandDeep = primaryPressed;
 
-  // --- Semantic state (base hues; tints derived via alpha) ------------------
+  // --- Semantic state colors ------------------------------------------------
   static const success = Color(0xFF16A34A);
   static const warning = Color(0xFFD97706);
   static const danger = Color(0xFFDC2626);
@@ -42,11 +44,11 @@ class AppColors {
   static const lightSurfaceMuted = neutral100;
   static const lightBorder = neutral200;
 
-  // --- Dark surfaces (future-proofed; shipping light-first) -----------------
-  static const darkBackground = Color(0xFF0B1110);
-  static const darkSurface = Color(0xFF121A19);
-  static const darkSurfaceMuted = Color(0xFF18211F);
-  static const darkBorder = Color(0xFF263230);
+  // --- Dark surfaces --------------------------------------------------------
+  static const darkBackground = Color(0xFF090D12);
+  static const darkSurface = Color(0xFF0D1117);
+  static const darkSurfaceMuted = Color(0xFF151B23);
+  static const darkBorder = Color(0xFF27313B);
 }
 
 /// Tone categories used by status pills, badges, and banners.
@@ -112,7 +114,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
   Color border(StatusTone tone) =>
       tone.base.withValues(alpha: brightness == Brightness.dark ? 0.40 : 0.28);
 
-  /// Foreground (text/icon) for a tone — slightly brighter in dark mode.
+  /// Foreground (text/icon) for a tone, slightly brighter in dark mode.
   Color foreground(StatusTone tone) => brightness == Brightness.dark
       ? Color.lerp(tone.base, Colors.white, 0.25)!
       : tone.base;
