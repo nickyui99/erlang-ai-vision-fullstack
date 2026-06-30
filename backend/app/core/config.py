@@ -38,6 +38,25 @@ class Settings(BaseSettings):
     alerts_enabled: bool = Field(default=True, validation_alias="ALERTS_ENABLED")
     alert_min_severity: str = Field(default="high", validation_alias="ALERT_MIN_SEVERITY")
 
+    # Milestone 9 — Qwen Cloud verification (DashScope OpenAI-compatible).
+    # Verification is opt-in: it stays off until VERIFICATION_ENABLED=true so the
+    # default ingestion/alert path is unchanged. Without a QWEN_API_KEY the
+    # service falls back to a deterministic mock verdict (handy for offline demos).
+    verification_enabled: bool = Field(default=False, validation_alias="VERIFICATION_ENABLED")
+    verify_min_severity: str = Field(default="high", validation_alias="VERIFY_MIN_SEVERITY")
+    qwen_api_key: str = Field(default="", validation_alias="QWEN_API_KEY")
+    qwen_base_url: str = Field(
+        default="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        validation_alias="QWEN_BASE_URL",
+    )
+    qwen_model: str = Field(default="qwen-vl-max", validation_alias="QWEN_MODEL")
+    qwen_timeout_seconds: float = Field(default=20, validation_alias="QWEN_TIMEOUT_SECONDS")
+    qwen_max_tool_turns: int = Field(default=4, validation_alias="QWEN_MAX_TOOL_TURNS")
+
+    # MCP actuation guardrails (Milestone 9B). Pan is rate-limited per event.
+    mcp_max_pans_per_event: int = Field(default=3, validation_alias="MCP_MAX_PANS_PER_EVENT")
+    mcp_min_seconds_between_pans: float = Field(default=5, validation_alias="MCP_MIN_SECONDS_BETWEEN_PANS")
+
     signed_url_ttl_seconds: int = Field(default=900, validation_alias="SIGNED_URL_TTL_SECONDS")
     media_retention_days: int = Field(default=7, validation_alias="MEDIA_RETENTION_DAYS")
     daily_recording_retention_hours: int = Field(

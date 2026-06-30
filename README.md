@@ -4,7 +4,7 @@ SentinelEdge is a surveillance backend and edge-integration project spanning a F
 
 ## Current Status
 
-Milestones 1 through 8.5 are complete:
+Milestones 1 through 9 are complete:
 
 - FastAPI app scaffold
 - environment-based configuration
@@ -30,6 +30,7 @@ Milestones 1 through 8.5 are complete:
 - edge command relay over WebSocket: two-axis SG90 gimbal control (pan + tilt) and live snapshot
 - Firebase Cloud Messaging (FCM) push alerts for high-severity events (Milestone 8)
 - Flutter smart-camera UX pass: camera-first dashboard, live/snapshot control surface, quick actions, PTZ controller, protection toggles, and event timeline (Milestone 8.5)
+- Qwen Cloud AI verification of qualifying events (verdict stored in `events.stage3_verdict`), an in-process MCP tool layer (live snapshot, pan, device/event/clip reads) with permission + pan-rate guardrails and full `tool_audit` logging, a bounded agent tool-calling loop, and a frontend AI-verification panel showing the verdict + agent tool trail (Milestone 9)
 
 Implemented HTTP endpoints:
 
@@ -63,6 +64,7 @@ Implemented HTTP endpoints:
 - `GET /api/v1/events`
 - `GET /api/v1/events/{event_id}`
 - `GET /api/v1/events/{event_id}/clips`
+- `GET /api/v1/events/{event_id}/audit`
 - `POST /api/v1/clips/{clip_id}/signed-url`
 - `POST /api/v1/notifications/tokens`
 - `DELETE /api/v1/notifications/tokens/{token}`
@@ -71,7 +73,7 @@ Implemented HTTP endpoints:
 - `WS /api/v1/edge/ws`
 - `WS /api/v1/edge/stream`
 
-Remaining work is tracked in later milestones: Flutter push-notification registration and native camera affordances, Qwen verification, MCP tooling, retention, and deployment.
+Remaining work: the edge **detection/agent tier** that auto-generates events from video (see "AI Verification" below — events do not fire automatically yet), retention + real OSS + deployment (Milestone 10), and Flutter push-notification registration and native camera affordances.
 
 ## Repository Layout
 
@@ -117,6 +119,11 @@ scripts/
   demo_sqlite_schema.sql
   generate_demo_sqlite.py
   inspect_demo_sqlite.py
+  seed_local_device.py
+  simulate_event.py
+  stream_simulator.py
+  verify_smoke.py
+  start-dev.ps1
 ```
 
 ## Local Setup
@@ -315,6 +322,49 @@ Interactive docs are available in development:
 http://localhost:8000/docs
 ```
 
+## AI Verification (Milestone 9)
+
+When the edge submits a qualifying event, the backend asks Qwen Cloud to verify
+it. The model may call MCP tools (fetch a live snapshot, pan the camera, read
+device status / recent events / clips) before returning a structured verdict,
+which is stored in `events.stage3_verdict` and feeds the alert decision. Every
+tool call is permission-checked, pan-rate-limited, and written to `tool_audit`;
+the Flutter event detail shows the verdict plus the agent's tool trail
+(`GET /api/v1/events/{event_id}/audit`).
+
+Enable it in `.env` (off by default):
+
+```env
+VERIFICATION_ENABLED=true
+QWEN_API_KEY=sk-...
+```
+
+Without a key (or under tests) a deterministic mock verdict is used, so the
+pipeline runs offline. Restart the backend after editing `.env`.
+
+### Triggering verification (important)
+
+There is **no detection tier yet** — arming an agent stores a compiled rule, but
+nothing analyzes video frames and POSTs events automatically. To exercise the
+full loop today, post an event the way that tier would:
+
+```powershell
+$env:PYTHONPATH="backend"
+python scripts\simulate_event.py                       # uses the seeded local device token
+python scripts\simulate_event.py --severity high --count 3 --interval 4
+```
+
+The event appears under Events / the camera's Recent activity, and (with
+verification enabled) the AI verdict + tool trail populate after the background
+verification finishes. To smoke-test the live Qwen call in isolation:
+
+```powershell
+python scripts\verify_smoke.py
+```
+
+Building the real detection tier — pull active configs, run a Stage 1/2 detector
+on frames, POST matched events — is the main remaining gap for a hands-free demo.
+
 ## Run Full Stack Locally
 
 Start the backend and Flutter web frontend together:
@@ -461,34 +511,26 @@ Pull active configs as the edge service:
 Invoke-RestMethod http://localhost:8000/api/v1/edge/agents/active -Headers @{ Authorization = "Bearer <edge_token>" }
 ```
 
-## Next Milestone
+## What's Next
 
-Milestone 8 (alert loop) is complete, delivered as Firebase Cloud Messaging push:
+Backend Milestones 1–9 are complete (auth, devices, agents, events/media,
+realtime, edge commands, FCM alerts, smart-camera UX, and AI verification + MCP).
+The remaining work, highest-impact first:
 
-- alert service interface (`backend/app/services/alert_service.py`)
-- first alert adapter - FCM push (`backend/app/services/notification_service.py`)
-- duplicate alerts suppressed per event + channel
-- alert delivery results stored on `alerts.status`
-- alert status pushed through SSE (`alert.created`)
+1. **Edge detection / agent tier — the biggest gap.** Nothing auto-generates
+   events from video. Arming an agent stores a compiled config, but no component
+   runs detectors on frames and POSTs to `/api/v1/edge/events`;
+   `SentinelEdge_IOT/receiver/edge_bridge.py` only forwards video + commands and
+   logs the pulled config. Use `scripts/simulate_event.py` to drive the pipeline
+   until this exists (see "AI Verification").
+2. **Rule compiler is a stub.** `_compile_agent_rule` maps every rule to
+   `{detectors:[person], min_confidence:0.75}`; make it translate the rule text
+   into real detector classes/thresholds.
+3. **Milestone 10 — retention & deployment.** Retention/cleanup, real Alibaba OSS
+   (today `PlaceholderMediaUrlService`), SQLite→Postgres check, and ECI deploy.
+4. **Frontend.** Register FCM tokens + display push notifications; back the
+   disabled market-style controls (recording, audio mute/talk, alarm, fill light,
+   resolution switching, fullscreen, presets, PTZ correction); mobile/emulator QA.
 
-Milestone 8.5 (Flutter smart-camera UX) is complete:
-
-- Cameras are now the primary frontend tab.
-- Device rows are replaced with smart-camera style cards.
-- The camera control screen now has a live/snapshot surface, quick action dock, circular PTZ control, favorite position chips, protection toggles, and recent activity.
-- Event review now uses a camera-app timeline, with technical event IDs and stage output behind an expander.
-- Unsupported market-style actions remain visible but disabled until backend APIs exist: recording, mute, talk, alarm, fill light, resolution switching, fullscreen stream, presets, and PTZ correction.
-
-Milestone 9 is next - AI verification and the MCP tool layer:
-
-- add the Qwen client wrapper and verification schema
-- validate or repair model output and store `stage3_verdict`
-- add MCP tool permissions and audit logging
-- enforce pan/tilt limits and high-risk tool rules
-
-Remaining parallel frontend work:
-
-- register FCM tokens from Flutter and display push notifications
-- add backend + UI support for recording, audio mute/talk, alarm, fill light, resolution switching, fullscreen live video, presets, and PTZ correction
-- live video is delivered as an MJPEG push relay (see "Live Video"); remaining: fullscreen surface and resolution switching
-- run mobile/emulator visual QA for the camera screens
+See the [MVP checklist](docs/backend/mvp_checklist.md) ("Next up") for the
+detailed status.

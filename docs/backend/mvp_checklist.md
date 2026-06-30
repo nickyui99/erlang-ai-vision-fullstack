@@ -2,6 +2,32 @@
 
 This checklist turns the backend plan into a practical implementation sequence.
 
+## Next up (read me first)
+
+Backend Milestones 1–9 are done. The gap to a hands-free, end-to-end demo:
+
+1. **Edge detection / agent tier — the biggest gap.** Nothing auto-generates
+   events from video yet. Arming an agent stores a compiled config, but no
+   component runs detectors on frames and POSTs to `/api/v1/edge/events`.
+   `SentinelEdge_IOT/receiver/edge_bridge.py` only forwards video + commands and
+   *logs* the pulled config — it never detects.
+   - **Workaround now:** `python scripts/simulate_event.py` posts events the way
+     that tier would, which drives the real AI verification + frontend trail.
+   - **To build:** an edge loop that pulls active configs, runs a Stage 1/2
+     detector (e.g. a person model) on frames, and POSTs matched events (with
+     debounce + idempotency).
+2. **Rule compiler is a stub.** `_compile_agent_rule` maps *every* rule to
+   `{detectors:[person], min_confidence:0.75}` — it ignores the rule text. Make
+   it translate the rule into real detector classes/thresholds.
+3. **Milestone 10** — retention, real Alibaba OSS (today
+   `PlaceholderMediaUrlService`), SQLite→Postgres check, and ECI deployment.
+4. **Frontend** — FCM token registration + push display; the disabled
+   market-style camera controls (record/audio/alarm/light/resolution/fullscreen).
+
+Helper scripts: `scripts/simulate_event.py` (fake events), `scripts/verify_smoke.py`
+(live Qwen check), `scripts/seed_local_device.py` (local device + token),
+`scripts/stream_simulator.py` (fake video).
+
 ## Milestone 1: Foundation
 
 - [x] Create FastAPI backend structure.
@@ -119,13 +145,23 @@ Remaining frontend work:
 
 ## Milestone 9: AI Verification and MCP
 
-- [ ] Add Qwen client wrapper.
-- [ ] Define verification schema.
-- [ ] Validate or repair model output.
-- [ ] Store `stage3_verdict`.
-- [ ] Add MCP tool permissions.
-- [ ] Add MCP tool audit logging.
-- [ ] Enforce pan limits and high-risk tool rules.
+Plan: [milestone9_plan.md](milestone9_plan.md). Built in sub-milestones 9A → 9B → 9C (all done).
+
+9A — Qwen verification core (done):
+- [x] Add Qwen client wrapper. (`services/qwen_client.py`: real `QwenClient` + offline `MockQwenClient`)
+- [x] Define verification schema. (`schemas/verification.py`)
+- [x] Validate or repair model output. (`verification_service._extract_json` / `_normalize` + one repair re-ask, else `degraded`)
+- [x] Store `stage3_verdict`. (background task off event ingestion; emits `event.verified`, re-evaluates alerting)
+
+9B/9C — MCP tools + agentic loop (done):
+- [x] Add MCP tool permissions. (`mcp/permissions.py`: autonomy table; high-risk tools denied)
+- [x] Add MCP tool audit logging. (`mcp/tools.py`: every call → `tool_audit`, `called_by="agent"`, `event_id`)
+- [x] Enforce pan limits and high-risk tool rules. (per-event `PanRateLimiter` + 0–180 clamp; verification runs a bounded tool-calling loop via `chat()`)
+
+Notes:
+- Verification is **opt-in** (`VERIFICATION_ENABLED`, default `false`) and triggers for events at or above `VERIFY_MIN_SEVERITY` (default `high`). Default ingestion/alert behaviour is unchanged when off.
+- Without `QWEN_API_KEY` (or under `APP_ENV=test`) the service uses a deterministic mock verdict so the pipeline runs offline.
+- Tests: `tests/test_milestone9_verification.py` (run alone, per the milestone-test convention).
 
 ## Milestone 10: Retention and Deployment
 

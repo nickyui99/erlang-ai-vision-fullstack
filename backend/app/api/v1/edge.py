@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 import secrets
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Response, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,7 @@ from app.schemas.media import (
 )
 from app.core.config import settings
 from app.services import alert_service
+from app.services import verification_service
 from app.services.media_url_service import media_url_service
 from app.services.edge_command_hub import edge_command_hub
 from app.services.realtime_bus import realtime_bus
@@ -183,6 +184,7 @@ async def active_agent_configs(
 async def create_edge_event(
     payload: EdgeEventCreate,
     response: Response,
+    background_tasks: BackgroundTasks,
     edge_device: Device = Depends(get_edge_device),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
@@ -241,6 +243,10 @@ async def create_edge_event(
         await alert_service.maybe_alert_for_event(session, event)
     except Exception:  # noqa: BLE001 - alerting is best-effort
         pass
+    # Milestone 9: verify qualifying events with Qwen Cloud after the response is
+    # sent. Runs in its own DB session; re-evaluates alerting on the verdict.
+    if verification_service.should_verify(event):
+        background_tasks.add_task(verification_service.run_verification, event.event_id)
     return {"data": EventRead.model_validate(event).model_dump(mode="json")}
 
 

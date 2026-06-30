@@ -225,6 +225,9 @@ class _BrandPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final logoAsset = theme.brightness == Brightness.dark
+        ? 'assets/brand/sentineledge-logo-light.png'
+        : 'assets/brand/sentineledge-logo-dark.png';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.xxl),
@@ -247,10 +250,10 @@ class _BrandPanel extends StatelessWidget {
               borderRadius: AppRadius.lgAll,
               border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
             ),
-            child: const Icon(
-              Icons.shield_outlined,
-              color: Colors.white,
-              size: 28,
+            clipBehavior: Clip.antiAlias,
+            child: Image.asset(
+              logoAsset,
+              fit: BoxFit.cover,
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
