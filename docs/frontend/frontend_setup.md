@@ -23,7 +23,7 @@ Remaining frontend work:
 
 - Register FCM tokens from Flutter and display push notifications.
 - Add real backend + UI support for recording, audio mute/talk, alarm, fill light, resolution switching, fullscreen live video, presets, and PTZ correction.
-- Render a live stream once an edge stream endpoint is available.
+- Keep live stream rendering polished across MJPEG and latest-frame polling modes.
 - Run mobile/emulator visual QA for the camera screens.
 
 ## Firebase Client Config
