@@ -1,341 +1,365 @@
 {
-  "info": {
-    "name": "SentinelEdge Milestone 4 API",
-    "description": "Postman collection for testing SentinelEdge Milestone 4: device registration, edge heartbeat, agent create/arm/disarm, and active config pull. Set sessionToken in the environment before running authenticated user requests.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "item": [
-    {
-      "name": "Health",
-      "item": [
-        {
-          "name": "GET healthz",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/healthz"
-          }
-        },
-        {
-          "name": "GET readyz",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/readyz"
-          }
-        },
-        {
-          "name": "GET version",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/v1/version"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Auth",
-      "item": [
-        {
-          "name": "GET current user",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Cookie",
-                "value": "{{sessionCookieName}}={{sessionToken}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/api/v1/users/me"
-          }
-        },
-        {
-          "name": "POST Firebase login",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{firebaseIdToken}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/api/v1/auth/firebase/login",
-            "description": "Use this only when you have a real Firebase ID token. For local backend-only testing, create a dev session token with the PowerShell helper in README and paste it into sessionToken."
-          }
-        },
-        {
-          "name": "POST logout",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Cookie",
-                "value": "{{sessionCookieName}}={{sessionToken}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/api/v1/auth/logout"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Devices",
-      "item": [
-        {
-          "name": "POST register device",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('device created', function () { pm.response.to.have.status(201); });",
-                  "const body = pm.response.json();",
-                  "if (body.data && body.data.device) { pm.environment.set('deviceId', body.data.device.device_id); }",
-                  "if (body.data && body.data.edge_token) { pm.environment.set('edgeToken', body.data.edge_token); }"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Cookie",
-                "value": "{{sessionCookieName}}={{sessionToken}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Front Door Camera\",\n  \"location\": \"Front Door\"\n}"
-            },
-            "url": "{{baseUrl}}/api/v1/devices"
-          }
-        },
-        {
-          "name": "GET list devices",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Cookie",
-                "value": "{{sessionCookieName}}={{sessionToken}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/api/v1/devices"
-          }
-        },
-        {
-          "name": "GET device detail",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Cookie",
-                "value": "{{sessionCookieName}}={{sessionToken}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/api/v1/devices/{{deviceId}}"
-          }
-        },
-        {
-          "name": "PUT update device",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Cookie",
-                "value": "{{sessionCookieName}}={{sessionToken}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Front Door Camera Updated\",\n  \"location\": \"Front Door\"\n}"
-            },
-            "url": "{{baseUrl}}/api/v1/devices/{{deviceId}}"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Agents",
-      "item": [
-        {
-          "name": "POST create agent",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('agent created', function () { pm.response.to.have.status(201); });",
-                  "const body = pm.response.json();",
-                  "if (body.data && body.data.agent_id) { pm.environment.set('agentId', body.data.agent_id); }"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Cookie",
-                "value": "{{sessionCookieName}}={{sessionToken}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"device_id\": \"{{deviceId}}\",\n  \"name\": \"Night Front Door Watch\",\n  \"location\": \"Front Door\",\n  \"nl_rule\": \"Alert me if a person is lingering near the front door after 10 PM.\"\n}"
-            },
-            "url": "{{baseUrl}}/api/v1/agents"
-          }
-        },
-        {
-          "name": "GET list agents",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Cookie",
-                "value": "{{sessionCookieName}}={{sessionToken}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/api/v1/agents"
-          }
-        },
-        {
-          "name": "GET agent detail",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Cookie",
-                "value": "{{sessionCookieName}}={{sessionToken}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/api/v1/agents/{{agentId}}"
-          }
-        },
-        {
-          "name": "PUT update agent",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Cookie",
-                "value": "{{sessionCookieName}}={{sessionToken}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Night Front Door Watch Updated\",\n  \"location\": \"Front Door\",\n  \"nl_rule\": \"Alert me if a person is lingering near the front door after 9 PM.\"\n}"
-            },
-            "url": "{{baseUrl}}/api/v1/agents/{{agentId}}"
-          }
-        },
-        {
-          "name": "POST arm agent",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Cookie",
-                "value": "{{sessionCookieName}}={{sessionToken}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/api/v1/agents/{{agentId}}/arm"
-          }
-        },
-        {
-          "name": "POST disarm agent",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Cookie",
-                "value": "{{sessionCookieName}}={{sessionToken}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/api/v1/agents/{{agentId}}/disarm"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Edge",
-      "item": [
-        {
-          "name": "POST edge heartbeat",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{edgeToken}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"health_status\": \"online\",\n  \"rssi\": -58.2,\n  \"fps\": 15.0,\n  \"current_pan\": 90\n}"
-            },
-            "url": "{{baseUrl}}/api/v1/edge/heartbeat"
-          }
-        },
-        {
-          "name": "GET active edge configs",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{edgeToken}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/api/v1/edge/agents/active"
-          }
-        }
-      ]
-    }
-  ]
+    "info":  {
+                 "name":  "SentinelEdge Milestone 4 API",
+                 "description":  "Postman collection for testing SentinelEdge Milestone 4: device registration, edge heartbeat, agent create/assign/unassign, and active config pull. Set sessionToken in the environment before running authenticated user requests.",
+                 "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+             },
+    "item":  [
+                 {
+                     "name":  "Health",
+                     "item":  [
+                                  {
+                                      "name":  "GET healthz",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/healthz"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET readyz",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/readyz"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET version",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/version"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Auth",
+                     "item":  [
+                                  {
+                                      "name":  "GET current user",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Cookie",
+                                                                         "value":  "{{sessionCookieName}}={{sessionToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/users/me"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "POST Firebase login",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{firebaseIdToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/auth/firebase/login",
+                                                      "description":  "Use this only when you have a real Firebase ID token. For local backend-only testing, create a dev session token with the PowerShell helper in README and paste it into sessionToken."
+                                                  }
+                                  },
+                                  {
+                                      "name":  "POST logout",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Cookie",
+                                                                         "value":  "{{sessionCookieName}}={{sessionToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/auth/logout"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Devices",
+                     "item":  [
+                                  {
+                                      "name":  "POST register device",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027device created\u0027, function () { pm.response.to.have.status(201); });",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "if (body.data \u0026\u0026 body.data.device) { pm.environment.set(\u0027deviceId\u0027, body.data.device.device_id); }",
+                                                                                    "if (body.data \u0026\u0026 body.data.edge_token) { pm.environment.set(\u0027edgeToken\u0027, body.data.edge_token); }"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Cookie",
+                                                                         "value":  "{{sessionCookieName}}={{sessionToken}}",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"Front Door Camera\",\n  \"location\": \"Front Door\"\n}"
+                                                               },
+                                                      "url":  "{{baseUrl}}/api/v1/devices"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET list devices",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Cookie",
+                                                                         "value":  "{{sessionCookieName}}={{sessionToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/devices"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET device detail",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Cookie",
+                                                                         "value":  "{{sessionCookieName}}={{sessionToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/devices/{{deviceId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "PUT update device",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Cookie",
+                                                                         "value":  "{{sessionCookieName}}={{sessionToken}}",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"Front Door Camera Updated\",\n  \"location\": \"Front Door\"\n}"
+                                                               },
+                                                      "url":  "{{baseUrl}}/api/v1/devices/{{deviceId}}"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Agents",
+                     "item":  [
+                                  {
+                                      "name":  "POST create agent",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027agent created\u0027, function () { pm.response.to.have.status(201); });",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "if (body.data \u0026\u0026 body.data.agent_id) { pm.environment.set(\u0027agentId\u0027, body.data.agent_id); }"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Cookie",
+                                                                         "value":  "{{sessionCookieName}}={{sessionToken}}",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"device_id\": \"{{deviceId}}\",\n  \"name\": \"Night Front Door Watch\",\n  \"location\": \"Front Door\",\n  \"nl_rule\": \"Alert me if a person is lingering near the front door after 10 PM.\"\n}"
+                                                               },
+                                                      "url":  "{{baseUrl}}/api/v1/agents"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET list agents",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Cookie",
+                                                                         "value":  "{{sessionCookieName}}={{sessionToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/agents"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET agent detail",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Cookie",
+                                                                         "value":  "{{sessionCookieName}}={{sessionToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/agents/{{agentId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "PUT update agent",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Cookie",
+                                                                         "value":  "{{sessionCookieName}}={{sessionToken}}",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"Night Front Door Watch Updated\",\n  \"location\": \"Front Door\",\n  \"nl_rule\": \"Alert me if a person is lingering near the front door after 9 PM.\"\n}"
+                                                               },
+                                                      "url":  "{{baseUrl}}/api/v1/agents/{{agentId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "POST assign agent",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Cookie",
+                                                                         "value":  "{{sessionCookieName}}={{sessionToken}}",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"device_id\": \"{{deviceId}}\"\n}"
+                                                               },
+                                                      "url":  "{{baseUrl}}/api/v1/agents/{{agentId}}/assign"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "POST unassign agent",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Cookie",
+                                                                         "value":  "{{sessionCookieName}}={{sessionToken}}",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"device_id\": \"{{deviceId}}\"\n}"
+                                                               },
+                                                      "url":  "{{baseUrl}}/api/v1/agents/{{agentId}}/unassign"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Edge",
+                     "item":  [
+                                  {
+                                      "name":  "POST edge heartbeat",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{edgeToken}}",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"health_status\": \"online\",\n  \"rssi\": -58.2,\n  \"fps\": 15.0,\n  \"current_pan\": 90,\n  \"current_tilt\": 90\n}"
+                                                               },
+                                                      "url":  "{{baseUrl}}/api/v1/edge/heartbeat"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "GET active edge configs",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{edgeToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/edge/agents/active"
+                                                  }
+                                  }
+                              ]
+                 }
+             ]
 }
