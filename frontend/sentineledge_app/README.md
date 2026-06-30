@@ -1,6 +1,6 @@
-# SentinelEdge App
+# Erlang AI Vision App
 
-Flutter frontend for SentinelEdge web and mobile.
+Flutter frontend for the Erlang AI Vision web console and Android/iOS mobile clients.
 
 See the full frontend setup guide:
 
@@ -8,7 +8,7 @@ See the full frontend setup guide:
 
 ## Auth
 
-The app uses Firebase Auth for Google sign-in. After Firebase returns an ID token, the app calls the FastAPI backend:
+The app uses Firebase Auth for Google sign-in and email/password sign-in. After Firebase returns an ID token, the app calls the same FastAPI backend login endpoint:
 
 ```text
 POST /api/v1/auth/firebase/login
@@ -23,7 +23,7 @@ Copy the example Firebase config and fill it with your Firebase Web app settings
 Copy-Item config/firebase.example.json config/firebase.json
 ```
 
-The local `config/firebase.json` file is ignored by Git. Keep backend secrets and Firebase Admin service account files out of the Flutter app.
+The local `config/firebase.json` file is ignored by Git. Keep backend secrets and Firebase Admin service account files out of the Flutter app. Email/password accounts must verify their email before the backend accepts the session.
 
 Run with the local config:
 
@@ -56,7 +56,4 @@ Run tests:
 ```powershell
 flutter test
 ```
-
-
-
 
