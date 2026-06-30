@@ -432,7 +432,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
 
   void _selectTab(int index) {
     setState(() => _selectedTab = index);
-    if (_destinations[index].label == 'Events' && _events.isEmpty) {
+    if ((_destinations[index].label == 'Overview' ||
+            _destinations[index].label == 'Events') &&
+        _events.isEmpty) {
       _loadEvents(showSuccess: false);
     }
   }
@@ -547,11 +549,33 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     final onlineDevices = _devices
         .where((device) => device.healthStatus == 'online')
         .length;
+    final offlineDevices = _devices
+        .where((device) => device.healthStatus != 'online')
+        .toList();
+    final weakSignalDevices = _devices
+        .where((device) => device.rssi != null && device.rssi! <= -70)
+        .toList();
+    final lowFpsDevices = _devices
+        .where((device) => device.fps != null && device.fps! < 8)
+        .toList();
     final activeAssignments = _agents
         .where((agent) => !agent.isDefinition && agent.state == 'armed')
         .length;
-    final offlineDevices = _devices.length - onlineDevices;
+    final assignedDeviceIds = _agents
+        .where((agent) => agent.deviceId != null && agent.state == 'armed')
+        .map((agent) => agent.deviceId!)
+        .toSet();
+    final unassignedDevices = _devices
+        .where((device) => !assignedDeviceIds.contains(device.deviceId))
+        .toList();
+    final eventsToday = _events.where(_isToday).length;
+    final pendingEvents = _events.where(_needsReview).toList();
+    final recentEvents = [..._events]
+      ..sort((a, b) => (b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0))
+          .compareTo(a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0)));
+    final avgFps = _averageFps(_devices);
     final metricColumns = compact ? 2 : 4;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -564,36 +588,269 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           childAspectRatio: compact ? 1.35 : 1.55,
           children: [
             MetricTile(
-              label: 'Total devices',
-              value: _devices.length.toString(),
+              label: 'Online cameras',
+              value: '$onlineDevices/${_devices.length}',
               icon: Icons.videocam_outlined,
+              accent: onlineDevices == _devices.length
+                  ? AppColors.success
+                  : AppColors.warning,
+              caption: offlineDevices.isEmpty ? 'all live' : 'attention',
             ),
             MetricTile(
-              label: 'Online',
-              value: onlineDevices.toString(),
-              icon: Icons.sensors_outlined,
-              accent: AppColors.success,
-            ),
-            MetricTile(
-              label: 'Offline',
-              value: offlineDevices.toString(),
-              icon: Icons.signal_wifi_bad_outlined,
-              accent: AppColors.danger,
-            ),
-            MetricTile(
-              label: 'Active assignments',
+              label: 'Armed agents',
               value: activeAssignments.toString(),
-              icon: Icons.shield_outlined,
-              accent: AppColors.warning,
+              icon: Icons.radar_outlined,
+              accent: AppColors.success,
+              caption: '${unassignedDevices.length} unassigned',
+            ),
+            MetricTile(
+              label: 'Events today',
+              value: eventsToday.toString(),
+              icon: Icons.timeline_outlined,
+              accent: AppColors.info,
+              caption: _events.isEmpty ? 'load events' : '24h',
+            ),
+            MetricTile(
+              label: 'Pending review',
+              value: pendingEvents.length.toString(),
+              icon: Icons.fact_check_outlined,
+              accent: pendingEvents.isEmpty ? AppColors.success : AppColors.warning,
+              caption: pendingEvents.isEmpty ? 'clear' : 'review',
             ),
           ],
         ),
+        const SizedBox(height: AppSpacing.lg),
+        if (compact) ...[
+          _attentionPanel(
+            offlineDevices: offlineDevices,
+            weakSignalDevices: weakSignalDevices,
+            lowFpsDevices: lowFpsDevices,
+            unassignedDevices: unassignedDevices,
+            pendingEvents: pendingEvents,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          _recentActivityPanel(recentEvents.take(5).toList()),
+        ] else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 5,
+                child: _attentionPanel(
+                  offlineDevices: offlineDevices,
+                  weakSignalDevices: weakSignalDevices,
+                  lowFpsDevices: lowFpsDevices,
+                  unassignedDevices: unassignedDevices,
+                  pendingEvents: pendingEvents,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(
+                flex: 4,
+                child: _recentActivityPanel(recentEvents.take(5).toList()),
+              ),
+            ],
+          ),
+        const SizedBox(height: AppSpacing.lg),
+        _performancePanel(avgFps: avgFps, weakSignalDevices: weakSignalDevices),
         const SizedBox(height: AppSpacing.lg),
         _operationsPanel(),
       ],
     );
   }
 
+  bool _isToday(SecurityEvent event) {
+    final timestamp = event.timestamp?.toLocal();
+    if (timestamp == null) return false;
+    final now = DateTime.now();
+    return timestamp.year == now.year &&
+        timestamp.month == now.month &&
+        timestamp.day == now.day;
+  }
+
+  bool _needsReview(SecurityEvent event) {
+    final status = event.status.toLowerCase();
+    if (status.contains('verified') || status.contains('closed')) return false;
+    return event.stage3Verdict == null ||
+        status.contains('pending') ||
+        status.contains('new') ||
+        status.contains('open');
+  }
+
+  double? _averageFps(List<EdgeDevice> devices) {
+    final values = devices
+        .map((device) => device.fps)
+        .whereType<double>()
+        .where((fps) => fps > 0)
+        .toList();
+    if (values.isEmpty) return null;
+    return values.reduce((a, b) => a + b) / values.length;
+  }
+
+  String _cameraName(String deviceId) {
+    return _devices
+        .where((device) => device.deviceId == deviceId)
+        .map((device) => device.name)
+        .firstOrNull ??
+        deviceId;
+  }
+
+  Widget _attentionPanel({
+    required List<EdgeDevice> offlineDevices,
+    required List<EdgeDevice> weakSignalDevices,
+    required List<EdgeDevice> lowFpsDevices,
+    required List<EdgeDevice> unassignedDevices,
+    required List<SecurityEvent> pendingEvents,
+  }) {
+    final items = <Widget>[
+      if (offlineDevices.isNotEmpty)
+        _InsightRow(
+          icon: Icons.signal_wifi_off_outlined,
+          title: '${offlineDevices.length} camera offline',
+          detail: offlineDevices.map((device) => device.name).take(3).join(', '),
+          tone: StatusTone.danger,
+        ),
+      if (weakSignalDevices.isNotEmpty)
+        _InsightRow(
+          icon: Icons.wifi_2_bar_outlined,
+          title: '${weakSignalDevices.length} weak Wi-Fi signal',
+          detail: weakSignalDevices.map((device) => device.name).take(3).join(', '),
+          tone: StatusTone.warning,
+        ),
+      if (lowFpsDevices.isNotEmpty)
+        _InsightRow(
+          icon: Icons.speed_outlined,
+          title: '${lowFpsDevices.length} low FPS stream',
+          detail: lowFpsDevices.map((device) => device.name).take(3).join(', '),
+          tone: StatusTone.warning,
+        ),
+      if (unassignedDevices.isNotEmpty)
+        _InsightRow(
+          icon: Icons.shield_outlined,
+          title: '${unassignedDevices.length} camera without armed agent',
+          detail: unassignedDevices.map((device) => device.name).take(3).join(', '),
+          tone: StatusTone.neutral,
+        ),
+      if (pendingEvents.isNotEmpty)
+        _InsightRow(
+          icon: Icons.fact_check_outlined,
+          title: '${pendingEvents.length} event pending review',
+          detail: pendingEvents
+              .map((event) => _cameraName(event.deviceId))
+              .take(3)
+              .join(', '),
+          tone: StatusTone.warning,
+        ),
+    ];
+
+    return ConsolePanel(
+      title: 'Attention needed',
+      subtitle: 'Issues that may affect coverage',
+      icon: Icons.priority_high_outlined,
+      child: items.isEmpty
+          ? const EmptyState(
+              icon: Icons.verified_outlined,
+              title: 'Coverage looks healthy',
+              message: 'No offline cameras, weak streams, or pending reviews.',
+              compact: true,
+            )
+          : Column(children: _withSpacing(items)),
+    );
+  }
+
+  Widget _recentActivityPanel(List<SecurityEvent> recentEvents) {
+    return ConsolePanel(
+      title: 'Recent activity',
+      subtitle: 'Latest detections and verification states',
+      icon: Icons.history_outlined,
+      action: AppButton(
+        label: 'Review',
+        icon: Icons.open_in_new,
+        variant: AppButtonVariant.secondary,
+        onPressed: () => _selectTab(3),
+      ),
+      child: recentEvents.isEmpty
+          ? EmptyState(
+              icon: _isLoadingEvents
+                  ? Icons.hourglass_top_outlined
+                  : Icons.event_available_outlined,
+              title: _isLoadingEvents ? 'Loading events' : 'No recent events',
+              message: _isLoadingEvents
+                  ? 'Fetching recent detections from the backend.'
+                  : 'New detections will appear here as cameras report them.',
+              compact: true,
+            )
+          : Column(
+              children: _withSpacing(
+                recentEvents
+                    .map(
+                      (event) => _InsightRow(
+                        icon: Icons.warning_amber_outlined,
+                        title: _cameraName(event.deviceId),
+                        detail:
+                            '${event.eventType} - ${event.severity} - ${_formatDate(event.timestamp)}',
+                        tone: StatusToneColor.fromStatus(event.severity),
+                        trailing: StatusPill.fromStatus(event.status),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+    );
+  }
+
+  Widget _performancePanel({
+    required double? avgFps,
+    required List<EdgeDevice> weakSignalDevices,
+  }) {
+    final weakest = _devices
+        .where((device) => device.rssi != null)
+        .toList()
+      ..sort((a, b) => a.rssi!.compareTo(b.rssi!));
+    return ConsolePanel(
+      title: 'Camera performance',
+      subtitle: 'Signal and stream quality summary',
+      icon: Icons.monitor_heart_outlined,
+      child: Row(
+        children: [
+          Expanded(
+            child: _MiniStat(
+              label: 'Average FPS',
+              value: avgFps == null ? '--' : avgFps.toStringAsFixed(1),
+              icon: Icons.speed_outlined,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: _MiniStat(
+              label: 'Weak signals',
+              value: weakSignalDevices.length.toString(),
+              icon: Icons.wifi_2_bar_outlined,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: _MiniStat(
+              label: 'Weakest RSSI',
+              value: weakest.isEmpty
+                  ? '--'
+                  : '${weakest.first.rssi!.toStringAsFixed(0)} dBm',
+              icon: Icons.network_check_outlined,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _withSpacing(List<Widget> children) {
+    return [
+      for (var i = 0; i < children.length; i++) ...[
+        if (i > 0) const SizedBox(height: AppSpacing.sm),
+        children[i],
+      ],
+    ];
+  }
   Widget _operationsPanel() {
     final selectedDevice = _devices
         .where((device) => device.deviceId == _selectedDeviceId)
@@ -707,10 +964,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: visibleDevices.length,
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: compact ? 1 : 2,
+                    crossAxisCount: compact ? 2 : 4,
                     crossAxisSpacing: AppSpacing.md,
                     mainAxisSpacing: AppSpacing.md,
-                    childAspectRatio: compact ? 1.28 : 1.38,
+                    childAspectRatio: 1.08,
                   ),
                   itemBuilder: (context, index) {
                     final device = visibleDevices[index];
@@ -914,7 +1171,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     final user = widget.user;
     return ConsolePanel(
       title: 'Account',
-      subtitle: 'Signed in to SentinelEdge',
+      subtitle: 'Signed in to Erlang AI Vision',
       icon: Icons.person_outline,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -961,7 +1218,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     final controller = AppThemeModeScope.maybeOf(context);
     return ConsolePanel(
       title: 'Appearance',
-      subtitle: 'Choose how SentinelEdge looks',
+      subtitle: 'Choose how Erlang AI Vision looks',
       icon: Icons.palette_outlined,
       child: controller == null
           ? const EmptyState(
@@ -1007,7 +1264,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _DetailLine(label: 'App', value: 'SentinelEdge'),
+          const _DetailLine(label: 'App', value: 'Erlang AI Vision'),
           _DetailLine(label: 'Backend', value: BackendAuthClient.baseUrl),
           _DetailLine(label: 'Realtime', value: realtimeLabel),
         ],
@@ -1166,171 +1423,113 @@ class _CameraDeviceCard extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final online = device.healthStatus == 'online';
-    final signal = device.rssi != null
-        ? '${device.rssi!.toStringAsFixed(0)} dBm'
-        : 'No signal';
-    final fps = device.fps != null
-        ? '${device.fps!.toStringAsFixed(1)} fps'
-        : 'No stream';
+    final statusColor = StatusToneColor.fromStatus(device.healthStatus).base;
+    final tileFill = online
+        ? scheme.surface
+        : Color.alphaBlend(
+            scheme.onSurface.withValues(alpha: 0.045),
+            scheme.surface,
+          );
+
 
     return AppCard(
       selected: selected,
       hoverable: true,
       padding: EdgeInsets.zero,
       onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(AppRadius.lg),
-              ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: online
-                            ? const [Color(0xFF10231F), Color(0xFF091311)]
-                            : const [Color(0xFF2A3036), Color(0xFF171B20)],
-                      ),
-                    ),
-                  ),
-                  Center(
-                    child: Icon(
-                      online
-                          ? Icons.videocam_outlined
-                          : Icons.videocam_off_outlined,
-                      size: 46,
-                      color: Colors.white.withValues(alpha: 0.62),
-                    ),
-                  ),
-                  Positioned(
-                    left: AppSpacing.md,
-                    top: AppSpacing.md,
-                    child: _CameraGlassLabel(
-                      icon: online ? Icons.circle : Icons.circle_outlined,
-                      label: online ? 'Live ready' : 'Offline',
-                    ),
-                  ),
-                  Positioned(
-                    right: AppSpacing.md,
-                    bottom: AppSpacing.md,
-                    child: _CameraGlassLabel(
-                      icon: Icons.control_camera_outlined,
-                      label: 'P ${device.currentPan} / T ${device.currentTilt}',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
+      child: AnimatedContainer(
+        duration: AppMotion.duration(context, AppMotion.fast),
+        curve: AppMotion.easeOut,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: tileFill,
+          borderRadius: AppRadius.lgAll,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        device.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium,
-                      ),
+                Opacity(
+                  opacity: online ? 1 : 0.42,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Image.asset(
+                      'assets/brand/erlang-ai-camera-tile-icon.png',
+                      width: 44,
+                      height: 44,
+                      fit: BoxFit.cover,
                     ),
-                    StatusPill.fromStatus(device.healthStatus),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  device.location ?? 'No location',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _CameraMeta(icon: Icons.wifi, label: signal),
-                    ),
-                    Expanded(
-                      child: _CameraMeta(icon: Icons.speed, label: fps),
-                    ),
-                    Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
-                  ],
+                const Spacer(),
+                _CameraStatusBadge(
+                  label: online ? 'Live' : 'Offline',
+                  color: statusColor,
+                  muted: !online,
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CameraGlassLabel extends StatelessWidget {
-  const _CameraGlassLabel({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.46),
-        borderRadius: AppRadius.pillAll,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: Colors.white.withValues(alpha: 0.86)),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
+            const Spacer(),
+            Text(
+              device.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: online ? scheme.onSurface : scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              device.location ?? _cameraSummary(device),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _CameraMeta extends StatelessWidget {
-  const _CameraMeta({required this.icon, required this.label});
+String _cameraSummary(EdgeDevice device) {
+  if (device.fps != null) return '${device.fps!.toStringAsFixed(1)} fps';
+  if (device.rssi != null) return '${device.rssi!.toStringAsFixed(0)} dBm';
+  return 'Camera device';
+}
 
-  final IconData icon;
+class _CameraStatusBadge extends StatelessWidget {
+  const _CameraStatusBadge({
+    required this.label,
+    required this.color,
+    required this.muted,
+  });
+
   final String label;
+  final Color color;
+  final bool muted;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Row(
-      children: [
-        Icon(icon, size: 15, color: scheme.onSurfaceVariant),
-        const SizedBox(width: 5),
-        Expanded(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall,
-          ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: muted ? 0.08 : 0.14),
+        borderRadius: AppRadius.pillAll,
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w800,
         ),
-      ],
+      ),
     );
   }
 }
@@ -1363,8 +1562,9 @@ class _Sidebar extends StatelessWidget {
     final scheme = theme.colorScheme;
     final width = extended ? 252.0 : 76.0;
     final logoAsset = theme.brightness == Brightness.dark
-        ? 'assets/brand/sentineledge-logo-light.png'
-        : 'assets/brand/sentineledge-logo-dark.png';
+        ? 'assets/brand/erlang-ai-vision-logo-light.png'
+        : 'assets/brand/erlang-ai-vision-logo-dark.png';
+    const iconAsset = 'assets/brand/erlang-ai-vision-icon.png';
 
     return AnimatedContainer(
       duration: AppMotion.duration(context, AppMotion.base),
@@ -1390,28 +1590,30 @@ class _Sidebar extends StatelessWidget {
                   ? MainAxisAlignment.start
                   : MainAxisAlignment.center,
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Image.asset(
-                    logoAsset,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                if (extended) ...[
-                  const SizedBox(width: AppSpacing.md),
+                if (extended)
                   Expanded(
-                    child: Text(
-                      'SentinelEdge',
-                      style: theme.textTheme.titleMedium,
-                      overflow: TextOverflow.ellipsis,
+                    child: SizedBox(
+                      height: 42,
+                      child: Image.asset(
+                        logoAsset,
+                        fit: BoxFit.contain,
+                        alignment: Alignment.centerLeft,
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Image.asset(
+                      iconAsset,
+                      fit: BoxFit.contain,
                     ),
                   ),
-                ],
               ],
             ),
           ),
@@ -2138,6 +2340,110 @@ class _EventDetail extends StatelessWidget {
   }
 }
 
+class _InsightRow extends StatelessWidget {
+  const _InsightRow({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.tone,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+  final StatusTone tone;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLowest,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          IconChip(icon: icon, color: tone.base, size: 34),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  detail.isEmpty ? 'No detail available' : detail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: AppSpacing.sm),
+            trailing!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  const _MiniStat({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLowest,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: scheme.primary),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleMedium,
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
 class _DetailLine extends StatelessWidget {
   const _DetailLine({required this.label, required this.value});
 
@@ -2723,6 +3029,4 @@ String _formatDate(DateTime? value) {
   }
   return value.toLocal().toString().split('.').first;
 }
-
-
 
