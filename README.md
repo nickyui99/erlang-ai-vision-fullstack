@@ -1,6 +1,6 @@
-# SentinelEdge Fullstack
+# Erlang AI Vision Fullstack
 
-SentinelEdge Fullstack contains the FastAPI backend and Flutter app for the SentinelEdge camera product. It owns users, devices, agent definitions, camera assignment, live video fan-out, edge command relay, event/media metadata, push alerts, and Qwen Cloud verification.
+Erlang AI Vision Fullstack contains the FastAPI backend and Flutter web/mobile console for the Erlang AI Vision camera product. The repository and some technical identifiers still use SentinelEdge during the rebrand transition. It owns users, devices, agent definitions, camera assignment, live video fan-out, edge command relay, event/media metadata, push alerts, and Qwen Cloud verification.
 
 The physical camera firmware and local AI edge runtime live in sibling repos:
 
@@ -10,7 +10,7 @@ The physical camera firmware and local AI edge runtime live in sibling repos:
 ## Current Architecture
 
 ```text
-Flutter app
+Erlang AI Vision Flutter console
   -> FastAPI backend (this repo)
       - auth/session/device/agent APIs
       - live MJPEG stream broker
@@ -31,7 +31,7 @@ The backend never talks directly to a LAN camera. The edge bridge keeps outbound
 
 ## Implemented Backend Features
 
-- Firebase Google login with backend session cookie.
+- Firebase Google and email/password login with backend session cookie.
 - Device registration with one-time edge token display.
 - Device list/detail/update/delete.
 - Agent definition creation/update and per-camera assignment/unassignment.
@@ -121,7 +121,7 @@ backend/
   requirements.txt
 
 frontend/sentineledge_app/
-  lib/               Flutter app
+  lib/               Erlang AI Vision Flutter app
   config/            firebase.example.json / firebase.json
 
 data/
@@ -207,11 +207,11 @@ Note: `data/sentineledge_demo.db` is local runtime data. Do not commit changes t
 
 For a real camera demo, run all three tiers:
 
-1. Backend and Flutter app from this repo.
+1. Backend and Erlang AI Vision Flutter app from this repo.
 2. Edge console/bridge from `SentinelEdge_LaptopEdge` in `Real ESP32 WiFi` mode.
 3. ESP32 firmware from `SentinelEdge_IOT`, usually the `xiao_s3` Wi-Fi build.
 
-The app creates/registers a camera and shows the one-time edge token. The edge bridge uses that token to connect to this backend, forward frames to `WS /api/v1/edge/stream`, keep `WS /api/v1/edge/ws` open for commands, and post detected events.
+Erlang AI Vision creates/registers a camera and shows the one-time edge token. The edge bridge uses that token to connect to this backend, forward frames to `WS /api/v1/edge/stream`, keep `WS /api/v1/edge/ws` open for commands, and post detected events.
 
 The live view uses `POST /api/v1/devices/{device_id}/stream-url` to mint a short-lived signed URL for MJPEG (`/stream`) or latest-frame polling (`/stream-frame`).
 
@@ -289,7 +289,7 @@ Start with:
 - [Edge integration](docs/backend/edge_integration.md)
 - [Media storage](docs/backend/media_storage.md)
 - [Frontend setup](docs/frontend/frontend_setup.md)
-- [Flutter app README](frontend/sentineledge_app/README.md)
+- [Erlang AI Vision app README](frontend/sentineledge_app/README.md)
 
 ## Remaining Work
 
@@ -298,3 +298,4 @@ Start with:
 - Replace placeholder/local media URL handling with real OSS deployment settings.
 - Complete Flutter push notification registration and native/mobile QA.
 - Keep backend docs in sync with the separate LaptopEdge and IOT repos as their contracts evolve.
+

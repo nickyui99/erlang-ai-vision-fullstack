@@ -23,7 +23,7 @@ class _LiveStreamViewState extends State<LiveStreamView> {
   void initState() {
     super.initState();
     _viewType = 'sentineledge-live-${widget.url.hashCode}-${DateTime.now().microsecondsSinceEpoch}';
-    _image = web.HTMLImageElement()..alt = 'SentinelEdge live stream';
+    _image = web.HTMLImageElement()..alt = 'Erlang AI Vision live stream';
     _image.style
       ..width = '100%'
       ..height = '100%'

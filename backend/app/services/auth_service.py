@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -10,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.user import User
 
+
+_logger = logging.getLogger(__name__)
 
 _firebase_initialized = False
 
@@ -56,8 +59,13 @@ def verify_firebase_id_token(id_token: str) -> dict:
     try:
         from firebase_admin import auth
 
-        return auth.verify_id_token(id_token)
+        return auth.verify_id_token(id_token, clock_skew_seconds=10)
     except Exception as exc:
+        _logger.warning(
+            "Firebase ID token verification failed: %s: %s",
+            exc.__class__.__name__,
+            exc,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "invalid_firebase_token", "message": "Firebase ID token is invalid or expired"},
@@ -109,3 +117,4 @@ async def upsert_firebase_user(session: AsyncSession, decoded_token: dict) -> Us
     await session.commit()
     await session.refresh(user)
     return user
+

@@ -1,11 +1,11 @@
 {
-    "name": "SentinelEdge",
-    "short_name": "SentinelEdge",
+    "name": "Erlang AI Vision",
+    "short_name": "Erlang AI",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0B1110",
-    "theme_color": "#2F6B5F",
-    "description": "Security console for SentinelEdge devices, agents, events, and edge sync.",
+    "background_color": "#0D1117",
+    "theme_color": "#F03A24",
+    "description": "AI vision console for Erlang cameras, agents, events, and edge sync.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

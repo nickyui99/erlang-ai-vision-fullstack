@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
-/// Type scale for SentinelEdge, built on Inter.
+/// Type scale for Erlang AI Vision, built on Inter.
 ///
 /// Weights are deliberate (400/500/600/700) — no blanket w800. Line-heights
 /// are tuned for dense data UIs. If the build environment is offline, Inter
