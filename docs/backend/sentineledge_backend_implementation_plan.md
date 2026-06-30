@@ -409,8 +409,8 @@ Allow users to create and manage natural-language surveillance agents.
 | GET | `/api/v1/agents/{agent_id}` | Get agent |
 | PUT | `/api/v1/agents/{agent_id}` | Update agent |
 | DELETE | `/api/v1/agents/{agent_id}` | Delete agent |
-| POST | `/api/v1/agents/{agent_id}/arm` | Arm agent |
-| POST | `/api/v1/agents/{agent_id}/disarm` | Disarm agent |
+| POST | `/api/v1/agents/{agent_id}/assign` | Assign agent definition to a camera |
+| POST | `/api/v1/agents/{agent_id}/unassign` | Remove agent definition from a camera |
 | GET | `/api/v1/agents/active` | Edge pulls active compiled configs |
 
 ### Agent compiler output
@@ -870,11 +870,11 @@ DAILY_RECORDING_RETENTION_HOURS=72
 | Auth | `/api/v1/auth/firebase/login`, `/api/v1/auth/logout` |
 | Users | `/api/v1/users/me` |
 | Devices | `/api/v1/devices`, `/api/v1/devices/{id}`, `/api/v1/devices/{id}/heartbeat`, `/api/v1/devices/{id}/pan` |
-| Agents | `/api/v1/agents`, `/api/v1/agents/{id}`, `/api/v1/agents/{id}/arm`, `/api/v1/agents/{id}/disarm` |
+| Agents | `/api/v1/agents`, `/api/v1/agents/{id}`, `/api/v1/agents/{id}/assign`, `/api/v1/agents/{id}/unassign` |
 | Events | `/api/v1/events`, `/api/v1/events/{id}`, `/api/v1/events/{id}/dismiss` |
 | Clips | `/api/v1/clips`, `/api/v1/events/{id}/clips`, `/api/v1/clips/{id}/signed-url` |
 | Recordings | `/api/v1/recordings`, `/api/v1/recordings/{id}`, `/api/v1/recordings/{id}/signed-url` |
-| Edge | `/api/v1/edge/ws`, `/api/v1/agents/active` |
+| Edge | `/api/v1/edge/ws`, `/api/v1/edge/stream`, `/api/v1/edge/agents/active` |
 | Realtime | `/api/v1/stream/events` |
 | Health | `/healthz`, `/readyz` |
 

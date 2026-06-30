@@ -211,8 +211,8 @@ erDiagram
 | `health_status` | Current health state, such as `online`, `offline`, `degraded`, or `unknown`. |
 | `rssi` | Latest signal strength reported by the device or edge service, if available. |
 | `fps` | Latest measured frames per second from the camera stream. |
-| `current_pan` | Current pan servo angle of the SG90 gimbal (horizontal axis), clamped 0–180, centered at 90. |
-| `current_tilt` | Current tilt servo angle of the SG90 gimbal (vertical axis), clamped 0–180, centered at 90. |
+| `current_pan` | Current pan servo angle of the SG90 gimbal (horizontal axis), clamped 0..180, centered at 90. |
+| `current_tilt` | Current tilt servo angle of the SG90 gimbal (vertical axis), clamped 60..140, centered at 90. |
 | `last_seen` | Last heartbeat or successful contact time from the device/edge service. |
 | `created_at` | Time the device was registered. |
 | `updated_at` | Time the device row was last updated. |

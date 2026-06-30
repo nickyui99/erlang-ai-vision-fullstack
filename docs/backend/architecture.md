@@ -1,115 +1,142 @@
-# SentinelEdge Architecture
+# SentinelEdge Backend Architecture
 
-This document gives a high-level view of the current MVP architecture: auth, the device/agent loop, edge command relay, and push alerts.
+This document describes the current backend architecture in `SentinelEdge-Fullstack` and how it connects to the sibling edge repositories.
 
-## Current MVP Architecture
+## Scope
+
+This repo owns:
+
+- FastAPI HTTP/WebSocket API.
+- Firebase login and backend session cookies.
+- Device, agent, event, clip, recording, alert, and tool-audit persistence.
+- Live JPEG stream fan-out to web clients.
+- Command relay between the app/Qwen tools and the edge bridge.
+- Qwen Cloud verification for events posted by the edge tier.
+- Flutter app UI for camera management, live view, rules, PTZ controls, and event review.
+
+This repo does not own the camera firmware or local detection runtime:
+
+- `SentinelEdge_IOT` owns ESP32 firmware, QR provisioning, Wi-Fi/USB transport, camera capture, and servo control.
+- `SentinelEdge_LaptopEdge` owns the local bridge and AI pipeline: YOLO video detection, optional YAMNet audio detection, Ollama Qwen local triage, event posting, and local preview.
+
+## System View
 
 ```mermaid
 flowchart LR
-    Flutter[Flutter App] --> Firebase[Firebase Auth]
-    Firebase --> Flutter
-    Flutter --> Backend[FastAPI Backend]
-    Backend --> FirebaseAdmin[Firebase Admin SDK]
-    FirebaseAdmin --> Firebase
-    Backend --> Database[(SQLite local / PostgreSQL target)]
-    Backend -->|SSE| Flutter
-    Backend -->|FCM push| FCM[Firebase Cloud Messaging]
-    FCM --> Flutter
-    Edge[Laptop Edge Service] -->|REST + WebSocket| Backend
-    Backend -->|command relay| Edge
-    Edge --> Camera[Camera / ESP32-CAM + SG90 gimbal]
+    App[Flutter App] -->|session APIs| Backend[FastAPI Backend]
+    App -->|signed stream URL| Stream[Backend MJPEG/frame endpoints]
+    Backend --> DB[(SQLite local / PostgreSQL target)]
+    Backend --> FCM[Firebase Cloud Messaging]
+    Backend --> Qwen[Qwen Cloud]
+
+    Edge[LaptopEdge bridge + local AI] -->|edge token REST| Backend
+    Edge -->|WS commands| Backend
+    Edge -->|WS binary JPEG stream| Backend
+    Backend -->|command.pan/tilt/snapshot| Edge
+
+    Camera[ESP32 camera firmware] -->|LAN Wi-Fi WS or USB serial| Edge
+    Edge -->|pan/tilt/snapshot commands| Camera
 ```
 
-## Authentication Flow
+## Authentication
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Flutter as Flutter Web App
+    participant App as Flutter App
     participant Firebase as Firebase Auth
     participant Backend as FastAPI Backend
     participant DB as Database
 
-    User->>Flutter: Sign in with Google
-    Flutter->>Firebase: Firebase Google sign-in
-    Firebase-->>Flutter: Firebase ID token
-    Flutter->>Backend: POST /api/v1/auth/firebase/login
-    Backend->>Firebase: Verify ID token
-    Firebase-->>Backend: Verified identity claims
-    Backend->>DB: Create or update user
-    Backend-->>Flutter: Set SentinelEdge session cookie
-    Flutter->>Backend: GET /api/v1/users/me
-    Backend-->>Flutter: Current user profile
+    App->>Firebase: Google sign-in
+    Firebase-->>App: Firebase ID token
+    App->>Backend: POST /api/v1/auth/firebase/login
+    Backend->>Firebase: verify ID token
+    Backend->>DB: create/update user
+    Backend-->>App: SentinelEdge session cookie
+    App->>Backend: GET /api/v1/users/me
 ```
 
-## Device and Agent Loop
+User-facing APIs use the backend session cookie. Edge APIs use a device-bound edge token in `Authorization: Bearer <edge_token>`.
+
+## Device and Agent Model
 
 ```mermaid
-flowchart LR
-    Flutter[Flutter App] --> Backend[FastAPI Backend]
-    Backend --> DB[(Database)]
-    Backend --> Edge[Laptop Edge Service]
-    Edge --> Camera[Camera / ESP32-CAM]
-    Edge --> Backend
-
-    Flutter -->|Register device| Backend
-    Backend -->|Return edge token once| Flutter
-    Edge -->|Heartbeat with edge token| Backend
-    Flutter -->|Create and arm agent| Backend
-    Edge -->|Pull active agent config| Backend
+flowchart TD
+    User[User] --> Device[Device / camera]
+    User --> Definition[Agent definition]
+    Definition -->|assign to camera| SubAgent[Per-device assigned agent]
+    SubAgent -->|active config| Edge[Edge pipeline]
+    Edge -->|candidate event| Event[Backend event]
 ```
 
-## Edge Command Relay
+Agents are now definition-first. Creating an agent can leave `device_id` null. Assigning an agent to a camera creates a per-device sub-agent with `parent_agent_id`, `device_id`, state `armed`, and a compiled edge config. Unassigning deletes that sub-agent.
 
-User-initiated camera commands are relayed to the edge service over the
-WebSocket channel, never sent directly to the camera. Pan and tilt drive the
-two SG90 servos of the gimbal (each `0–180°`, centered at `90°`); snapshot
-requests a fresh frame. Every command is audit-logged in `tool_audit`.
+The current compiler is intentionally simple and emits a person-detection config. Rich natural-language compilation is future work.
+
+## Live Video Flow
 
 ```mermaid
 sequenceDiagram
-    participant Flutter as Flutter App
-    participant Backend as FastAPI Backend
-    participant Edge as Laptop Edge Service
-    participant Camera as Camera + SG90 gimbal
+    participant Camera as ESP32 Camera
+    participant Edge as LaptopEdge Bridge
+    participant Backend as Backend Broker
+    participant App as Flutter App
 
-    Flutter->>Backend: POST /devices/{id}/pan|tilt|snapshot
-    Backend->>Edge: command.* over WebSocket (request_id)
-    Edge->>Camera: drive servo / capture frame
-    Edge-->>Backend: response.command_result (request_id)
-    Backend->>Backend: write tool_audit row
-    Backend-->>Flutter: command result
+    Camera->>Edge: JPEG frames + health
+    Edge->>Backend: WS /api/v1/edge/stream binary JPEG
+    App->>Backend: POST /devices/{id}/stream-url
+    Backend-->>App: signed stream/frame URL
+    App->>Backend: GET /devices/{id}/stream or /stream-frame
+    Backend-->>App: MJPEG stream or latest JPEG frame
 ```
 
-## Alert Flow (Milestone 8 — Firebase Cloud Messaging)
+The backend broker is in-memory. It keeps only the latest frame per device and fans frames out to active subscribers. The signed stream token is used because browser image requests cannot attach custom auth headers.
 
-When the edge submits an event whose severity is at or above
-`ALERT_MIN_SEVERITY` (default `high`), the backend creates a deduplicated alert,
-pushes it to every FCM token the owner has registered, stores the delivery
-result, and emits `alert.created` over SSE. Delivery is best-effort and never
-blocks event ingestion.
+## Command Relay
 
 ```mermaid
 sequenceDiagram
-    participant Edge as Laptop Edge Service
+    participant App as Flutter App or Qwen Tool
     participant Backend as FastAPI Backend
-    participant DB as Database
-    participant FCM as Firebase Cloud Messaging
-    participant Flutter as Flutter App
+    participant Edge as LaptopEdge Bridge
+    participant Camera as ESP32 Gimbal
 
-    Edge->>Backend: POST /api/v1/edge/events (severity)
-    Backend->>DB: store event
-    Backend->>Backend: severity >= threshold?
-    alt qualifies
-        Backend->>DB: insert alert (dedup on event+channel)
-        Backend->>FCM: send push to user's tokens
-        FCM-->>Flutter: notification
-        Backend->>DB: update alert status (sent / failed / no_recipients)
-        Backend-->>Flutter: SSE alert.created
-    end
+    App->>Backend: POST /devices/{id}/pan|tilt|snapshot
+    Backend->>Backend: write tool_audit request
+    Backend->>Edge: command.* over WS /api/v1/edge/ws
+    Edge->>Camera: pan/tilt/snapshot command
+    Camera-->>Edge: state/frame
+    Edge-->>Backend: response.command_result
+    Backend->>Backend: update tool_audit result
+    Backend-->>App: command result
 ```
 
-Clients register an FCM registration token with
-`POST /api/v1/notifications/tokens` and remove it on logout with
-`DELETE /api/v1/notifications/tokens/{token}`. FCM reuses the same Firebase
-Admin SDK and service-account credentials configured for auth.
+Pan accepts `0..180`. Tilt accepts `60..140`, matching the mechanical safe range of the current rig. The device reports `current_pan` and `current_tilt` through heartbeat.
+
+## Event and Verification Flow
+
+```mermaid
+sequenceDiagram
+    participant Edge as LaptopEdge AI Pipeline
+    participant Backend as FastAPI Backend
+    participant Qwen as Qwen Cloud
+    participant App as Flutter App
+
+    Edge->>Backend: POST /api/v1/edge/events
+    Backend->>Backend: persist event, emit SSE
+    Backend->>Qwen: verify qualifying event
+    Qwen->>Backend: optional tool calls
+    Backend->>Edge: snapshot/pan/status tools via command hub
+    Backend->>Backend: store stage3_verdict + tool_audit
+    Backend->>App: SSE event/alert updates
+```
+
+The local LaptopEdge pipeline does Stage 1/2 detection and triage before posting events. The backend Stage 3 verifier is optional and controlled by `VERIFICATION_ENABLED` / `QWEN_API_KEY`.
+
+## Realtime and Alerts
+
+The backend emits SSE at `GET /api/v1/stream/events` for user-visible changes such as device health, events, clips, and alerts. High-severity events create alert records and trigger Firebase Cloud Messaging when push tokens are registered.
+
+## Storage
+
+Local development uses SQLite through async SQLAlchemy. Production targets PostgreSQL-compatible relational storage. Media bytes are not stored in the relational database; clip/recording rows hold metadata and local/OSS paths. The current media URL service is placeholder/local-oriented and should be replaced with real OSS deployment settings for production.
