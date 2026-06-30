@@ -140,7 +140,7 @@ Remaining frontend work:
 - [ ] Register FCM tokens from Flutter and display push notifications.
 - [ ] Add backend + UI support for recording, audio mute/talk, alarm, fill light, resolution switching, and fullscreen live video.
 - [ ] Persist camera presets/favorites and PTZ correction once backend APIs exist.
-- [ ] Add real live stream rendering when an edge stream endpoint is available.
+- [x] Add real live stream rendering through signed MJPEG/latest-frame backend endpoints.
 - [ ] Run mobile/emulator visual QA for the camera screens.
 
 ## Milestone 9: AI Verification and MCP

@@ -1,27 +1,16 @@
 # Edge Device Integration Guide
 
-This document describes how the laptop edge service or camera gateway should communicate with the backend.
+This document describes how the LaptopEdge bridge connects the ESP32 camera to the SentinelEdge Fullstack backend.
 
-## Responsibilities
+The backend does not connect directly to a LAN camera. The edge bridge keeps outbound connections open to the backend, receives frames from the ESP32, runs local AI, and relays commands back to the camera.
 
-The edge service is responsible for:
+## Repo Boundaries
 
-- reading camera streams
-- running local detection
-- sending heartbeats
-- pulling active agent configs
-- submitting events
-- registering clips and recordings
-- uploading event clips when needed
-- maintaining WebSocket connection for commands
-
-The backend is responsible for:
-
-- authenticating the edge token
-- deriving device ownership
-- storing event and media metadata
-- generating signed upload/playback URLs
-- relaying user or AI tool commands
+| Repo | Responsibility |
+|---|---|
+| `SentinelEdge-Fullstack` | FastAPI backend, Flutter app, auth, devices, agents, live stream fan-out, command relay, events, media metadata, push alerts, Qwen Cloud verification. |
+| `SentinelEdge_LaptopEdge` | Bridge process, ESP32 USB/Wi-Fi intake, YOLO video detection, optional YAMNet audio detection, Ollama `qwen3.5:0.8b` local triage, event posting. |
+| `SentinelEdge_IOT` | ESP32-S3 camera firmware, QR provisioning, Wi-Fi/USB transport, JPEG capture, pan/tilt servo control. |
 
 ## Authentication
 
@@ -31,15 +20,17 @@ Use a device-bound edge token:
 Authorization: Bearer <edge_token>
 ```
 
-The backend derives `device_id` and `user_id` from the token. The edge service should not send trusted `user_id`.
+The backend derives `device_id` and `user_id` from the token. The edge service must not send trusted ownership fields. If an edge payload includes a device id for correlation, it must match the token-bound device.
 
 ## Startup Sequence
 
-1. Load local edge token.
-2. Send heartbeat to `/api/v1/edge/heartbeat`.
-3. Pull active configs from `/api/v1/edge/agents/active`.
-4. Connect to `WS /api/v1/edge/ws`.
-5. Start camera capture and local detection.
+1. Load the edge token issued once by `POST /api/v1/devices`.
+2. Send `POST /api/v1/edge/heartbeat`.
+3. Pull active camera-agent configs from `GET /api/v1/edge/agents/active`.
+4. Connect to `WS /api/v1/edge/ws` for commands and command results.
+5. Connect to `WS /api/v1/edge/stream` and send binary JPEG frames.
+6. Start ESP32 frame intake over Wi-Fi WebSocket or USB serial.
+7. Run local detection and post events when rules match.
 
 ## Heartbeat
 
@@ -61,11 +52,9 @@ Example request:
 }
 ```
 
-`current_pan` and `current_tilt` report the two SG90 gimbal servo angles
-(horizontal and vertical, each `0–180°`). `current_tilt` defaults to `90` for
-backward compatibility with edges that do not yet report it.
+`current_pan` reports the horizontal servo angle. `current_tilt` reports the vertical servo angle. Pan accepts `0..180`; tilt accepts `60..140`, matching the current mechanical safe range. Edges that do not yet report tilt default to `90` for backward compatibility.
 
-The backend updates `devices.last_seen`, health fields, and emits `device.health_changed` through SSE when needed.
+The backend updates device health, `last_seen`, RSSI, FPS, pan, and tilt. It emits `device.health_changed` over SSE when visible state changes.
 
 ## Active Agent Config Pull
 
@@ -86,17 +75,42 @@ Example response:
       "state": "armed",
       "compiled_edge_config": {
         "detectors": ["person"],
-        "schedule": {
-          "start": "22:00",
-          "end": "06:00"
-        },
-        "min_confidence": 0.75
+        "min_confidence": 0.75,
+        "rule_text": "alert me when a person is visible"
       }
     }
   ],
   "request_id": "req_123"
 }
 ```
+
+Current rule compilation is intentionally simple: the backend normalizes the natural language rule and emits a person detector config. Rich NL-to-detector compilation remains future work.
+
+## Live Video Stream
+
+Endpoint:
+
+```text
+WS /api/v1/edge/stream
+```
+
+The edge bridge sends one JPEG frame per binary WebSocket message. The backend stores the latest frame in memory for that device and serves it to app clients through signed stream URLs:
+
+- `POST /api/v1/devices/{device_id}/stream-url` mints a short-lived signed URL.
+- `GET /api/v1/devices/{device_id}/stream` returns MJPEG.
+- `GET /api/v1/devices/{device_id}/stream-frame` returns the latest JPEG frame for polling clients.
+
+The stream socket is only a fan-out path. Detection should continue to happen in `SentinelEdge_LaptopEdge`.
+
+## Local AI Detection
+
+The current local edge pipeline is expected to run in `SentinelEdge_LaptopEdge`:
+
+- YOLO for video object detection, including human/person detection.
+- Optional YAMNet for audio labels when audio frames are available.
+- Ollama `qwen3.5:0.8b` local triage before posting selected events.
+
+The backend receives the result. It does not run YOLO, YAMNet, or local Ollama itself.
 
 ## Event Submission
 
@@ -112,10 +126,11 @@ Example request:
 {
   "event_id": "evt_edge_001",
   "agent_id": "agt_frontdoor_night",
-  "timestamp": "2026-06-11T12:45:00Z",
+  "timestamp": "2026-06-30T12:45:00Z",
   "event_type": "person_detected",
   "stage1_result": {
-    "detector": "person",
+    "detector": "yolo",
+    "label": "person",
     "boxes": [
       {
         "x": 0.42,
@@ -126,33 +141,31 @@ Example request:
     ]
   },
   "stage2_verdict": {
-    "matched_rule": true,
-    "reason": "Person present near front door"
+    "triggered": true,
+    "confidence": 0.86,
+    "reason": "Person visible in camera frame"
   },
   "severity": "high",
   "confidence": 0.92,
   "summary": "Person detected near the front door.",
   "degraded": false,
-  "idempotency_key": "dev_frontdoor_001-20260611T124500-person"
+  "idempotency_key": "dev_frontdoor_001-20260630T124500-person"
 }
 ```
 
-The backend should enforce uniqueness on `(device_id, idempotency_key)`.
+The backend enforces idempotency per device. Use a stable `idempotency_key` when retrying the same physical event.
 
-Events submitted at or above the configured alert threshold (`ALERT_MIN_SEVERITY`,
-default `high`) trigger a Firebase Cloud Messaging push to the device owner's
-registered clients. Alerting is best-effort on the backend side and never blocks
-or fails event submission, so the edge does not need to handle it.
+Events at or above `ALERT_MIN_SEVERITY` trigger best-effort Firebase Cloud Messaging alerts to registered user devices. Alert delivery never blocks event ingestion.
 
 ## Clip Upload Flow
 
 Preferred flow for event clips:
 
 1. Edge submits event.
-2. Edge requests signed upload URL.
-3. Edge uploads clip directly to OSS.
-4. Edge marks upload complete.
-5. Backend marks clip `available`.
+2. Edge requests an upload URL.
+3. Edge uploads the clip directly to object storage when configured.
+4. Edge marks the clip complete.
+5. Backend marks the clip `available`.
 6. Backend emits `clip.available` through SSE.
 
 Create upload URL:
@@ -192,7 +205,7 @@ Example request:
 
 ## Recording Metadata
 
-Daily or continuous recordings stay local by default.
+Daily or continuous recordings can stay local by default. The edge can still register metadata so the app knows what exists.
 
 Endpoint:
 
@@ -204,10 +217,10 @@ Example request:
 
 ```json
 {
-  "start_time": "2026-06-11T12:00:00Z",
-  "end_time": "2026-06-11T12:30:00Z",
+  "start_time": "2026-06-30T12:00:00Z",
+  "end_time": "2026-06-30T12:30:00Z",
   "storage_type": "local_edge",
-  "storage_path": "recordings/dev_frontdoor_001/2026-06-11/rec_001.mp4",
+  "storage_path": "recordings/dev_frontdoor_001/2026-06-30/rec_001.mp4",
   "duration_seconds": 1800,
   "file_size_bytes": 256000000,
   "mime_type": "video/mp4",
@@ -224,17 +237,13 @@ Endpoint:
 WS /api/v1/edge/ws
 ```
 
-Authenticate with the same device-bound edge token used by heartbeat, event, clip, and recording APIs:
+The backend sends user and Qwen tool commands over this socket. The edge must answer every command with `response.command_result` using the same `request_id`.
 
-```http
-Authorization: Bearer <edge_token>
-```
+Supported command types:
 
-The gimbal is a two-axis SG90 rig: `command.pan_camera` drives the horizontal
-servo and `command.tilt_camera` the vertical servo, each with an `angle` of
-`0–180°`. The edge should clamp angles to the servo range and report the
-resulting position back through the next heartbeat (`current_pan` /
-`current_tilt`).
+- `command.pan_camera`
+- `command.tilt_camera`
+- `command.get_live_snapshot`
 
 Pan command example:
 
@@ -262,16 +271,6 @@ Tilt command example:
 }
 ```
 
-Result example:
-
-```json
-{
-  "type": "response.command_result",
-  "request_id": "cmd_001",
-  "status": "ok"
-}
-```
-
 Snapshot command example:
 
 ```json
@@ -283,11 +282,34 @@ Snapshot command example:
 }
 ```
 
-The edge service should answer every command with `response.command_result` using the same `request_id`. The backend times out user-facing command requests after 10 seconds if no result is received.
+Result example:
+
+```json
+{
+  "type": "response.command_result",
+  "request_id": "cmd_001",
+  "status": "ok",
+  "payload": {
+    "angle": 90
+  }
+}
+```
+
+If the edge is disconnected, user-facing command APIs return `503 edge_not_connected`. If the edge does not answer before timeout, the backend returns `504 command_timeout`.
+
+## Qwen Cloud Verification
+
+When an event qualifies for verification, the backend can call Qwen Cloud with audited tools. Tool calls can read device status, request a live snapshot, pan the camera, and inspect recent events or clips. Tool actions are persisted in `tool_audit`.
+
+This is separate from local Ollama triage in LaptopEdge:
+
+- Local Ollama filters or explains edge candidates before event submission.
+- Qwen Cloud verifies selected backend events and may request camera tools through the backend command relay.
 
 ## Retry Rules
 
 - Use stable `idempotency_key` values for events and clips.
 - Retry network failures with backoff.
 - Do not create new event IDs for the same physical event retry.
-- If upload URL expires, request a new upload URL for the same clip or idempotency key.
+- If an upload URL expires, request a new upload URL for the same clip or idempotency key.
+- Reconnect both WebSockets after disconnect and send heartbeat after reconnect.
