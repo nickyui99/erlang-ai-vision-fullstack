@@ -76,6 +76,7 @@ flutter:
     - assets/brand/erlang-ai-vision-logo-dark.png
     - assets/brand/erlang-ai-vision-logo.png
     - assets/brand/erlang-ai-camera-tile-icon.png
+    - assets/brand/erlang-ai-agent-icon.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
