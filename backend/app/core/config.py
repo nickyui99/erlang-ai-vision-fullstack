@@ -4,9 +4,15 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.alicloud_secrets import load_alicloud_kms_secret
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_SQLITE_URL = f"sqlite+aiosqlite:///{(REPO_ROOT / 'data' / 'sentineledge_demo.db').as_posix()}"
+ENV_FILE = REPO_ROOT / ".env"
+
+
+load_alicloud_kms_secret(ENV_FILE)
 
 
 class Settings(BaseSettings):
@@ -65,7 +71,7 @@ class Settings(BaseSettings):
     )
 
     model_config = SettingsConfigDict(
-        env_file=REPO_ROOT / ".env",
+        env_file=ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
     )
