@@ -333,13 +333,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   }
 
   Future<void> _openAiAgentChat() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      constraints: const BoxConstraints(maxWidth: 520),
-      builder: (context) => _AiAgentChatSheet(user: widget.user),
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _AiAgentChatScreen(user: widget.user),
+      ),
     );
   }
 
@@ -1254,7 +1251,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     final controller = AppThemeModeScope.maybeOf(context);
     return ConsolePanel(
       title: 'Appearance',
-      subtitle: 'Choose how Erlang AI Vision looks',
+      subtitle: 'Your theme choice is saved on this device',
       icon: Icons.palette_outlined,
       child: controller == null
           ? const EmptyState(
@@ -1266,20 +1263,14 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           : ValueListenableBuilder<ThemeMode>(
               valueListenable: controller,
               builder: (context, mode, _) {
-                return SegmentedButton<ThemeMode>(
-                  segments: ThemeMode.values
-                      .map(
-                        (themeMode) => ButtonSegment<ThemeMode>(
-                          value: themeMode,
-                          icon: Icon(_themeModeIcon(themeMode)),
-                          label: Text(_themeModeLabel(themeMode)),
-                        ),
-                      )
-                      .toList(),
-                  selected: {mode},
-                  showSelectedIcon: false,
-                  onSelectionChanged: (selection) =>
-                      controller.setMode(selection.first),
+                final darkMode = mode == ThemeMode.dark;
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: _ThemeModeToggle(
+                    darkMode: darkMode,
+                    onChanged: controller.setDarkMode,
+                    showLabel: true,
+                  ),
                 );
               },
             ),
@@ -2548,8 +2539,8 @@ class _AiAgentChatFab extends StatelessWidget {
   }
 }
 
-class _AiAgentChatSheet extends StatelessWidget {
-  const _AiAgentChatSheet({required this.user});
+class _AiAgentChatScreen extends StatelessWidget {
+  const _AiAgentChatScreen({required this.user});
 
   final BackendUser user;
 
@@ -2557,99 +2548,241 @@ class _AiAgentChatSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final media = MediaQuery.sizeOf(context);
-    final compact = media.width < AppBreakpoints.compact;
-    final sheetHeight = math.min(
-      media.height * 0.86,
-      compact ? media.height * 0.82 : 560.0,
-    );
+    final compact = MediaQuery.sizeOf(context).width < AppBreakpoints.compact;
     final firstName = (user.displayName?.trim().isNotEmpty == true)
         ? user.displayName!.trim().split(' ').first
         : user.email.split('@').first;
+    final prompts = const [
+      'Which cameras need attention right now?',
+      'Summarize today\'s security events.',
+      'Help me create a smarter agent rule.',
+      'What should I review before leaving?',
+    ];
 
-    return SizedBox(
-      height: sheetHeight,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.xl,
-          0,
-          AppSpacing.xl,
-          AppSpacing.xl,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                const _AiAgentIconMark(size: 42),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Erlang AI Agent',
-                        style: theme.textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Camera, event, and automation support',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
+    return Scaffold(
+      backgroundColor: theme.brightness == Brightness.dark
+          ? AppColors.darkBackground
+          : scheme.surface,
+      appBar: AppBar(
+        title: const Text('Erlang AI Agent'),
+        actions: [
+          IconButton(
+            tooltip: 'Agent menu',
+            onPressed: null,
+            icon: const Icon(Icons.menu_rounded),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+        ],
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                compact ? AppSpacing.lg : AppSpacing.xxl,
+                compact ? AppSpacing.md : AppSpacing.xl,
+                compact ? AppSpacing.lg : AppSpacing.xxl,
+                AppSpacing.lg,
+              ),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        const SizedBox(height: AppSpacing.lg),
+                        const Center(child: _AnimatedAiAgentIcon(size: 86)),
+                        const SizedBox(height: AppSpacing.xl),
+                        Text(
+                          'Hi, I\'m Erlang AI Agent.',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          'Ready when the agent backend is connected, $firstName.',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xxl),
+                        ...prompts.map(
+                          (prompt) => _AgentSuggestionRow(label: prompt),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                StatusPill(label: 'Preview', tone: StatusTone.warning),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerLow,
-                  borderRadius: AppRadius.lgAll,
-                  border: Border.all(color: scheme.outlineVariant),
-                ),
-                child: ListView(
-                  children: [
-                    _AiChatBubble(
-                      useAgentIcon: true,
-                      title: 'Erlang AI Agent',
-                      message:
-                          'Hi $firstName. I will be ready to help with camera status, event review, and agent rules once the chat service is connected.',
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    _AiChatBubble(
-                      icon: Icons.info_outline,
-                      title: 'Setup status',
-                      message:
-                          'The app entry point and chat surface are in place. Backend conversation logic can be added next.',
-                      tone: StatusTone.info,
-                    ),
-                  ],
-                ),
+                  const SizedBox(height: AppSpacing.lg),
+                  const _AgentComposerDock(),
+                ],
               ),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            TextField(
-              enabled: false,
-              minLines: 1,
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: 'Agent backend not connected yet',
-                prefixIcon: const Icon(Icons.chat_bubble_outline),
-                suffixIcon: IconButton(
-                  tooltip: 'Send',
-                  onPressed: null,
-                  icon: const Icon(Icons.send_outlined),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedAiAgentIcon extends StatefulWidget {
+  const _AnimatedAiAgentIcon({this.size = 88});
+
+  final double size;
+
+  @override
+  State<_AnimatedAiAgentIcon> createState() => _AnimatedAiAgentIconState();
+}
+
+class _AnimatedAiAgentIconState extends State<_AnimatedAiAgentIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 6),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reducedMotion = AppMotion.reduced(context);
+    final theme = Theme.of(context);
+    final innerPadding = widget.size * 0.16;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = reducedMotion ? 0.0 : _controller.value;
+        return Container(
+          width: widget.size,
+          height: widget.size,
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: SweepGradient(
+              transform: GradientRotation(t * math.pi * 2),
+              colors: const [
+                AppColors.primaryPressed,
+                AppColors.accentOrange,
+                AppColors.primaryContainer,
+                AppColors.primary,
+                AppColors.primaryPressed,
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.26),
+                blurRadius: 22,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Container(
+            padding: EdgeInsets.all(innerPadding),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: theme.colorScheme.surface,
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.55),
+              ),
+            ),
+            child: _AiAgentIconMark(size: widget.size * 0.56),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AgentSuggestionRow extends StatelessWidget {
+  const _AgentSuggestionRow({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.subdirectory_arrow_right_rounded,
+              size: 20,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                label,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AgentComposerDock extends StatelessWidget {
+  const _AgentComposerDock();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: AppRadius.lgAll,
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            enabled: false,
+            decoration: InputDecoration(
+              hintText: 'Ask anything',
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              prefixIcon: const Icon(Icons.chat_bubble_outline),
+              suffixIcon: IconButton(
+                tooltip: 'Voice input',
+                onPressed: null,
+                icon: const Icon(Icons.mic_none_rounded),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: null,
+              icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+              label: const Text('Reason'),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2668,57 +2801,6 @@ class _AiAgentIconMark extends StatelessWidget {
         _aiAgentIconAsset,
         fit: BoxFit.contain,
         semanticLabel: 'Erlang AI Agent',
-      ),
-    );
-  }
-}
-
-class _AiChatBubble extends StatelessWidget {
-  const _AiChatBubble({
-    required this.title,
-    required this.message,
-    this.icon,
-    this.useAgentIcon = false,
-    this.tone = StatusTone.neutral,
-  }) : assert(useAgentIcon || icon != null);
-
-  final IconData? icon;
-  final bool useAgentIcon;
-  final String title;
-  final String message;
-  final StatusTone tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final status = theme.extension<AppStatusColors>();
-    final color = status?.foreground(tone) ?? tone.base;
-    final leading = useAgentIcon
-        ? const _AiAgentIconMark(size: 34)
-        : IconChip(icon: icon!, color: color, size: 34);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: AppRadius.mdAll,
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          leading,
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: theme.textTheme.titleSmall),
-                const SizedBox(height: AppSpacing.xs),
-                Text(message, style: theme.textTheme.bodyMedium),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -2844,42 +2926,118 @@ class _ThemeModeButton extends StatelessWidget {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: controller,
       builder: (context, mode, _) {
-        return PopupMenuButton<ThemeMode>(
-          tooltip: 'Theme',
-          initialValue: mode,
-          icon: Icon(_themeModeIcon(mode)),
-          onSelected: controller.setMode,
-          itemBuilder: (context) => ThemeMode.values
-              .map(
-                (themeMode) => PopupMenuItem<ThemeMode>(
-                  value: themeMode,
-                  child: Row(
-                    children: [
-                      Icon(_themeModeIcon(themeMode), size: 18),
-                      const SizedBox(width: AppSpacing.md),
-                      Text(_themeModeLabel(themeMode)),
-                    ],
-                  ),
-                ),
-              )
-              .toList(),
+        final darkMode = mode == ThemeMode.dark;
+        return _ThemeModeToggle(
+          darkMode: darkMode,
+          onChanged: controller.setDarkMode,
         );
       },
     );
   }
 }
 
-IconData _themeModeIcon(ThemeMode mode) => switch (mode) {
-  ThemeMode.system => Icons.brightness_auto_outlined,
-  ThemeMode.light => Icons.light_mode_outlined,
-  ThemeMode.dark => Icons.dark_mode_outlined,
-};
+class _ThemeModeToggle extends StatelessWidget {
+  const _ThemeModeToggle({
+    required this.darkMode,
+    required this.onChanged,
+    this.showLabel = false,
+  });
 
-String _themeModeLabel(ThemeMode mode) => switch (mode) {
-  ThemeMode.system => 'System',
-  ThemeMode.light => 'Light',
-  ThemeMode.dark => 'Dark',
-};
+  final bool darkMode;
+  final ValueChanged<bool> onChanged;
+  final bool showLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = darkMode ? 'Night' : 'Day';
+    final accent = darkMode ? AppColors.primary : AppColors.warning;
+    final background = darkMode
+        ? const LinearGradient(
+            colors: [AppColors.primaryPressed, AppColors.primary],
+          )
+        : LinearGradient(colors: [AppColors.neutral100, AppColors.neutral150]);
+
+    final toggle = Tooltip(
+      message: darkMode ? 'Switch to day mode' : 'Switch to night mode',
+      child: Semantics(
+        button: true,
+        toggled: darkMode,
+        label: '$label mode',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: AppRadius.pillAll,
+            onTap: () => onChanged(!darkMode),
+            child: AnimatedContainer(
+              duration: AppMotion.duration(context, AppMotion.base),
+              curve: AppMotion.standard,
+              width: 66,
+              height: 34,
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                gradient: background,
+                borderRadius: AppRadius.pillAll,
+                border: Border.all(
+                  color: darkMode
+                      ? AppColors.primaryHover
+                      : theme.colorScheme.outlineVariant,
+                ),
+              ),
+              child: AnimatedAlign(
+                duration: AppMotion.duration(context, AppMotion.base),
+                curve: AppMotion.standard,
+                alignment: darkMode
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    darkMode ? Icons.nightlight_round : Icons.wb_sunny_outlined,
+                    size: 16,
+                    color: darkMode
+                        ? AppColors.primaryPressed
+                        : AppColors.warning,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (showLabel) ...[
+          Text(
+            '$label mode',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: accent,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+        ],
+        toggle,
+      ],
+    );
+  }
+}
 
 class _RealtimeStatusPill extends StatelessWidget {
   const _RealtimeStatusPill({required this.status});
