@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../design/app_colors.dart';
@@ -11,6 +13,8 @@ import '../../shared/console_widgets.dart';
 import 'add_camera_wizard.dart';
 import 'agent_templates.dart';
 import 'device_control_view.dart';
+
+const _aiAgentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
 
 class WorkspaceView extends StatefulWidget {
   const WorkspaceView({
@@ -328,6 +332,17 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
   }
 
+  Future<void> _openAiAgentChat() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      constraints: const BoxConstraints(maxWidth: 520),
+      builder: (context) => _AiAgentChatSheet(user: widget.user),
+    );
+  }
+
   Future<void> _openEditAgentDialog(SurveillanceAgent agent) async {
     final result = await showDialog<_AgentFormResult>(
       context: context,
@@ -426,8 +441,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
 
   bool _shouldReturnToSignIn(Object error) {
     return error is BackendAuthException &&
-        (error.code == 'not_authenticated' ||
-            error.code == 'invalid_session');
+        (error.code == 'not_authenticated' || error.code == 'invalid_session');
   }
 
   void _selectTab(int index) {
@@ -497,6 +511,11 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         if (compact) {
           return Scaffold(
             body: SafeArea(child: body),
+            floatingActionButton: _AiAgentChatFab(
+              compact: true,
+              onPressed: _openAiAgentChat,
+            ),
+            floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
             bottomNavigationBar: NavigationBar(
               selectedIndex: _selectedTab,
               onDestinationSelected: _selectTab,
@@ -514,6 +533,11 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         }
 
         return Scaffold(
+          floatingActionButton: _AiAgentChatFab(
+            compact: false,
+            onPressed: _openAiAgentChat,
+          ),
+          floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
           body: SafeArea(
             child: Row(
               children: [
@@ -571,8 +595,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     final eventsToday = _events.where(_isToday).length;
     final pendingEvents = _events.where(_needsReview).toList();
     final recentEvents = [..._events]
-      ..sort((a, b) => (b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0))
-          .compareTo(a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0)));
+      ..sort(
+        (a, b) => (b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0))
+            .compareTo(a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0)),
+      );
     final avgFps = _averageFps(_devices);
     final metricColumns = compact ? 2 : 4;
 
@@ -614,7 +640,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
               label: 'Pending review',
               value: pendingEvents.length.toString(),
               icon: Icons.fact_check_outlined,
-              accent: pendingEvents.isEmpty ? AppColors.success : AppColors.warning,
+              accent: pendingEvents.isEmpty
+                  ? AppColors.success
+                  : AppColors.warning,
               caption: pendingEvents.isEmpty ? 'clear' : 'review',
             ),
           ],
@@ -689,9 +717,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
 
   String _cameraName(String deviceId) {
     return _devices
-        .where((device) => device.deviceId == deviceId)
-        .map((device) => device.name)
-        .firstOrNull ??
+            .where((device) => device.deviceId == deviceId)
+            .map((device) => device.name)
+            .firstOrNull ??
         deviceId;
   }
 
@@ -707,14 +735,20 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         _InsightRow(
           icon: Icons.signal_wifi_off_outlined,
           title: '${offlineDevices.length} camera offline',
-          detail: offlineDevices.map((device) => device.name).take(3).join(', '),
+          detail: offlineDevices
+              .map((device) => device.name)
+              .take(3)
+              .join(', '),
           tone: StatusTone.danger,
         ),
       if (weakSignalDevices.isNotEmpty)
         _InsightRow(
           icon: Icons.wifi_2_bar_outlined,
           title: '${weakSignalDevices.length} weak Wi-Fi signal',
-          detail: weakSignalDevices.map((device) => device.name).take(3).join(', '),
+          detail: weakSignalDevices
+              .map((device) => device.name)
+              .take(3)
+              .join(', '),
           tone: StatusTone.warning,
         ),
       if (lowFpsDevices.isNotEmpty)
@@ -728,7 +762,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         _InsightRow(
           icon: Icons.shield_outlined,
           title: '${unassignedDevices.length} camera without armed agent',
-          detail: unassignedDevices.map((device) => device.name).take(3).join(', '),
+          detail: unassignedDevices
+              .map((device) => device.name)
+              .take(3)
+              .join(', '),
           tone: StatusTone.neutral,
         ),
       if (pendingEvents.isNotEmpty)
@@ -803,9 +840,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     required double? avgFps,
     required List<EdgeDevice> weakSignalDevices,
   }) {
-    final weakest = _devices
-        .where((device) => device.rssi != null)
-        .toList()
+    final weakest = _devices.where((device) => device.rssi != null).toList()
       ..sort((a, b) => a.rssi!.compareTo(b.rssi!));
     return ConsolePanel(
       title: 'Camera performance',
@@ -851,6 +886,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       ],
     ];
   }
+
   Widget _operationsPanel() {
     final selectedDevice = _devices
         .where((device) => device.deviceId == _selectedDeviceId)
@@ -1431,7 +1467,6 @@ class _CameraDeviceCard extends StatelessWidget {
             scheme.surface,
           );
 
-
     return AppCard(
       selected: selected,
       hoverable: true,
@@ -1609,10 +1644,7 @@ class _Sidebar extends StatelessWidget {
                       borderRadius: BorderRadius.circular(11),
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: Image.asset(
-                      iconAsset,
-                      fit: BoxFit.contain,
-                    ),
+                    child: Image.asset(iconAsset, fit: BoxFit.contain),
                   ),
               ],
             ),
@@ -1977,10 +2009,17 @@ class _AiVerificationSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.auto_awesome_outlined, size: 18, color: scheme.primary),
+              Icon(
+                Icons.auto_awesome_outlined,
+                size: 18,
+                color: scheme.primary,
+              ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: Text('AI verification', style: theme.textTheme.titleSmall),
+                child: Text(
+                  'AI verification',
+                  style: theme.textTheme.titleSmall,
+                ),
               ),
               if (isLoadingAudit)
                 const SizedBox.square(
@@ -2070,7 +2109,9 @@ class _AiVerificationSection extends StatelessWidget {
     final theme = Theme.of(context);
     if (audit.isEmpty) {
       return Text(
-        isLoadingAudit ? 'Loading agent activity…' : 'No agent actions for this event.',
+        isLoadingAudit
+            ? 'Loading agent activity…'
+            : 'No agent actions for this event.',
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),
@@ -2107,7 +2148,10 @@ class _ToolCallRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_humanizeToolCall(entry), style: theme.textTheme.bodyMedium),
+                Text(
+                  _humanizeToolCall(entry),
+                  style: theme.textTheme.bodyMedium,
+                ),
                 Text(
                   failed && entry.error != null
                       ? '${_formatDate(entry.timestamp)} · ${entry.error}'
@@ -2131,7 +2175,9 @@ String _humanizeToolCall(ToolAuditEntry entry) {
       return 'Requested a live snapshot';
     case 'pan_camera':
       final angle = entry.arguments?['angle'];
-      return angle != null ? 'Panned the camera to $angle°' : 'Panned the camera';
+      return angle != null
+          ? 'Panned the camera to $angle°'
+          : 'Panned the camera';
     case 'get_device_status':
       return 'Checked device status';
     case 'query_recent_events':
@@ -2444,6 +2490,7 @@ class _MiniStat extends StatelessWidget {
     );
   }
 }
+
 class _DetailLine extends StatelessWidget {
   const _DetailLine({required this.label, required this.value});
 
@@ -2468,6 +2515,207 @@ class _DetailLine extends StatelessWidget {
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurface,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiAgentChatFab extends StatelessWidget {
+  const _AiAgentChatFab({required this.compact, required this.onPressed});
+
+  final bool compact;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      return FloatingActionButton(
+        tooltip: 'Erlang AI Agent',
+        onPressed: onPressed,
+        child: const _AiAgentIconMark(size: 34),
+      );
+    }
+
+    return FloatingActionButton.extended(
+      tooltip: 'Erlang AI Agent',
+      onPressed: onPressed,
+      icon: const _AiAgentIconMark(size: 26),
+      label: const Text('AI Agent'),
+    );
+  }
+}
+
+class _AiAgentChatSheet extends StatelessWidget {
+  const _AiAgentChatSheet({required this.user});
+
+  final BackendUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final media = MediaQuery.sizeOf(context);
+    final compact = media.width < AppBreakpoints.compact;
+    final sheetHeight = math.min(
+      media.height * 0.86,
+      compact ? media.height * 0.82 : 560.0,
+    );
+    final firstName = (user.displayName?.trim().isNotEmpty == true)
+        ? user.displayName!.trim().split(' ').first
+        : user.email.split('@').first;
+
+    return SizedBox(
+      height: sheetHeight,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          0,
+          AppSpacing.xl,
+          AppSpacing.xl,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const _AiAgentIconMark(size: 42),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Erlang AI Agent',
+                        style: theme.textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Camera, event, and automation support',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                StatusPill(label: 'Preview', tone: StatusTone.warning),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerLow,
+                  borderRadius: AppRadius.lgAll,
+                  border: Border.all(color: scheme.outlineVariant),
+                ),
+                child: ListView(
+                  children: [
+                    _AiChatBubble(
+                      useAgentIcon: true,
+                      title: 'Erlang AI Agent',
+                      message:
+                          'Hi $firstName. I will be ready to help with camera status, event review, and agent rules once the chat service is connected.',
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    _AiChatBubble(
+                      icon: Icons.info_outline,
+                      title: 'Setup status',
+                      message:
+                          'The app entry point and chat surface are in place. Backend conversation logic can be added next.',
+                      tone: StatusTone.info,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            TextField(
+              enabled: false,
+              minLines: 1,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Agent backend not connected yet',
+                prefixIcon: const Icon(Icons.chat_bubble_outline),
+                suffixIcon: IconButton(
+                  tooltip: 'Send',
+                  onPressed: null,
+                  icon: const Icon(Icons.send_outlined),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AiAgentIconMark extends StatelessWidget {
+  const _AiAgentIconMark({this.size = 36});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: size,
+      child: Image.asset(
+        _aiAgentIconAsset,
+        fit: BoxFit.contain,
+        semanticLabel: 'Erlang AI Agent',
+      ),
+    );
+  }
+}
+
+class _AiChatBubble extends StatelessWidget {
+  const _AiChatBubble({
+    required this.title,
+    required this.message,
+    this.icon,
+    this.useAgentIcon = false,
+    this.tone = StatusTone.neutral,
+  }) : assert(useAgentIcon || icon != null);
+
+  final IconData? icon;
+  final bool useAgentIcon;
+  final String title;
+  final String message;
+  final StatusTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final status = theme.extension<AppStatusColors>();
+    final color = status?.foreground(tone) ?? tone.base;
+    final leading = useAgentIcon
+        ? const _AiAgentIconMark(size: 34)
+        : IconChip(icon: icon!, color: color, size: 34);
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          leading,
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: theme.textTheme.titleSmall),
+                const SizedBox(height: AppSpacing.xs),
+                Text(message, style: theme.textTheme.bodyMedium),
+              ],
             ),
           ),
         ],
@@ -2632,6 +2880,7 @@ String _themeModeLabel(ThemeMode mode) => switch (mode) {
   ThemeMode.light => 'Light',
   ThemeMode.dark => 'Dark',
 };
+
 class _RealtimeStatusPill extends StatelessWidget {
   const _RealtimeStatusPill({required this.status});
 
@@ -3029,4 +3278,3 @@ String _formatDate(DateTime? value) {
   }
   return value.toLocal().toString().split('.').first;
 }
-
