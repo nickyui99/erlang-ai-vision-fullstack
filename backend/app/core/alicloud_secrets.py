@@ -1,0 +1,138 @@
+from __future__ import annotations
+
+import json
+import os
+import tempfile
+from pathlib import Path
+from typing import Any
+
+
+def _escape_control_chars_in_json_strings(value: str) -> str:
+    escaped: list[str] = []
+    in_string = False
+    escape_next = False
+
+    for char in value:
+        if escape_next:
+            escaped.append(char)
+            escape_next = False
+            continue
+
+        if char == "\\" and in_string:
+            escaped.append(char)
+            escape_next = True
+            continue
+
+        if char == '"':
+            escaped.append(char)
+            in_string = not in_string
+            continue
+
+        if in_string:
+            if char == "\n":
+                escaped.append("\\n")
+                continue
+            if char == "\r":
+                escaped.append("\\r")
+                continue
+            if char == "\t":
+                escaped.append("\\t")
+                continue
+
+        escaped.append(char)
+
+    return "".join(escaped)
+
+def _read_dotenv_key(env_file: Path, key: str) -> str | None:
+    if key in os.environ:
+        return os.environ[key]
+    if not env_file.exists():
+        return None
+
+    prefix = f"{key}="
+    for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or not line.startswith(prefix):
+            continue
+        value = line[len(prefix) :].strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        return value
+    return None
+
+
+def _parse_secret_data(secret_data: str) -> dict[str, Any]:
+    stripped = secret_data.strip()
+    if not stripped:
+        return {}
+
+    if stripped.startswith("{"):
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError:
+            parsed = json.loads(_escape_control_chars_in_json_strings(stripped))
+        if not isinstance(parsed, dict):
+            raise ValueError("Alibaba KMS secret JSON must be an object")
+        return parsed
+
+    values: dict[str, Any] = {}
+    for raw_line in stripped.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def _write_firebase_credentials(firebase_credentials: Any) -> str:
+    if isinstance(firebase_credentials, str):
+        firebase_credentials = json.loads(firebase_credentials)
+    if not isinstance(firebase_credentials, dict):
+        raise ValueError("GOOGLE_APPLICATION_CREDENTIALS_JSON must be a JSON object")
+
+    path = Path(tempfile.gettempdir()) / "sentineledge-firebase-service-account.json"
+    path.write_text(json.dumps(firebase_credentials), encoding="utf-8")
+    return str(path)
+
+
+def _apply_secret_values(secret_values: dict[str, Any]) -> None:
+    for key in ("SESSION_SECRET_KEY", "QWEN_API_KEY"):
+        value = secret_values.get(key)
+        if value:
+            os.environ[key] = str(value)
+
+    firebase_credentials = secret_values.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if firebase_credentials:
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _write_firebase_credentials(firebase_credentials)
+
+
+def load_alicloud_kms_secret(env_file: Path) -> None:
+    secret_name = _read_dotenv_key(env_file, "ALICLOUD_KMS_SECRET_NAME")
+    if not secret_name or secret_name == "change-me":
+        return
+
+    region_id = _read_dotenv_key(env_file, "ALICLOUD_REGION_ID") or "ap-southeast-1"
+    endpoint = _read_dotenv_key(env_file, "ALICLOUD_KMS_ENDPOINT") or f"kms.{region_id}.aliyuncs.com"
+
+    access_key_id = _read_dotenv_key(env_file, "ALIBABA_CLOUD_ACCESS_KEY_ID")
+    access_key_secret = _read_dotenv_key(env_file, "ALIBABA_CLOUD_ACCESS_KEY_SECRET")
+
+    try:
+        from alibabacloud_kms20160120 import models as kms_models
+        from alibabacloud_kms20160120.client import Client as KmsClient
+        from alibabacloud_tea_openapi import models as open_api_models
+    except ImportError as exc:
+        raise RuntimeError(
+            "Alibaba KMS secret loading is enabled, but Alibaba Cloud SDK packages are not installed. "
+            "Install backend requirements before starting the app."
+        ) from exc
+
+    config = open_api_models.Config(
+        access_key_id=access_key_id,
+        access_key_secret=access_key_secret,
+        endpoint=endpoint,
+    )
+    client = KmsClient(config)
+    response = client.get_secret_value(kms_models.GetSecretValueRequest(secret_name=secret_name))
+    _apply_secret_values(_parse_secret_data(response.body.secret_data))
