@@ -110,15 +110,17 @@ def _database_url_from_rds_parts(secret_values: dict[str, Any]) -> str | None:
 
 
 def _apply_secret_values(secret_values: dict[str, Any]) -> None:
-    for key in ("SESSION_SECRET_KEY", "QWEN_API_KEY", "DATABASE_URL"):
+    for key in ("SESSION_SECRET_KEY", "QWEN_API_KEY"):
         value = secret_values.get(key)
         if value:
             os.environ[key] = str(value)
 
-    if not secret_values.get("DATABASE_URL"):
-        assembled = _database_url_from_rds_parts(secret_values)
-        if assembled:
-            os.environ["DATABASE_URL"] = assembled
+    # An explicitly set DATABASE_URL always wins over the KMS value: tests and
+    # local tooling pin their own database, and silently redirecting them to
+    # the production RDS would let e.g. a test drop_all wipe live data.
+    database_url = secret_values.get("DATABASE_URL") or _database_url_from_rds_parts(secret_values)
+    if database_url and "DATABASE_URL" not in os.environ:
+        os.environ["DATABASE_URL"] = str(database_url)
 
     firebase_credentials = secret_values.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     if firebase_credentials:

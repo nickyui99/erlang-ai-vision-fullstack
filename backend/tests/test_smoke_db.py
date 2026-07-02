@@ -11,6 +11,11 @@ DATABASE_URL wins because the engine is created at import):
     APP_ENV=test PYTHONPATH=backend DATABASE_URL=postgresql+asyncpg://... \
         pytest backend/tests/test_smoke_db.py -v
 
+or, when the DSN comes from the Alibaba KMS secret configured in .env:
+
+    APP_ENV=test PYTHONPATH=backend SMOKE_USE_KMS=1 \
+        pytest backend/tests/test_smoke_db.py -v
+
 Against a real (non-SQLite) database the suite never drops or creates tables:
 it only inserts rows keyed by *_smoketest IDs and deletes them again in
 teardown. Set SMOKE_ALLOW_RESET=1 ONLY for a disposable PostgreSQL scratch DB
@@ -27,10 +32,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 os.environ["APP_ENV"] = "test"
-os.environ.setdefault(
-    "DATABASE_URL",
-    f"sqlite+aiosqlite:///{(Path(tempfile.gettempdir()) / 'sentineledge_smoke_pytest.db').as_posix()}",
-)
+if os.environ.get("SMOKE_USE_KMS") != "1":
+    # Default to a throwaway sqlite DB. SMOKE_USE_KMS=1 leaves DATABASE_URL
+    # unset so the KMS loader supplies the RDS DSN (live-instance validation).
+    os.environ.setdefault(
+        "DATABASE_URL",
+        f"sqlite+aiosqlite:///{(Path(tempfile.gettempdir()) / 'sentineledge_smoke_pytest.db').as_posix()}",
+    )
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
