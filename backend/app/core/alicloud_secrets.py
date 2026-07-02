@@ -5,6 +5,7 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote_plus
 
 
 def _escape_control_chars_in_json_strings(value: str) -> str:
@@ -96,11 +97,28 @@ def _write_firebase_credentials(firebase_credentials: Any) -> str:
     return str(path)
 
 
+def _database_url_from_rds_parts(secret_values: dict[str, Any]) -> str | None:
+    host = secret_values.get("RDS_HOST")
+    if not host:
+        return None
+    user = quote_plus(str(secret_values.get("RDS_USER", "")))
+    password = quote_plus(str(secret_values.get("RDS_PASSWORD", "")))
+    port = str(secret_values.get("RDS_PORT", "5432"))
+    database = secret_values.get("RDS_DB", "sentineledge")
+    auth = f"{user}:{password}@" if user else ""
+    return f"postgresql+asyncpg://{auth}{host}:{port}/{database}"
+
+
 def _apply_secret_values(secret_values: dict[str, Any]) -> None:
-    for key in ("SESSION_SECRET_KEY", "QWEN_API_KEY"):
+    for key in ("SESSION_SECRET_KEY", "QWEN_API_KEY", "DATABASE_URL"):
         value = secret_values.get(key)
         if value:
             os.environ[key] = str(value)
+
+    if not secret_values.get("DATABASE_URL"):
+        assembled = _database_url_from_rds_parts(secret_values)
+        if assembled:
+            os.environ["DATABASE_URL"] = assembled
 
     firebase_credentials = secret_values.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     if firebase_credentials:
@@ -111,6 +129,7 @@ def load_alicloud_kms_secret(env_file: Path) -> None:
     secret_name = _read_dotenv_key(env_file, "ALICLOUD_KMS_SECRET_NAME")
     if not secret_name or secret_name == "change-me":
         return
+    secret_names = [name.strip() for name in secret_name.split(",") if name.strip()]
 
     region_id = _read_dotenv_key(env_file, "ALICLOUD_REGION_ID") or "ap-southeast-1"
     endpoint = _read_dotenv_key(env_file, "ALICLOUD_KMS_ENDPOINT") or f"kms.{region_id}.aliyuncs.com"
@@ -134,5 +153,8 @@ def load_alicloud_kms_secret(env_file: Path) -> None:
         endpoint=endpoint,
     )
     client = KmsClient(config)
-    response = client.get_secret_value(kms_models.GetSecretValueRequest(secret_name=secret_name))
-    _apply_secret_values(_parse_secret_data(response.body.secret_data))
+    merged: dict[str, Any] = {}
+    for name in secret_names:
+        response = client.get_secret_value(kms_models.GetSecretValueRequest(secret_name=name))
+        merged.update(_parse_secret_data(response.body.secret_data))
+    _apply_secret_values(merged)
