@@ -3,6 +3,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas._datetime import UTCDatetime
+
 
 EventSeverity = Literal["low", "medium", "high", "critical"]
 EventStatus = Literal["candidate", "verified", "dismissed", "false_positive"]
@@ -11,7 +13,7 @@ EventStatus = Literal["candidate", "verified", "dismissed", "false_positive"]
 class EdgeEventCreate(BaseModel):
     event_id: str | None = Field(default=None, max_length=64)
     agent_id: str = Field(min_length=1, max_length=64)
-    timestamp: datetime
+    timestamp: UTCDatetime
     event_type: str = Field(min_length=1, max_length=64)
     stage1_result: dict[str, Any] | None = None
     stage2_verdict: dict[str, Any] | None = None
