@@ -2,12 +2,13 @@ import asyncio
 import os
 from pathlib import Path
 import sys
+import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 os.environ["APP_ENV"] = "test"
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///C:/tmp/sentineledge_m6_pytest.db"
+os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{(Path(tempfile.gettempdir()) / 'sentineledge_m6_pytest.db').as_posix()}"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
