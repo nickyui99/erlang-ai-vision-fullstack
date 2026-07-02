@@ -14,6 +14,7 @@ os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{(Path(tempfile.gettempdir())
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
 
+from app.core.config import settings  # noqa: E402
 from app.core.security import create_session_token, hash_edge_token  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.session import engine  # noqa: E402
@@ -21,6 +22,12 @@ from app.main import app  # noqa: E402
 from app.models.agent import Agent  # noqa: E402
 from app.models.device import Device  # noqa: E402
 from app.models.user import User  # noqa: E402
+from app.services.media_url_service import media_url_service  # noqa: E402
+
+settings.alibaba_cloud_access_key_id = ""
+settings.alibaba_cloud_access_key_secret = ""
+settings.alicloud_oss_endpoint = ""
+settings.alicloud_oss_bucket = ""
 
 
 EDGE_TOKEN = "edge-token-m5"
@@ -173,6 +180,10 @@ def test_clip_upload_completion_signed_url_and_recording_registration() -> None:
     unavailable = client.post(f"/api/v1/clips/{clip_id}/signed-url")
     assert unavailable.status_code == 409
 
+    pending_device_clips = client.get("/api/v1/devices/dev_m5/clips")
+    assert pending_device_clips.status_code == 200
+    assert pending_device_clips.json()["data"] == []
+
     complete = client.post(
         f"/api/v1/edge/clips/{clip_id}/complete",
         headers=EDGE_HEADERS,
@@ -185,9 +196,17 @@ def test_clip_upload_completion_signed_url_and_recording_registration() -> None:
     assert clips.status_code == 200
     assert len(clips.json()["data"]) == 1
 
+    device_clips = client.get("/api/v1/devices/dev_m5/clips")
+    assert device_clips.status_code == 200
+    assert [clip["clip_id"] for clip in device_clips.json()["data"]] == [clip_id]
+
     signed = client.post(f"/api/v1/clips/{clip_id}/signed-url")
     assert signed.status_code == 200
     assert signed.json()["data"]["playback_url"].startswith("placeholder://playback/")
+
+    download = client.post(f"/api/v1/clips/{clip_id}/download-url")
+    assert download.status_code == 200
+    assert download.json()["data"]["download_url"].startswith("placeholder://download/")
 
     recording = client.post(
         "/api/v1/edge/recordings",
@@ -201,3 +220,53 @@ def test_clip_upload_completion_signed_url_and_recording_registration() -> None:
     )
     assert recording.status_code == 201
     assert recording.json()["data"]["status"] == "local_only"
+
+    device_recordings = client.get("/api/v1/devices/dev_m5/recordings")
+    assert device_recordings.status_code == 200
+    assert [item["recording_id"] for item in device_recordings.json()["data"]] == [
+        recording.json()["data"]["recording_id"]
+    ]
+
+    local_recording_signed = client.post(
+        f"/api/v1/recordings/{recording.json()['data']['recording_id']}/signed-url"
+    )
+    assert local_recording_signed.status_code == 409
+
+    oss_recording = client.post(
+        "/api/v1/edge/recordings",
+        headers=EDGE_HEADERS,
+        json={
+            "recording_id": "rec_m5_oss",
+            "start_time": "2026-06-21T12:30:00Z",
+            "end_time": "2026-06-21T13:00:00Z",
+            "storage_type": "oss",
+            "oss_object_key": "recordings/dev_m5/rec_m5_oss.mp4",
+            "duration_seconds": 1800,
+            "status": "available",
+        },
+    )
+    assert oss_recording.status_code == 201
+
+    recording_signed = client.post("/api/v1/recordings/rec_m5_oss/signed-url")
+    assert recording_signed.status_code == 200
+    assert recording_signed.json()["data"]["playback_url"].startswith("placeholder://playback/")
+
+
+def test_media_url_service_generates_oss_signed_urls(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "alicloud_oss_endpoint", "oss-ap-southeast-1.aliyuncs.com")
+    monkeypatch.setattr(settings, "alicloud_oss_bucket", "sentineledge-media")
+    monkeypatch.setattr(settings, "alibaba_cloud_access_key_id", "test-access-key")
+    monkeypatch.setattr(settings, "alibaba_cloud_access_key_secret", "test-secret")
+    monkeypatch.setattr(settings, "alicloud_oss_secure", True)
+
+    playback_url, playback_expires_at = media_url_service.playback_url("recordings/dev_m5/test.mp4")
+    download_url, download_expires_at = media_url_service.download_url("recordings/dev_m5/test.mp4")
+    upload_url, upload_expires_at = media_url_service.upload_url("events/dev_m5/test.mp4")
+
+    assert playback_url.startswith("https://sentineledge-media.oss-ap-southeast-1.aliyuncs.com/recordings/dev_m5/test.mp4?")
+    assert "OSSAccessKeyId=test-access-key" in playback_url
+    assert "Expires=" in playback_url
+    assert "Signature=" in playback_url
+    assert "response-content-disposition=" in download_url
+    assert upload_url.startswith("https://sentineledge-media.oss-ap-southeast-1.aliyuncs.com/events/dev_m5/test.mp4?")
+    assert playback_expires_at <= download_expires_at <= upload_expires_at

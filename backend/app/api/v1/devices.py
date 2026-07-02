@@ -13,11 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db_session
 from app.core.config import settings
 from app.core.security import create_signed_token, generate_edge_token, hash_edge_token, verify_signed_token
+from app.models.clip import Clip
+from app.models.recording import Recording
 from app.models.device import Device
 from app.models.tool_audit import ToolAudit
 from app.models.user import User
 from app.schemas.command import DeviceCommandResult, DevicePanCommand, DeviceTiltCommand
 from app.schemas.device import DeviceCreate, DeviceRead, DeviceRegistrationRead, DeviceUpdate, LiveStreamUrlRead
+from app.schemas.media import ClipRead, RecordingRead
 from app.services.edge_command_hub import EdgeCommandTimeoutError, EdgeNotConnectedError, edge_command_hub
 from app.services.video_stream_broker import video_stream_broker
 
@@ -93,6 +96,51 @@ async def list_devices(
     return {"data": devices}
 
 
+@router.get("/{device_id}/clips")
+async def list_device_clips(
+    device_id: str,
+    clip_type: str | None = None,
+    status_filter: str | None = Query(default="available", alias="status"),
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    await _get_owned_device(session, current_user.user_id, device_id)
+    query = select(Clip).where(
+        Clip.device_id == device_id,
+        Clip.user_id == current_user.user_id,
+        Clip.deleted_at.is_(None),
+    )
+    if clip_type:
+        query = query.where(Clip.clip_type == clip_type)
+    if status_filter:
+        query = query.where(Clip.status == status_filter)
+
+    result = await session.execute(query.order_by(Clip.created_at.desc()).limit(limit))
+    clips = [ClipRead.model_validate(clip).model_dump(mode="json") for clip in result.scalars()]
+    return {"data": clips}
+
+
+@router.get("/{device_id}/recordings")
+async def list_device_recordings(
+    device_id: str,
+    status_filter: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    await _get_owned_device(session, current_user.user_id, device_id)
+    query = select(Recording).where(
+        Recording.device_id == device_id,
+        Recording.user_id == current_user.user_id,
+        Recording.deleted_at.is_(None),
+    )
+    if status_filter:
+        query = query.where(Recording.status == status_filter)
+
+    result = await session.execute(query.order_by(Recording.start_time.desc()).limit(limit))
+    recordings = [RecordingRead.model_validate(recording).model_dump(mode="json") for recording in result.scalars()]
+    return {"data": recordings}
 @router.get("/{device_id}")
 async def get_device(
     device_id: str,
@@ -363,4 +411,3 @@ async def _send_audited_device_command(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail={"code": "command_timeout", "message": "Edge command timed out"},
         ) from exc
-
