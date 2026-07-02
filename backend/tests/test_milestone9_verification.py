@@ -3,12 +3,13 @@ from datetime import UTC, datetime
 import os
 from pathlib import Path
 import sys
+import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 os.environ["APP_ENV"] = "test"
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///C:/tmp/sentineledge_m9_pytest.db"
+os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{(Path(tempfile.gettempdir()) / 'sentineledge_m9_pytest.db').as_posix()}"
 os.environ["VERIFICATION_ENABLED"] = "true"
 
 import pytest  # noqa: E402
@@ -41,6 +42,17 @@ from app.services.video_stream_broker import video_stream_broker  # noqa: E402
 
 EDGE_TOKEN = "edge-token-m9"
 EDGE_HEADERS = {"Authorization": f"Bearer {EDGE_TOKEN}"}
+
+
+def setup_module() -> None:
+    # The VERIFICATION_ENABLED env var only takes effect when this module is
+    # the first to import app config; settings are cached process-wide, so in
+    # a full-suite run the flag must be forced on the live settings object.
+    settings.verification_enabled = True
+
+
+def teardown_module() -> None:
+    settings.verification_enabled = False
 
 
 def setup_function() -> None:

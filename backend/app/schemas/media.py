@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas._datetime import UTCDatetime
+
 
 ClipType = Literal["event", "thumbnail"]
 StorageType = Literal["local_edge", "oss", "pending_upload"]
@@ -78,8 +80,8 @@ class RecordingPlaybackUrlRead(BaseModel):
 
 class EdgeRecordingCreate(BaseModel):
     recording_id: str | None = Field(default=None, max_length=64)
-    start_time: datetime
-    end_time: datetime
+    start_time: UTCDatetime
+    end_time: UTCDatetime
     storage_type: StorageType = "local_edge"
     storage_path: str | None = None
     oss_object_key: str | None = None

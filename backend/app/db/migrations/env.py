@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from logging.config import fileConfig
+from pathlib import Path
+
+# Package root (backend/ in a checkout, /app in the Docker image). Done here
+# instead of ini prepend_sys_path, which alembic splits on spaces and breaks
+# for paths containing them.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import settings
 from app.db.base import Base
@@ -17,8 +24,6 @@ config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-
-config.set_main_option("sqlalchemy.url", settings.database_url)
 
 target_metadata = Base.metadata
 
@@ -43,11 +48,9 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    # Engine built directly from settings: routing the URL through the ini's
+    # configparser breaks on '%' in URL-encoded passwords.
+    connectable = create_async_engine(settings.database_url, poolclass=pool.NullPool)
 
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

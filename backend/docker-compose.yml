@@ -1,5 +1,8 @@
 services:
   backend:
+    # Local `docker compose up` builds from source. On a deploy target, set
+    # BACKEND_IMAGE to a pushed tag and compose runs that image instead of building.
+    image: ${BACKEND_IMAGE:-sentineledge-backend:local}
     build:
       context: ..
       dockerfile: backend/Dockerfile
