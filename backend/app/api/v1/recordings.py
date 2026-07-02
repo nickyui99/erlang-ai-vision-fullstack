@@ -42,7 +42,7 @@ async def signed_recording_playback_url(
             detail={"code": "not_found", "message": "Recording was not found"},
         )
 
-    if settings.app_env == "development" and _DEV_SAMPLE_VIDEO.exists():
+    if settings.app_env == "development" and not media_url_service.oss_configured and _DEV_SAMPLE_VIDEO.exists():
         token = create_signed_token(
             {
                 "recording_id": recording.recording_id,

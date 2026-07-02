@@ -72,6 +72,11 @@ class Settings(BaseSettings):
         validation_alias="DAILY_RECORDING_RETENTION_HOURS",
     )
 
+    alibaba_cloud_access_key_id: str = Field(default="", validation_alias="ALIBABA_CLOUD_ACCESS_KEY_ID")
+    alibaba_cloud_access_key_secret: str = Field(default="", validation_alias="ALIBABA_CLOUD_ACCESS_KEY_SECRET")
+    alicloud_oss_endpoint: str = Field(default="", validation_alias="ALICLOUD_OSS_ENDPOINT")
+    alicloud_oss_bucket: str = Field(default="", validation_alias="ALICLOUD_OSS_BUCKET")
+    alicloud_oss_secure: bool = Field(default=True, validation_alias="ALICLOUD_OSS_SECURE")
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
         env_file_encoding="utf-8",
