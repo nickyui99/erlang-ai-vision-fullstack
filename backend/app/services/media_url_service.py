@@ -23,6 +23,13 @@ class PlaceholderMediaUrlService:
             expires_at,
         )
 
+    def download_url(self, object_key: str) -> tuple[str, datetime]:
+        expires_at = self._expires_at()
+        return (
+            f"placeholder://download/{quote(object_key, safe='')}?expires_at={quote(expires_at.isoformat())}",
+            expires_at,
+        )
+
     def event_clip_object_key(
         self,
         *,
