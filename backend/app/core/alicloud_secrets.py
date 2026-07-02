@@ -87,7 +87,10 @@ def _parse_secret_data(secret_data: str) -> dict[str, Any]:
 
 def _write_firebase_credentials(firebase_credentials: Any) -> str:
     if isinstance(firebase_credentials, str):
-        firebase_credentials = json.loads(firebase_credentials)
+        try:
+            firebase_credentials = json.loads(firebase_credentials)
+        except json.JSONDecodeError:
+            firebase_credentials = json.loads(_escape_control_chars_in_json_strings(firebase_credentials))
     if not isinstance(firebase_credentials, dict):
         raise ValueError("GOOGLE_APPLICATION_CREDENTIALS_JSON must be a JSON object")
 
@@ -105,6 +108,21 @@ def _apply_secret_values(secret_values: dict[str, Any]) -> None:
     firebase_credentials = secret_values.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     if firebase_credentials:
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _write_firebase_credentials(firebase_credentials)
+        return
+
+    firebase_credentials = secret_values.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if not firebase_credentials:
+        return
+
+    if isinstance(firebase_credentials, dict):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _write_firebase_credentials(firebase_credentials)
+        return
+
+    firebase_credentials_raw = str(firebase_credentials).strip()
+    if firebase_credentials_raw.startswith("{"):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _write_firebase_credentials(firebase_credentials_raw)
+    else:
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = firebase_credentials_raw
 
 
 def load_alicloud_kms_secret(env_file: Path) -> None:

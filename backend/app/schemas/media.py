@@ -65,6 +65,17 @@ class ClipPlaybackUrlRead(BaseModel):
     expires_at: datetime
 
 
+class ClipDownloadUrlRead(BaseModel):
+    clip_id: str
+    download_url: str
+    expires_at: datetime
+
+
+class RecordingPlaybackUrlRead(BaseModel):
+    recording_id: str
+    playback_url: str
+    expires_at: datetime
+
 class EdgeRecordingCreate(BaseModel):
     recording_id: str | None = Field(default=None, max_length=64)
     start_time: datetime

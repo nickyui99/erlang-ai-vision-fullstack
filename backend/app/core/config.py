@@ -1,4 +1,5 @@
 from functools import lru_cache
+import os
 from pathlib import Path
 
 from pydantic import Field
@@ -12,7 +13,8 @@ DEFAULT_SQLITE_URL = f"sqlite+aiosqlite:///{(REPO_ROOT / 'data' / 'sentineledge_
 ENV_FILE = REPO_ROOT / ".env"
 
 
-load_alicloud_kms_secret(ENV_FILE)
+if os.environ.get("APP_ENV") != "test":
+    load_alicloud_kms_secret(ENV_FILE)
 
 
 class Settings(BaseSettings):
