@@ -58,6 +58,19 @@ if (-not $SkipUpload) {
 
 # --- Build ------------------------------------------------------------------
 
+# Dart native-assets build hooks invoke the SDK with unquoted paths and break
+# when the SDK, pub cache, or project sits under a directory with spaces
+# (e.g. C:\Users\Kenneth Chua). 8.3 short paths dodge that; ShortPath is a
+# no-op where paths have no spaces or 8.3 names are disabled.
+$fso = New-Object -ComObject Scripting.FileSystemObject
+$FlutterBinDir = Split-Path (Get-Command "flutter").Source
+$env:Path = $fso.GetFolder($FlutterBinDir).ShortPath + [IO.Path]::PathSeparator + $env:Path
+$DefaultPubCache = Join-Path $env:LOCALAPPDATA "Pub/Cache"
+if (-not $env:PUB_CACHE -and (Test-Path $DefaultPubCache)) {
+    $env:PUB_CACHE = $fso.GetFolder($DefaultPubCache).ShortPath
+}
+$FrontendDir = $fso.GetFolder($FrontendDir).ShortPath
+
 Push-Location $FrontendDir
 try {
     Write-Host "Fetching packages..." -ForegroundColor Cyan
@@ -142,6 +155,9 @@ except oss2.exceptions.NoSuchBucket:
         oss2.BUCKET_ACL_PUBLIC_READ,
         oss2.models.BucketCreateConfig(oss2.BUCKET_STORAGE_CLASS_STANDARD),
     )
+# New buckets ship with Block Public Access on, which overrides the
+# public-read ACL with 403s.
+bucket.put_bucket_public_access_block(False)
 bucket.put_bucket_website(oss2.models.BucketWebsite("index.html", "index.html"))
 
 uploaded = 0
@@ -155,9 +171,12 @@ for file in sorted(build_dir.rglob("*")):
     uploaded += 1
 
 print(f"Uploaded {uploaded} files to {bucket_name}.")
-print(f"Site: http://{bucket_name}.oss-website-{region}.aliyuncs.com")
 '@ | python -
 if ($LASTEXITCODE -ne 0) { Write-Error "OSS upload failed." }
 
+# OSS forces Content-Disposition: attachment for HTML on the default
+# *.aliyuncs.com endpoint; browsers only render the site through a custom
+# domain bound to the bucket (OSS console > Bucket > Domain Names).
 Write-Host ""
-Write-Host "Deployed: http://$Bucket.oss-website-$Region.aliyuncs.com" -ForegroundColor Green
+Write-Host "Deployed to https://$Bucket.oss-$Region.aliyuncs.com" -ForegroundColor Green
+Write-Host "Browsers render it only via a custom domain bound to the bucket." -ForegroundColor Yellow
