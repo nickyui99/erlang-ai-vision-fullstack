@@ -39,6 +39,53 @@ jobs:
       - name: Build image (verify Dockerfile)
         run: docker build -f backend/Dockerfile -t erlang-ai-vision-backend:ci .
 
+  # Proves the alembic migrations and the smoke suite run on PostgreSQL
+  # (the production ApsaraDB RDS engine). Existing tests above stay on SQLite.
+  postgres-migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sentineledge
+          POSTGRES_PASSWORD: sentineledge
+          POSTGRES_DB: sentineledge
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U sentineledge"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements-dev.txt
+
+      - name: Run migrations on PostgreSQL (up, down, up)
+        env:
+          APP_ENV: test
+          DATABASE_URL: postgresql+asyncpg://sentineledge:sentineledge@localhost:5432/sentineledge
+        run: |
+          alembic -c backend/alembic.ini upgrade head
+          alembic -c backend/alembic.ini downgrade base
+          alembic -c backend/alembic.ini upgrade head
+
+      - name: Run smoke tests against PostgreSQL
+        env:
+          APP_ENV: test
+          PYTHONPATH: backend
+          DATABASE_URL: postgresql+asyncpg://sentineledge:sentineledge@localhost:5432/sentineledge
+          SMOKE_ALLOW_RESET: "1"
+        run: pytest backend/tests/test_smoke_db.py -v
+
   # Deploy: stubbed until a target (VM/SAE) is chosen. When ready, this job will
   # log in to ACR, push the image tagged by SHA, then ship it to the target
   # (mirrors scripts/deploy.ps1). Gated on `build` passing + main only.
