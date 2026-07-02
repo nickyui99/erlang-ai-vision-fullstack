@@ -1,25 +1,30 @@
 <#
 .SYNOPSIS
-    Build the Erlang AI Vision Flutter web app (WASM) for static hosting.
+    Build the Erlang AI Vision Flutter web app (WASM) and deploy it to OSS.
 
 .DESCRIPTION
-    First stage of the frontend pipeline: produce build/web/ as a WASM bundle
-    ready to upload to OSS. Config (Firebase keys, API base URL) is injected via
-    --dart-define-from-file, matching scripts/start-dev.ps1. Tests/analyze are
-    CI's job; OSS upload is a later step.
+    One-shot frontend deploy: builds build/web/ as a WASM bundle, then uploads
+    it to the OSS static-website bucket with correct Content-Type per file
+    (.wasm as application/wasm) and cache headers. Creates the bucket
+    (public-read + static website hosting) if it does not exist.
 
-    Output serves from frontend/sentineledge_app/build/web/. Per the deploy
-    architecture, the OSS bucket must serve .wasm as application/wasm.
+    Config (Firebase keys, API base URL) is injected via
+    --dart-define-from-file, matching scripts/start-dev.ps1. OSS credentials
+    come from ALIBABA_CLOUD_ACCESS_KEY_ID / _SECRET in the environment or the
+    repo .env. Pass -SkipUpload to only build.
 
 .EXAMPLE
     ./scripts/deployment/frontend.ps1 -ApiBaseUrl https://api.example.com
 
 .EXAMPLE
-    ./scripts/deployment/frontend.ps1 -FirebaseConfig config/firebase.json -ApiBaseUrl https://api.example.com
+    ./scripts/deployment/frontend.ps1 -ApiBaseUrl https://api.example.com -SkipUpload
 #>
 param(
     [Parameter(Mandatory = $true)][string]$ApiBaseUrl,
-    [string]$FirebaseConfig = "config/firebase.json"
+    [string]$FirebaseConfig = "config/firebase.json",
+    [string]$Bucket = "erlang-vision",
+    [string]$Region = "ap-southeast-3",
+    [switch]$SkipUpload
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,6 +44,19 @@ if (-not (Test-Path $FrontendDir)) {
 if (-not (Test-Path $FirebaseConfigPath)) {
     Write-Error "Missing $FirebaseConfigPath. Copy config/firebase.example.json to config/firebase.json and fill the Firebase Web app settings."
 }
+if (-not $SkipUpload) {
+    if (-not (Get-Command "python" -ErrorAction SilentlyContinue)) {
+        Write-Error "python was not found on PATH (needed for the OSS upload)."
+    }
+    python -c "import oss2" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Installing oss2 SDK..." -ForegroundColor Cyan
+        python -m pip install --quiet oss2
+        if ($LASTEXITCODE -ne 0) { Write-Error "pip install oss2 failed." }
+    }
+}
+
+# --- Build ------------------------------------------------------------------
 
 Push-Location $FrontendDir
 try {
@@ -62,4 +80,84 @@ finally {
 $Output = Join-Path $FrontendDir "build/web"
 Write-Host ""
 Write-Host "Built web bundle at $Output" -ForegroundColor Green
-Write-Host "Upload its contents to OSS (serve .wasm as application/wasm)." -ForegroundColor Green
+
+if ($SkipUpload) {
+    Write-Host "Skipping upload (-SkipUpload)." -ForegroundColor Yellow
+    return
+}
+
+# --- Upload to OSS ----------------------------------------------------------
+# oss2 handles request signing; PowerShell hands it the bucket/region/paths.
+
+$env:SENTINELEDGE_OSS_BUCKET = $Bucket
+$env:SENTINELEDGE_OSS_REGION = $Region
+$env:SENTINELEDGE_WEB_BUILD_DIR = $Output
+$env:SENTINELEDGE_REPO_ROOT = $RepoRoot
+
+Write-Host "Uploading to OSS bucket $Bucket ($Region)..." -ForegroundColor Cyan
+@'
+import mimetypes, os, sys
+from pathlib import Path
+import oss2
+
+repo_root = Path(os.environ["SENTINELEDGE_REPO_ROOT"])
+build_dir = Path(os.environ["SENTINELEDGE_WEB_BUILD_DIR"])
+bucket_name = os.environ["SENTINELEDGE_OSS_BUCKET"]
+region = os.environ["SENTINELEDGE_OSS_REGION"]
+
+env_file = repo_root / ".env"
+if env_file.exists():
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, _, v = line.partition("=")
+            os.environ.setdefault(k.strip(), v.strip())
+
+key_id = os.environ.get("ALIBABA_CLOUD_ACCESS_KEY_ID")
+key_secret = os.environ.get("ALIBABA_CLOUD_ACCESS_KEY_SECRET")
+if not key_id or not key_secret:
+    sys.exit("ALIBABA_CLOUD_ACCESS_KEY_ID / _SECRET not set (env or .env).")
+
+CONTENT_TYPES = {
+    ".wasm": "application/wasm",
+    ".js": "text/javascript",
+    ".mjs": "text/javascript",
+    ".json": "application/json",
+    ".woff2": "font/woff2",
+    ".otf": "font/otf",
+    ".frag": "application/octet-stream",
+}
+# Entry/manifest files the browser must revalidate so deploys take effect
+# immediately; everything else is version-gated by the service worker.
+NO_CACHE = {"index.html", "flutter_service_worker.js", "version.json", "flutter_bootstrap.js"}
+
+auth = oss2.Auth(key_id, key_secret)
+bucket = oss2.Bucket(auth, f"https://oss-{region}.aliyuncs.com", bucket_name)
+
+try:
+    bucket.get_bucket_info()
+except oss2.exceptions.NoSuchBucket:
+    print(f"Creating bucket {bucket_name} in {region} (public-read)...")
+    bucket.create_bucket(
+        oss2.BUCKET_ACL_PUBLIC_READ,
+        oss2.models.BucketCreateConfig(oss2.BUCKET_STORAGE_CLASS_STANDARD),
+    )
+bucket.put_bucket_website(oss2.models.BucketWebsite("index.html", "index.html"))
+
+uploaded = 0
+for file in sorted(build_dir.rglob("*")):
+    if not file.is_file():
+        continue
+    key = file.relative_to(build_dir).as_posix()
+    content_type = CONTENT_TYPES.get(file.suffix) or mimetypes.guess_type(file.name)[0] or "application/octet-stream"
+    cache = "no-cache" if key in NO_CACHE else "public, max-age=3600"
+    bucket.put_object_from_file(key, str(file), headers={"Content-Type": content_type, "Cache-Control": cache})
+    uploaded += 1
+
+print(f"Uploaded {uploaded} files to {bucket_name}.")
+print(f"Site: http://{bucket_name}.oss-website-{region}.aliyuncs.com")
+'@ | python -
+if ($LASTEXITCODE -ne 0) { Write-Error "OSS upload failed." }
+
+Write-Host ""
+Write-Host "Deployed: http://$Bucket.oss-website-$Region.aliyuncs.com" -ForegroundColor Green
