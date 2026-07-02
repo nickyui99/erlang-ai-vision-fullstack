@@ -100,6 +100,14 @@ def _write_firebase_credentials(firebase_credentials: Any) -> str:
     return str(path)
 
 
+def _secret_names(*raw_names: str | None) -> list[str]:
+    names: list[str] = []
+    for raw_name in raw_names:
+        if not raw_name or raw_name == "change-me":
+            continue
+        names.extend(name.strip() for name in raw_name.split(",") if name.strip())
+    return names
+
 def _database_url_from_rds_parts(secret_values: dict[str, Any]) -> str | None:
     host = secret_values.get("RDS_HOST")
     if not host:
@@ -146,10 +154,11 @@ def _apply_secret_values(secret_values: dict[str, Any]) -> None:
 
 
 def load_alicloud_kms_secret(env_file: Path) -> None:
-    secret_name = _read_dotenv_key(env_file, "ALICLOUD_KMS_SECRET_NAME")
-    if not secret_name or secret_name == "change-me":
+    primary_secret_name = _read_dotenv_key(env_file, "ALICLOUD_KMS_SECRET_NAME")
+    db_secret_name = _read_dotenv_key(env_file, "ALICLOUD_KMS_DB_SECRET_NAME")
+    secret_names = _secret_names(primary_secret_name, db_secret_name)
+    if not secret_names:
         return
-    secret_names = [name.strip() for name in secret_name.split(",") if name.strip()]
 
     region_id = _read_dotenv_key(env_file, "ALICLOUD_REGION_ID") or "ap-southeast-1"
     endpoint = _read_dotenv_key(env_file, "ALICLOUD_KMS_ENDPOINT") or f"kms.{region_id}.aliyuncs.com"

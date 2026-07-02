@@ -14,6 +14,7 @@ os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{(Path(tempfile.gettempdir())
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
 
+from app.core.config import settings  # noqa: E402
 from app.core.security import create_session_token, hash_edge_token  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.session import engine  # noqa: E402
@@ -21,6 +22,12 @@ from app.main import app  # noqa: E402
 from app.models.agent import Agent  # noqa: E402
 from app.models.device import Device  # noqa: E402
 from app.models.user import User  # noqa: E402
+from app.services.media_url_service import media_url_service  # noqa: E402
+
+settings.alibaba_cloud_access_key_id = ""
+settings.alibaba_cloud_access_key_secret = ""
+settings.alicloud_oss_endpoint = ""
+settings.alicloud_oss_bucket = ""
 
 
 EDGE_TOKEN = "edge-token-m5"
@@ -243,3 +250,23 @@ def test_clip_upload_completion_signed_url_and_recording_registration() -> None:
     recording_signed = client.post("/api/v1/recordings/rec_m5_oss/signed-url")
     assert recording_signed.status_code == 200
     assert recording_signed.json()["data"]["playback_url"].startswith("placeholder://playback/")
+
+
+def test_media_url_service_generates_oss_signed_urls(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "alicloud_oss_endpoint", "oss-ap-southeast-1.aliyuncs.com")
+    monkeypatch.setattr(settings, "alicloud_oss_bucket", "sentineledge-media")
+    monkeypatch.setattr(settings, "alibaba_cloud_access_key_id", "test-access-key")
+    monkeypatch.setattr(settings, "alibaba_cloud_access_key_secret", "test-secret")
+    monkeypatch.setattr(settings, "alicloud_oss_secure", True)
+
+    playback_url, playback_expires_at = media_url_service.playback_url("recordings/dev_m5/test.mp4")
+    download_url, download_expires_at = media_url_service.download_url("recordings/dev_m5/test.mp4")
+    upload_url, upload_expires_at = media_url_service.upload_url("events/dev_m5/test.mp4")
+
+    assert playback_url.startswith("https://sentineledge-media.oss-ap-southeast-1.aliyuncs.com/recordings/dev_m5/test.mp4?")
+    assert "OSSAccessKeyId=test-access-key" in playback_url
+    assert "Expires=" in playback_url
+    assert "Signature=" in playback_url
+    assert "response-content-disposition=" in download_url
+    assert upload_url.startswith("https://sentineledge-media.oss-ap-southeast-1.aliyuncs.com/events/dev_m5/test.mp4?")
+    assert playback_expires_at <= download_expires_at <= upload_expires_at

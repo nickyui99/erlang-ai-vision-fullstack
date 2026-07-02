@@ -273,15 +273,28 @@ def seed_clips(conn: sqlite3.Connection, *, user_id: str, device_id: str, agent_
 
 
 
-def seed_recordings(conn: sqlite3.Connection, *, user_id: str, device_id: str, count: int) -> list[str]:
+def seed_recordings(
+    conn: sqlite3.Connection,
+    *,
+    user_id: str,
+    device_id: str,
+    count: int,
+    storage_type: str,
+) -> list[str]:
     now = datetime.now(UTC).replace(microsecond=0)
     current_block_start = now.replace(minute=(now.minute // 30) * 30, second=0, microsecond=0)
     recording_ids: list[str] = []
+    use_oss = storage_type == "oss"
 
     for index in range(max(1, min(4, count))):
         start = current_block_start - timedelta(minutes=30 * index)
         end = start + timedelta(minutes=30)
         recording_id = f"rec_playback_{safe_id(device_id)}_{start.strftime('%Y%m%dT%H%M')}"
+        oss_object_key = (
+            f"recordings/{user_id}/{device_id}/{start.strftime('%Y%m%dT%H%M%SZ')}_{recording_id}.mp4"
+            if use_oss
+            else None
+        )
         conn.execute(
             """
             INSERT INTO recordings (
@@ -296,6 +309,9 @@ def seed_recordings(conn: sqlite3.Connection, *, user_id: str, device_id: str, c
             ON CONFLICT(recording_id) DO UPDATE SET
                 start_time = excluded.start_time,
                 end_time = excluded.end_time,
+                storage_type = excluded.storage_type,
+                storage_path = excluded.storage_path,
+                oss_object_key = excluded.oss_object_key,
                 duration_seconds = excluded.duration_seconds,
                 file_size_bytes = excluded.file_size_bytes,
                 status = excluded.status,
@@ -309,16 +325,16 @@ def seed_recordings(conn: sqlite3.Connection, *, user_id: str, device_id: str, c
                 device_id,
                 utc_text(start),
                 utc_text(end),
-                "local_edge",
-                f"recordings/{device_id}/{start.strftime('%Y%m%dT%H%M')}.mp4",
-                None,
+                "oss" if use_oss else "local_edge",
+                None if use_oss else f"recordings/{device_id}/{start.strftime('%Y%m%dT%H%M')}.mp4",
+                oss_object_key,
                 1800,
                 78_000_000 + index * 1_250_000,
                 "video/mp4",
                 None,
-                "local_only",
-                None,
-                None,
+                "available" if use_oss else "local_only",
+                f"upload_{recording_id}" if use_oss else None,
+                utc_text(end - timedelta(minutes=2)) if use_oss else None,
                 utc_text(end),
                 None,
                 None,
@@ -331,12 +347,14 @@ def seed_recordings(conn: sqlite3.Connection, *, user_id: str, device_id: str, c
         recording_ids.append(recording_id)
 
     return recording_ids
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", default=str(DEFAULT_DB), help="SQLite DB path")
     parser.add_argument("--email", default=None, help="App user email to seed clips for")
     parser.add_argument("--device-id", default=None, help="Existing device ID owned by the selected user")
     parser.add_argument("--count", type=int, default=6, help="Number of event clips to seed")
+    parser.add_argument("--recording-storage", choices=["local_edge", "oss"], default="oss", help="Storage mode for seeded 30-minute recordings")
     args = parser.parse_args()
 
     db_path = Path(args.db)
@@ -362,6 +380,7 @@ def main() -> None:
             user_id=user["user_id"],
             device_id=device["device_id"],
             count=max(1, args.count // 2),
+            storage_type=args.recording_storage,
         )
         conn.commit()
     finally:

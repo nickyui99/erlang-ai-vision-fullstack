@@ -48,7 +48,7 @@ async def signed_clip_playback_url(
             detail={"code": "clip_unavailable", "message": "Clip is not available for playback"},
         )
 
-    if settings.app_env == "development" and _DEV_SAMPLE_VIDEO.exists():
+    if settings.app_env == "development" and not media_url_service.oss_configured and _DEV_SAMPLE_VIDEO.exists():
         token = create_signed_token(
             {
                 "clip_id": clip.clip_id,
@@ -94,7 +94,7 @@ async def signed_clip_download_url(
             detail={"code": "clip_unavailable", "message": "Clip is not available for download"},
         )
 
-    if settings.app_env == "development" and _DEV_SAMPLE_VIDEO.exists():
+    if settings.app_env == "development" and not media_url_service.oss_configured and _DEV_SAMPLE_VIDEO.exists():
         token = create_signed_token(
             {
                 "clip_id": clip.clip_id,
