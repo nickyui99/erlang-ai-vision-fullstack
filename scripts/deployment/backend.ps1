@@ -24,6 +24,9 @@ param(
     [string]$Region = "ap-southeast-3",
     [string]$AcrDomain = "crpi-9kvwsegbpo7ict75.ap-southeast-3.personal.cr.aliyuncs.com",
     [string]$AcrNamespace = "erlang-ai-vision",
+    # Standing EIP (erlang-eic-static-ip, 47.250.155.149) so the public IP
+    # survives group recreates. Empty string falls back to a throwaway auto-EIP.
+    [string]$EipId = "eip-8pshynfdz57al5mjunni6",
     [string]$Bucket = "erlang-vision",
     [string]$GroupName = "erlang-backend"
 )
@@ -135,6 +138,7 @@ $env:SE_BUCKET = $Bucket
 $env:SE_GROUP_NAME = $GroupName
 $env:SE_ACR_NAMESPACE = $AcrNamespace
 $env:SE_ACR_DOMAIN = $AcrDomain
+$env:SE_EIP_ID = $EipId
 
 # Single phase: mint ACR token, docker push, then provision ECI. All in one
 # python process so the token never crosses a process boundary or hits disk.
@@ -307,6 +311,8 @@ backend_env = [{"Key": k, "Value": os.environ.get(k, "")} for k in (
     "ALIBABA_CLOUD_ACCESS_KEY_ID", "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
 )] + [{"Key": "APP_ENV", "Value": "production"}]
 
+eip_id = os.environ.get("SE_EIP_ID", "")
+eip_cfg = {"EipInstanceId": eip_id} if eip_id else {"AutoCreateEip": True, "EipBandwidth": 5}
 req = eci_m.CreateContainerGroupRequest().from_map({
     "RegionId": region,
     "SecurityGroupId": sg_id,
@@ -315,8 +321,7 @@ req = eci_m.CreateContainerGroupRequest().from_map({
     "RestartPolicy": "Always",
     "Cpu": 1.0,
     "Memory": 2.0,
-    "AutoCreateEip": True,
-    "EipBandwidth": 5,
+    **eip_cfg,
     "ImageRegistryCredential": [{
         "Server": vpc_registry,
         "UserName": token_data["tempUserName"],
