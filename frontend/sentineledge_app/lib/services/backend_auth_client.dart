@@ -135,7 +135,10 @@ class SentinelEdgeApiClient {
   /// Mints a short-lived signed URL for the device's live MJPEG stream. The
   /// returned URL is absolute and can be used directly as an `<img>` source.
   Future<LiveStreamUrl> liveStreamUrl(String deviceId) async {
-    final body = await _postObject('/api/v1/devices/$deviceId/stream-url', null);
+    final body = await _postObject(
+      '/api/v1/devices/$deviceId/stream-url',
+      null,
+    );
     return LiveStreamUrl.fromJson(body['data'] as Map<String, dynamic>);
   }
 
@@ -249,7 +252,48 @@ class SentinelEdgeApiClient {
         .toList();
   }
 
-  /// The tool-call trail for an event — the AI agent's snapshot/pan/read actions
+  Future<List<MediaClip>> listDeviceClips(
+    String deviceId, {
+    int limit = 20,
+    String status = 'available',
+    String? clipType,
+  }) async {
+    final query = <String, String>{
+      'limit': limit.toString(),
+      if (status.isNotEmpty) 'status': status,
+      if (clipType != null && clipType.isNotEmpty) 'clip_type': clipType,
+    };
+    final uri = Uri(
+      path: '/api/v1/devices/$deviceId/clips',
+      queryParameters: query,
+    );
+    final body = await _getObject(uri.toString());
+    final items = body['data'] as List<dynamic>;
+    return items
+        .map((item) => MediaClip.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<MediaRecording>> listDeviceRecordings(
+    String deviceId, {
+    int limit = 20,
+    String? status,
+  }) async {
+    final query = <String, String>{
+      'limit': limit.toString(),
+      if (status != null && status.isNotEmpty) 'status': status,
+    };
+    final uri = Uri(
+      path: '/api/v1/devices/$deviceId/recordings',
+      queryParameters: query,
+    );
+    final body = await _getObject(uri.toString());
+    final items = body['data'] as List<dynamic>;
+    return items
+        .map((item) => MediaRecording.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+  /// The tool-call trail for an event ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the AI agent's snapshot/pan/read actions
   /// during verification, oldest-first.
   Future<List<ToolAuditEntry>> listEventAudit(String eventId) async {
     final body = await _getObject('/api/v1/events/$eventId/audit');
@@ -259,9 +303,23 @@ class SentinelEdgeApiClient {
         .toList();
   }
 
+  Future<RecordingPlaybackUrl> signedRecordingPlaybackUrl(
+    String recordingId,
+  ) async {
+    final body = await _postObject(
+      '/api/v1/recordings/$recordingId/signed-url',
+      null,
+    );
+    return RecordingPlaybackUrl.fromJson(body['data'] as Map<String, dynamic>);
+  }
   Future<ClipPlaybackUrl> signedClipPlaybackUrl(String clipId) async {
     final body = await _postObject('/api/v1/clips/$clipId/signed-url', null);
     return ClipPlaybackUrl.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  Future<ClipDownloadUrl> signedClipDownloadUrl(String clipId) async {
+    final body = await _postObject('/api/v1/clips/$clipId/download-url', null);
+    return ClipDownloadUrl.fromJson(body['data'] as Map<String, dynamic>);
   }
 
   Future<Map<String, dynamic>> _getObject(
@@ -470,9 +528,7 @@ class DeviceCommandResult {
     return DeviceCommandResult(
       requestId: json['request_id'].toString(),
       status: json['status'].toString(),
-      payload: Map<String, dynamic>.from(
-        json['payload'] as Map? ?? const {},
-      ),
+      payload: Map<String, dynamic>.from(json['payload'] as Map? ?? const {}),
     );
   }
 }
@@ -686,6 +742,79 @@ class MediaClip {
   }
 }
 
+class MediaRecording {
+  const MediaRecording({
+    required this.recordingId,
+    required this.deviceId,
+    required this.startTime,
+    required this.endTime,
+    required this.storageType,
+    required this.status,
+    this.storagePath,
+    this.ossObjectKey,
+    this.durationSeconds,
+    this.fileSizeBytes,
+    this.mimeType,
+    this.retentionUntil,
+  });
+
+  final String recordingId;
+  final String deviceId;
+  final DateTime? startTime;
+  final DateTime? endTime;
+  final String storageType;
+  final String? storagePath;
+  final String? ossObjectKey;
+  final int? durationSeconds;
+  final int? fileSizeBytes;
+  final String? mimeType;
+  final String status;
+  final DateTime? retentionUntil;
+
+  factory MediaRecording.fromJson(Map<String, dynamic> json) {
+    return MediaRecording(
+      recordingId: json['recording_id'].toString(),
+      deviceId: json['device_id'].toString(),
+      startTime: json['start_time'] == null
+          ? null
+          : DateTime.tryParse(json['start_time'].toString()),
+      endTime: json['end_time'] == null
+          ? null
+          : DateTime.tryParse(json['end_time'].toString()),
+      storageType: json['storage_type'].toString(),
+      storagePath: json['storage_path']?.toString(),
+      ossObjectKey: json['oss_object_key']?.toString(),
+      durationSeconds: int.tryParse(json['duration_seconds'].toString()),
+      fileSizeBytes: int.tryParse(json['file_size_bytes'].toString()),
+      mimeType: json['mime_type']?.toString(),
+      status: json['status'].toString(),
+      retentionUntil: json['retention_until'] == null
+          ? null
+          : DateTime.tryParse(json['retention_until'].toString()),
+    );
+  }
+}
+class RecordingPlaybackUrl {
+  const RecordingPlaybackUrl({
+    required this.recordingId,
+    required this.playbackUrl,
+    this.expiresAt,
+  });
+
+  final String recordingId;
+  final String playbackUrl;
+  final DateTime? expiresAt;
+
+  factory RecordingPlaybackUrl.fromJson(Map<String, dynamic> json) {
+    return RecordingPlaybackUrl(
+      recordingId: json['recording_id'].toString(),
+      playbackUrl: json['playback_url'].toString(),
+      expiresAt: json['expires_at'] == null
+          ? null
+          : DateTime.tryParse(json['expires_at'].toString()),
+    );
+  }
+}
 class ClipPlaybackUrl {
   const ClipPlaybackUrl({
     required this.clipId,
@@ -708,6 +837,27 @@ class ClipPlaybackUrl {
   }
 }
 
+class ClipDownloadUrl {
+  const ClipDownloadUrl({
+    required this.clipId,
+    required this.downloadUrl,
+    this.expiresAt,
+  });
+
+  final String clipId;
+  final String downloadUrl;
+  final DateTime? expiresAt;
+
+  factory ClipDownloadUrl.fromJson(Map<String, dynamic> json) {
+    return ClipDownloadUrl(
+      clipId: json['clip_id'].toString(),
+      downloadUrl: json['download_url'].toString(),
+      expiresAt: json['expires_at'] == null
+          ? null
+          : DateTime.tryParse(json['expires_at'].toString()),
+    );
+  }
+}
 class BackendNetworkInfo {
   const BackendNetworkInfo({this.lanIp, required this.port});
 
@@ -751,4 +901,3 @@ Map<String, dynamic>? _tryMap(Object? value) {
   }
   return null;
 }
-
