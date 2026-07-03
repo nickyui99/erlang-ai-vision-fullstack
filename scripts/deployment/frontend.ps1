@@ -13,14 +13,18 @@
     come from ALIBABA_CLOUD_ACCESS_KEY_ID / _SECRET in the environment or the
     repo .env. Pass -SkipUpload to only build.
 
+    -ApiBaseUrl is optional: release web builds default to the page origin
+    (Caddy serves app + API from one host), so omit it for the standard
+    deploy and pass it only to target a different backend host.
+
 .EXAMPLE
-    ./scripts/deployment/frontend.ps1 -ApiBaseUrl https://api.example.com
+    ./scripts/deployment/frontend.ps1
 
 .EXAMPLE
     ./scripts/deployment/frontend.ps1 -ApiBaseUrl https://api.example.com -SkipUpload
 #>
 param(
-    [Parameter(Mandatory = $true)][string]$ApiBaseUrl,
+    [string]$ApiBaseUrl,
     [string]$FirebaseConfig = "config/firebase.json",
     [string]$Bucket = "erlang-vision",
     [string]$Region = "ap-southeast-3",
@@ -80,10 +84,15 @@ try {
     # --wasm matches the deploy architecture (Flutter Web WASM on OSS).
     # dart-define-from-file supplies Firebase keys; API base URL is passed
     # separately so the same firebase.json works across environments.
-    Write-Host "Building web (WASM) against $ApiBaseUrl..." -ForegroundColor Cyan
-    flutter build web --wasm `
-        --dart-define-from-file=$FirebaseConfig `
-        --dart-define=SENTINELEDGE_API_BASE_URL=$ApiBaseUrl
+    $BuildArgs = @("build", "web", "--wasm", "--dart-define-from-file=$FirebaseConfig")
+    if ($ApiBaseUrl) {
+        $BuildArgs += "--dart-define=SENTINELEDGE_API_BASE_URL=$ApiBaseUrl"
+        Write-Host "Building web (WASM) against $ApiBaseUrl..." -ForegroundColor Cyan
+    }
+    else {
+        Write-Host "Building web (WASM); release default is same-origin API..." -ForegroundColor Cyan
+    }
+    flutter @BuildArgs
     if ($LASTEXITCODE -ne 0) { Write-Error "flutter build web failed." }
 }
 finally {
