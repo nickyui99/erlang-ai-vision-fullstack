@@ -16,13 +16,12 @@ The app currently covers the authenticated smart-camera console flow:
 - Agent creation and camera Protection / Detection Rule toggles.
 - Event timeline review with clip playback URL requests.
 - Realtime status updates through the backend event stream.
+- FCM token registration, token refresh handling, logout deregistration, and foreground push alert display.
 - Edge controls for pan, tilt, and snapshot commands.
-- Market-style camera affordances shown as disabled placeholders where backend APIs do not exist yet.
+- Market-style camera controls for record, mute, talk, alarm, fill light, resolution, and fullscreen live video.
 
 Remaining frontend work:
 
-- Register FCM tokens from Flutter and display push notifications.
-- Add real backend + UI support for recording, audio mute/talk, alarm, fill light, resolution switching, fullscreen live video, presets, and PTZ correction.
 - Keep live stream rendering polished across MJPEG and latest-frame polling modes.
 - Run mobile/emulator visual QA for the camera screens.
 
@@ -45,11 +44,16 @@ Fill `config/firebase.json` with the Firebase Web app config from Firebase Conso
   "FIREBASE_WEB_APP_ID": "your-web-app-id",
   "FIREBASE_WEB_MESSAGING_SENDER_ID": "your-sender-id",
   "FIREBASE_PROJECT_ID": "sentineledge-e069b",
-  "FIREBASE_AUTH_DOMAIN": "sentineledge-e069b.firebaseapp.com"
+  "FIREBASE_AUTH_DOMAIN": "sentineledge-e069b.firebaseapp.com",
+  "FIREBASE_MESSAGING_VAPID_KEY": "your-web-push-vapid-key"
 }
 ```
 
 These Firebase client values are not backend secrets, but keeping the local file ignored avoids committing environment-specific config.
+
+For web push notifications, also replace the placeholder values in `web/firebase-messaging-sw.js` with the same Firebase Web app values before deploying. The app reads `FIREBASE_MESSAGING_VAPID_KEY` from `config/firebase.json` at build/run time.
+
+The market-style controls send audited backend commands to LaptopEdge. Favorites, presets, and PTZ correction are persisted through the backend device update API. Real hardware behavior for record/audio/alarm/light/resolution depends on edge-side handlers for the `command.*` messages.
 
 Never put Firebase Admin service account JSON, database passwords, session secrets, or backend credentials in Flutter files.
 
@@ -131,6 +135,7 @@ Manual validation:
 3. Google sign-in succeeds.
 4. The app shows the backend user profile.
 5. Backend logs show `POST /api/v1/auth/firebase/login` returning success.
+
 
 
 

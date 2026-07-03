@@ -139,4 +139,4 @@ The backend emits SSE at `GET /api/v1/stream/events` for user-visible changes su
 
 ## Storage
 
-Local development uses SQLite through async SQLAlchemy. Production targets PostgreSQL-compatible relational storage. Media bytes are not stored in the relational database; clip/recording rows hold metadata and local/OSS paths. The current media URL service is placeholder/local-oriented and should be replaced with real OSS deployment settings for production.
+Local development uses SQLite through async SQLAlchemy. Production targets PostgreSQL-compatible relational storage. Media bytes are not stored in the relational database; clip/recording rows hold metadata and local/OSS paths. The media URL service generates signed Alibaba OSS upload, playback, and download URLs when OSS credentials are configured; local/offline tests intentionally fall back to `placeholder://` URLs.

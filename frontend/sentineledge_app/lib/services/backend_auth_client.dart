@@ -79,6 +79,20 @@ class SentinelEdgeApiClient {
     return BackendNetworkInfo.fromJson(body['data'] as Map<String, dynamic>);
   }
 
+  Future<void> registerPushToken({
+    required String token,
+    required String platform,
+  }) async {
+    await _postObject('/api/v1/notifications/tokens', {
+      'token': token,
+      'platform': platform,
+    });
+  }
+
+  Future<void> deregisterPushToken(String token) async {
+    await _delete('/api/v1/notifications/tokens/${Uri.encodeComponent(token)}');
+  }
+
   Future<List<EdgeDevice>> listDevices() async {
     final body = await _getObject('/api/v1/devices');
     final items = body['data'] as List<dynamic>;
@@ -91,14 +105,21 @@ class SentinelEdgeApiClient {
     required String deviceId,
     required String name,
     String? location,
+    bool isFavorite = false,
+    List<CameraPreset> presets = const [],
+    int ptzCorrectionPan = 0,
+    int ptzCorrectionTilt = 0,
   }) async {
     final body = await _putObject('/api/v1/devices/$deviceId', {
       'name': name,
       'location': _emptyToNull(location),
+      'is_favorite': isFavorite,
+      'presets': presets.map((preset) => preset.toJson()).toList(),
+      'ptz_correction_pan': ptzCorrectionPan,
+      'ptz_correction_tilt': ptzCorrectionTilt,
     });
     return EdgeDevice.fromJson(body['data'] as Map<String, dynamic>);
   }
-
   Future<EdgeDevice> getDevice(String deviceId) async {
     final body = await _getObject('/api/v1/devices/$deviceId');
     return EdgeDevice.fromJson(body['data'] as Map<String, dynamic>);
@@ -126,6 +147,22 @@ class SentinelEdgeApiClient {
     return DeviceCommandResult.fromJson(body['data'] as Map<String, dynamic>);
   }
 
+
+  Future<DeviceCommandResult> controlDevice(
+    String deviceId, {
+    required String action,
+    bool? enabled,
+    String? resolution,
+  }) async {
+    final payload = <String, dynamic>{'action': action};
+    if (enabled != null) payload['enabled'] = enabled;
+    if (resolution != null) payload['resolution'] = resolution;
+    final body = await _postObject(
+      '/api/v1/devices/$deviceId/control',
+      payload,
+    );
+    return DeviceCommandResult.fromJson(body['data'] as Map<String, dynamic>);
+  }
   /// Requests a live snapshot from the edge device.
   Future<DeviceCommandResult> snapshotDevice(String deviceId) async {
     final body = await _postObject('/api/v1/devices/$deviceId/snapshot', null);
@@ -467,6 +504,10 @@ class EdgeDevice {
     this.rssi,
     this.fps,
     this.lastSeen,
+    this.isFavorite = false,
+    this.presets = const [],
+    this.ptzCorrectionPan = 0,
+    this.ptzCorrectionTilt = 0,
   });
 
   final String deviceId;
@@ -478,6 +519,10 @@ class EdgeDevice {
   final double? rssi;
   final double? fps;
   final DateTime? lastSeen;
+  final bool isFavorite;
+  final List<CameraPreset> presets;
+  final int ptzCorrectionPan;
+  final int ptzCorrectionTilt;
 
   factory EdgeDevice.fromJson(Map<String, dynamic> json) {
     return EdgeDevice(
@@ -492,10 +537,37 @@ class EdgeDevice {
       lastSeen: json['last_seen'] == null
           ? null
           : DateTime.tryParse(json['last_seen'].toString()),
+      isFavorite: json['is_favorite'] == true,
+      presets: (json['presets'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((item) => CameraPreset.fromJson(Map<String, dynamic>.from(item)))
+          .toList(),
+      ptzCorrectionPan: int.tryParse(json['ptz_correction_pan'].toString()) ?? 0,
+      ptzCorrectionTilt: int.tryParse(json['ptz_correction_tilt'].toString()) ?? 0,
     );
   }
 }
+class CameraPreset {
+  const CameraPreset({required this.label, required this.pan, required this.tilt});
 
+  final String label;
+  final int pan;
+  final int tilt;
+
+  Map<String, dynamic> toJson() => {
+    'label': label,
+    'pan': pan,
+    'tilt': tilt,
+  };
+
+  factory CameraPreset.fromJson(Map<String, dynamic> json) {
+    return CameraPreset(
+      label: json['label']?.toString() ?? 'Preset',
+      pan: int.tryParse(json['pan'].toString()) ?? 90,
+      tilt: int.tryParse(json['tilt'].toString()) ?? 90,
+    );
+  }
+}
 class DeviceRegistration {
   const DeviceRegistration({required this.device, required this.edgeToken});
 

@@ -18,7 +18,7 @@ from app.models.recording import Recording
 from app.models.device import Device
 from app.models.tool_audit import ToolAudit
 from app.models.user import User
-from app.schemas.command import DeviceCommandResult, DevicePanCommand, DeviceTiltCommand
+from app.schemas.command import DeviceCommandResult, DeviceControlCommand, DevicePanCommand, DeviceTiltCommand
 from app.schemas.device import DeviceCreate, DeviceRead, DeviceRegistrationRead, DeviceUpdate, LiveStreamUrlRead
 from app.schemas.media import ClipRead, RecordingRead
 from app.services.edge_command_hub import EdgeCommandTimeoutError, EdgeNotConnectedError, edge_command_hub
@@ -73,6 +73,11 @@ async def create_device(
         location=payload.location.strip() if payload.location else None,
         health_status="unknown",
         current_pan=90,
+        current_tilt=90,
+        is_favorite=False,
+        presets=[],
+        ptz_correction_pan=0,
+        ptz_correction_tilt=0,
         created_at=now,
         updated_at=now,
     )
@@ -161,6 +166,10 @@ async def update_device(
     device = await _get_owned_device(session, current_user.user_id, device_id)
     device.name = payload.name.strip()
     device.location = payload.location.strip() if payload.location else None
+    device.is_favorite = payload.is_favorite
+    device.presets = [preset.model_dump(mode="json") for preset in payload.presets]
+    device.ptz_correction_pan = payload.ptz_correction_pan
+    device.ptz_correction_tilt = payload.ptz_correction_tilt
     device.updated_at = datetime.now(UTC)
     await session.commit()
     await session.refresh(device)
@@ -237,6 +246,26 @@ async def get_device_snapshot(
     )
     return {"data": result.model_dump(mode="json")}
 
+
+
+@router.post("/{device_id}/control")
+async def control_device(
+    device_id: str,
+    payload: DeviceControlCommand,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    device = await _get_owned_device(session, current_user.user_id, device_id)
+    command_payload = payload.command_payload()
+    result = await _send_audited_device_command(
+        session=session,
+        user=current_user,
+        device=device,
+        tool_name=f"device_{payload.action}",
+        command_type=f"command.{payload.action}",
+        payload=command_payload,
+    )
+    return {"data": result.model_dump(mode="json")}
 
 @router.post("/{device_id}/stream-url")
 async def create_device_stream_url(
@@ -411,3 +440,5 @@ async def _send_audited_device_command(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail={"code": "command_timeout", "message": "Edge command timed out"},
         ) from exc
+
+
