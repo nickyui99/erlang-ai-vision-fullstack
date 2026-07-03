@@ -19,7 +19,10 @@ class BackendAuthClient {
       return configured;
     }
     if (kIsWeb) {
-      return 'http://localhost:8000';
+      // Release web builds are served from the same host as the API (Caddy
+      // fronts both), so call back to the page origin. localhost:8000 is
+      // only ever right in the dev loop.
+      return kReleaseMode ? Uri.base.origin : 'http://localhost:8000';
     }
     if (defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:8000';
