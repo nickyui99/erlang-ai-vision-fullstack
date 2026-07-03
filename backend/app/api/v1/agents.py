@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import secrets
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.compiler import compile_agent_rule
 from app.api.deps import get_current_user, get_db_session
 from app.models.agent import Agent
 from app.models.device import Device
@@ -21,15 +21,6 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 
 def _new_agent_id() -> str:
     return f"agt_{secrets.token_urlsafe(18)}"
-
-
-def _compile_agent_rule(nl_rule: str) -> tuple[str, dict[str, Any]]:
-    normalized_rule = " ".join(nl_rule.split())
-    return normalized_rule, {
-        "detectors": ["person"],
-        "min_confidence": 0.75,
-        "rule_text": normalized_rule,
-    }
 
 
 async def _get_owned_agent(session: AsyncSession, user_id: str, agent_id: str) -> Agent:
@@ -68,7 +59,7 @@ async def create_agent(
     if payload.device_id:
         await _ensure_owned_device(session, current_user.user_id, payload.device_id)
         device_id = payload.device_id
-    compiled_prompt, compiled_edge_config = _compile_agent_rule(payload.nl_rule)
+    compiled_prompt, compiled_edge_config = await compile_agent_rule(payload.nl_rule)
     now = datetime.now(UTC)
     agent = Agent(
         agent_id=_new_agent_id(),
@@ -121,8 +112,8 @@ async def update_agent(
 ) -> dict:
     agent = await _get_owned_agent(session, current_user.user_id, agent_id)
     normalized_payload_rule = " ".join(payload.nl_rule.split())
-    if normalized_payload_rule != agent.compiled_prompt:
-        compiled_prompt, compiled_edge_config = _compile_agent_rule(payload.nl_rule)
+    if normalized_payload_rule != " ".join((agent.nl_rule or "").split()):
+        compiled_prompt, compiled_edge_config = await compile_agent_rule(payload.nl_rule)
         agent.compiled_prompt = compiled_prompt
         agent.compiled_edge_config = compiled_edge_config
     agent.name = payload.name.strip()
@@ -164,7 +155,7 @@ async def assign_agent(
     if existing is not None:
         return {"data": AgentRead.model_validate(existing).model_dump(mode="json")}
 
-    compiled_prompt, compiled_edge_config = _compile_agent_rule(parent.nl_rule)
+    compiled_prompt, compiled_edge_config = await compile_agent_rule(parent.nl_rule)
     now = datetime.now(UTC)
     sub_agent = Agent(
         agent_id=_new_agent_id(),

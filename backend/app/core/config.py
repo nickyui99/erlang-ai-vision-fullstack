@@ -58,6 +58,9 @@ class Settings(BaseSettings):
         validation_alias="QWEN_BASE_URL",
     )
     qwen_model: str = Field(default="qwen-vl-max", validation_alias="QWEN_MODEL")
+    # NL-rule compilation is text-only, so it uses a cheaper text model (not the vision model).
+    # Falls back to a deterministic keyword compiler in test/key-less environments.
+    qwen_compiler_model: str = Field(default="qwen-plus", validation_alias="QWEN_COMPILER_MODEL")
     qwen_timeout_seconds: float = Field(default=20, validation_alias="QWEN_TIMEOUT_SECONDS")
     qwen_max_tool_turns: int = Field(default=4, validation_alias="QWEN_MAX_TOOL_TURNS")
 
