@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'dart:math' as math;
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,6 +12,7 @@ import '../../design/app_shadows.dart';
 import '../../design/app_spacing.dart';
 import '../../firebase_options.dart';
 import '../../services/backend_auth_client.dart';
+import '../../services/push_notification_service.dart';
 import '../../shared/console_widgets.dart';
 import '../dashboard/workspace_view.dart';
 
@@ -23,6 +26,7 @@ class AuthShell extends StatefulWidget {
 class _AuthShellState extends State<AuthShell> {
   final BackendAuthClient _authClient = BackendAuthClient();
   final SentinelEdgeApiClient _apiClient = SentinelEdgeApiClient();
+  final PushNotificationService _pushNotifications = PushNotificationService();
   BackendUser? _backendUser;
   String? _error;
   bool _isLoading = true;
@@ -33,6 +37,12 @@ class _AuthShellState extends State<AuthShell> {
     _restoreSession();
   }
 
+  @override
+  void dispose() {
+    unawaited(_pushNotifications.dispose());
+    super.dispose();
+  }
+
   Future<void> _restoreSession() async {
     try {
       final backendUser = await _apiClient.currentUser();
@@ -41,6 +51,7 @@ class _AuthShellState extends State<AuthShell> {
         _backendUser = backendUser;
         _isLoading = false;
       });
+      unawaited(_registerPushNotifications());
       return;
     } catch (_) {
       // The backend session cookie may be absent after a fresh browser profile.
@@ -54,6 +65,7 @@ class _AuthShellState extends State<AuthShell> {
           final backendUser = await _loginBackendWithFirebaseUser(firebaseUser);
           if (!mounted) return;
           setState(() => _backendUser = backendUser);
+          unawaited(_registerPushNotifications());
         }
       }
     } catch (error) {
@@ -87,6 +99,7 @@ class _AuthShellState extends State<AuthShell> {
       final backendUser = await _loginBackendWithFirebaseUser(firebaseUser);
       if (!mounted) return;
       setState(() => _backendUser = backendUser);
+      unawaited(_registerPushNotifications());
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
@@ -96,6 +109,7 @@ class _AuthShellState extends State<AuthShell> {
       }
     }
   }
+
   Future<void> _signInWithEmailPassword(String email, String password) async {
     if (!DefaultFirebaseOptions.isConfigured) {
       setState(() => _error = 'Firebase options are not configured yet.');
@@ -120,6 +134,7 @@ class _AuthShellState extends State<AuthShell> {
       final backendUser = await _loginBackendWithFirebaseUser(firebaseUser);
       if (!mounted) return;
       setState(() => _backendUser = backendUser);
+      unawaited(_registerPushNotifications());
     } on BackendAuthException catch (error) {
       if (!mounted) return;
       if (error.code == 'email_not_verified') {
@@ -192,6 +207,18 @@ class _AuthShellState extends State<AuthShell> {
     }
   }
 
+  Future<void> _registerPushNotifications() async {
+    try {
+      await _pushNotifications.registerForCurrentUser(
+        _apiClient,
+        messenger: ScaffoldMessenger.maybeOf(context),
+      );
+    } catch (_) {
+      // Push registration is best-effort; sign-in and camera control should not
+      // fail just because notification permission or browser setup is missing.
+    }
+  }
+
   Future<void> _clearFirebaseSession() async {
     await FirebaseAuth.instance.signOut();
     if (!kIsWeb) {
@@ -221,6 +248,7 @@ class _AuthShellState extends State<AuthShell> {
       _error = null;
     });
     try {
+      await _pushNotifications.deregisterForCurrentUser(_apiClient);
       await _clearFirebaseSession();
       await _authClient.logout();
       if (!mounted) return;
@@ -269,11 +297,15 @@ class SignInView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final narrow = MediaQuery.sizeOf(context).width < 760;
     return Scaffold(
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSpacing.xl),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: narrow ? AppSpacing.lg : AppSpacing.xl,
+            ),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 980),
               child: LayoutBuilder(
@@ -314,10 +346,11 @@ class SignInView extends StatelessWidget {
                           : Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const _BrandPanel(),
+                                const _BrandPanel(compact: true),
                                 _LoginPanel(
                                   error: error,
                                   isLoading: isLoading,
+                                  compact: true,
                                   onGoogleSignIn: onGoogleSignIn,
                                   onEmailSignIn: onEmailSignIn,
                                   onEmailCreate: onEmailCreate,
@@ -337,7 +370,9 @@ class SignInView extends StatelessWidget {
 }
 
 class _BrandPanel extends StatefulWidget {
-  const _BrandPanel();
+  const _BrandPanel({this.compact = false});
+
+  final bool compact;
 
   @override
   State<_BrandPanel> createState() => _BrandPanelState();
@@ -365,6 +400,7 @@ class _BrandPanelState extends State<_BrandPanel>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final compact = widget.compact;
     const logoAsset = 'assets/brand/erlang-ai-vision-icon.png';
     return AnimatedBuilder(
       animation: _motion,
@@ -374,7 +410,7 @@ class _BrandPanelState extends State<_BrandPanel>
         final lift = math.cos(phase) * 0.18;
         return Container(
           width: double.infinity,
-          constraints: const BoxConstraints(minHeight: 430),
+          constraints: BoxConstraints(minHeight: compact ? 0 : 430),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: const [
@@ -423,14 +459,14 @@ class _BrandPanelState extends State<_BrandPanel>
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(AppSpacing.xxl),
+                padding: EdgeInsets.all(compact ? AppSpacing.xl : AppSpacing.xxl),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      width: 76,
-                      height: 76,
+                      width: compact ? 52 : 76,
+                      height: compact ? 52 : 76,
                       padding: const EdgeInsets.all(5),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.94),
@@ -443,45 +479,53 @@ class _BrandPanelState extends State<_BrandPanel>
                       clipBehavior: Clip.antiAlias,
                       child: Image.asset(logoAsset, fit: BoxFit.contain),
                     ),
-                    const SizedBox(height: AppSpacing.xl),
+                    SizedBox(height: compact ? AppSpacing.md : AppSpacing.xl),
                     Text(
                       'Erlang AI Vision',
-                      style: theme.textTheme.displaySmall?.copyWith(
+                      style: (compact
+                              ? theme.textTheme.headlineSmall
+                              : theme.textTheme.displaySmall)
+                          ?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.md),
+                    SizedBox(height: compact ? AppSpacing.xs : AppSpacing.md),
                     Text(
                       'Camera intelligence for live monitoring, edge control, and verified security events.',
-                      style: theme.textTheme.titleMedium?.copyWith(
+                      style: (compact
+                              ? theme.textTheme.bodyMedium
+                              : theme.textTheme.titleMedium)
+                          ?.copyWith(
                         color: Colors.white.withValues(alpha: 0.9),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.xl),
-                    const Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: [
-                        _SignalPill(
-                          icon: Icons.videocam_outlined,
-                          label: 'Live cameras',
-                        ),
-                        _SignalPill(
-                          icon: Icons.radar_outlined,
-                          label: 'AI agents',
-                        ),
-                        _SignalPill(
-                          icon: Icons.hub_outlined,
-                          label: 'Edge control',
-                        ),
-                        _SignalPill(
-                          icon: Icons.verified_outlined,
-                          label: 'Verified alerts',
-                        ),
-                      ],
-                    ),
+                    if (!compact) ...[
+                      const SizedBox(height: AppSpacing.xl),
+                      const Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: [
+                          _SignalPill(
+                            icon: Icons.videocam_outlined,
+                            label: 'Live cameras',
+                          ),
+                          _SignalPill(
+                            icon: Icons.radar_outlined,
+                            label: 'AI agents',
+                          ),
+                          _SignalPill(
+                            icon: Icons.hub_outlined,
+                            label: 'Edge control',
+                          ),
+                          _SignalPill(
+                            icon: Icons.verified_outlined,
+                            label: 'Verified alerts',
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -500,10 +544,12 @@ class _LoginPanel extends StatefulWidget {
     required this.onGoogleSignIn,
     required this.onEmailSignIn,
     required this.onEmailCreate,
+    this.compact = false,
   });
 
   final String? error;
   final bool isLoading;
+  final bool compact;
   final VoidCallback onGoogleSignIn;
   final Future<void> Function(String email, String password) onEmailSignIn;
   final Future<void> Function(String email, String password) onEmailCreate;
@@ -540,8 +586,9 @@ class _LoginPanelState extends State<_LoginPanel> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final compact = widget.compact;
     return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xxl),
+      padding: EdgeInsets.all(compact ? AppSpacing.xl : AppSpacing.xxl),
       child: Form(
         key: _formKey,
         child: Column(
@@ -554,7 +601,7 @@ class _LoginPanelState extends State<_LoginPanel> {
               'Access your camera workspace with Google or email/password.',
               style: theme.textTheme.bodyMedium,
             ),
-            const SizedBox(height: AppSpacing.xl),
+            SizedBox(height: compact ? AppSpacing.lg : AppSpacing.xl),
             if (!DefaultFirebaseOptions.isConfigured) ...[
               const AppBanner(
                 tone: StatusTone.warning,

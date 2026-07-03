@@ -3,5 +3,6 @@
   "FIREBASE_WEB_APP_ID": "your-web-app-id",
   "FIREBASE_WEB_MESSAGING_SENDER_ID": "your-sender-id",
   "FIREBASE_PROJECT_ID": "sentineledge-e069b",
-  "FIREBASE_AUTH_DOMAIN": "sentineledge-e069b.firebaseapp.com"
+  "FIREBASE_AUTH_DOMAIN": "sentineledge-e069b.firebaseapp.com",
+  "FIREBASE_MESSAGING_VAPID_KEY": "your-web-push-vapid-key"
 }

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -13,6 +13,27 @@ class DeviceTiltCommand(BaseModel):
     # match it here so the API never accepts a value the device will silently clamp.
     # The app's tilt control should constrain its slider to this range too.
     angle: int = Field(ge=60, le=140)
+
+
+class DeviceControlCommand(BaseModel):
+    action: Literal[
+        "recording",
+        "audio_mute",
+        "talk",
+        "alarm",
+        "fill_light",
+        "resolution",
+    ]
+    enabled: bool | None = None
+    resolution: Literal["auto", "360p", "720p", "1080p"] | None = None
+
+    def command_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {"action": self.action}
+        if self.enabled is not None:
+            payload["enabled"] = self.enabled
+        if self.resolution is not None:
+            payload["resolution"] = self.resolution
+        return payload
 
 
 class DeviceCommandResult(BaseModel):
