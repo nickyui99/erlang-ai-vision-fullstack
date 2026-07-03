@@ -15,7 +15,14 @@ class BackendAuthClient {
 
   static String get baseUrl {
     const configured = String.fromEnvironment('SENTINELEDGE_API_BASE_URL');
-    if (configured.isNotEmpty) {
+    if (configured == 'same-origin') {
+      // Web served from the same host as the API (e.g. Caddy in front of
+      // both): call back to wherever the page came from. Mobile has no page
+      // origin, so it falls through to the dev defaults below.
+      if (kIsWeb) {
+        return Uri.base.origin;
+      }
+    } else if (configured.isNotEmpty) {
       return configured;
     }
     if (kIsWeb) {
