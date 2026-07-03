@@ -15,18 +15,14 @@ class BackendAuthClient {
 
   static String get baseUrl {
     const configured = String.fromEnvironment('SENTINELEDGE_API_BASE_URL');
-    if (configured == 'same-origin') {
-      // Web served from the same host as the API (e.g. Caddy in front of
-      // both): call back to wherever the page came from. Mobile has no page
-      // origin, so it falls through to the dev defaults below.
-      if (kIsWeb) {
-        return Uri.base.origin;
-      }
-    } else if (configured.isNotEmpty) {
+    if (configured.isNotEmpty) {
       return configured;
     }
     if (kIsWeb) {
-      return 'http://localhost:8000';
+      // Release web builds are served from the same host as the API (Caddy
+      // fronts both), so call back to the page origin. localhost:8000 is
+      // only ever right in the dev loop.
+      return kReleaseMode ? Uri.base.origin : 'http://localhost:8000';
     }
     if (defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:8000';
