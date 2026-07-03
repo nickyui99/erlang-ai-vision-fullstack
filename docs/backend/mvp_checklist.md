@@ -23,7 +23,7 @@ Backend Milestones 1–9 are done. The gap to a hands-free, end-to-end demo:
    deletion signaling, SQLite to PostgreSQL verification, and deployed ECI smoke
    testing. The cloud RDS instance, retention settings, soft-delete playback
    blocking, OSS signed URLs, and the ECI deployment script are already in place.
-4. **Frontend** - Milestone 8.5 is functionally complete except mobile/emulator visual QA.
+4. **Frontend / edge controls** - Milestone 8.5 is functionally complete except mobile/emulator visual QA and real LaptopEdge/firmware handlers for the remaining ESP-supported camera action-row controls.
 
 Helper scripts: `scripts/simulate_event.py` (fake events), `scripts/verify_smoke.py`
 (live Qwen check), `scripts/seed_local_device.py` (local device + token),
@@ -142,9 +142,10 @@ Notes:
 
 Remaining frontend work:
 - [x] Register FCM tokens from Flutter and display push notifications.
-- [x] Add backend + UI support for recording, audio mute/talk, alarm, fill light, resolution switching, and fullscreen live video.
+- [x] Add backend + UI support for recording, audio mute, resolution switching, and fullscreen live video.
 - [x] Persist camera presets/favorites and PTZ correction via `PUT /api/v1/devices/{device_id}`.
 - [x] Add real live stream rendering through signed MJPEG/latest-frame backend endpoints.
+- [ ] Implement real LaptopEdge/firmware handlers for ESP-supported camera action-row controls: recording, audio mute, and resolution switching.
 - [ ] Run mobile/emulator visual QA for the camera screens.
 
 Notes:
@@ -156,8 +157,8 @@ Notes:
   mobile display still needs emulator/device QA.
 - Market-style controls relay through `POST /api/v1/devices/{device_id}/control`
   and audited edge messages (`command.recording`, `command.audio_mute`,
-  `command.talk`, `command.alarm`, `command.fill_light`, `command.resolution`).
-  LaptopEdge/firmware still need to implement those command handlers for real device effects.
+  `command.resolution`). Unsupported talk, alarm, and fill-light controls were removed from the UI because the ESP rig does not support them.
+  LaptopEdge/firmware still need to implement the remaining command handlers for real device effects.
 - Camera favorites, presets, and PTZ correction are persisted on the device record and returned by device list/detail endpoints.
 
 ## Milestone 9: AI Verification and MCP

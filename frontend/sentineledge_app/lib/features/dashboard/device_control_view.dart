@@ -57,9 +57,6 @@ class _DeviceControlViewState extends State<DeviceControlView> {
   bool _isSnapshotting = false;
   bool _isRecording = false;
   bool _isMuted = false;
-  bool _isTalking = false;
-  bool _alarmOn = false;
-  bool _fillLightOn = false;
   String _resolution = 'Auto';
   String? _cameraControlBusy;
   bool _isDeleting = false;
@@ -448,39 +445,6 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     );
   }
 
-  Future<void> _toggleTalk() async {
-    final next = !_isTalking;
-    await _sendCameraControl(
-      busyKey: 'talk',
-      action: 'talk',
-      enabled: next,
-      applyLocalState: () => _isTalking = next,
-      successLabel: next ? 'Talk enabled' : 'Talk disabled',
-    );
-  }
-
-  Future<void> _toggleAlarm() async {
-    final next = !_alarmOn;
-    await _sendCameraControl(
-      busyKey: 'alarm',
-      action: 'alarm',
-      enabled: next,
-      applyLocalState: () => _alarmOn = next,
-      successLabel: next ? 'Alarm enabled' : 'Alarm disabled',
-    );
-  }
-
-  Future<void> _toggleFillLight() async {
-    final next = !_fillLightOn;
-    await _sendCameraControl(
-      busyKey: 'fill_light',
-      action: 'fill_light',
-      enabled: next,
-      applyLocalState: () => _fillLightOn = next,
-      successLabel: next ? 'Fill light on' : 'Fill light off',
-    );
-  }
-
   Future<void> _cycleResolution() async {
     const values = ['Auto', '720p', '1080p'];
     final next = values[(values.indexOf(_resolution) + 1) % values.length];
@@ -760,20 +724,12 @@ class _DeviceControlViewState extends State<DeviceControlView> {
         ),
         const SizedBox(height: AppSpacing.sm),
         _CameraActionBar(
-          isSnapshotting: _isSnapshotting,
           isRecording: _isRecording,
           isMuted: _isMuted,
-          isTalking: _isTalking,
-          alarmOn: _alarmOn,
-          fillLightOn: _fillLightOn,
           resolution: _resolution,
           busyKey: _cameraControlBusy,
-          onSnapshot: _takeSnapshot,
           onRecord: _toggleRecording,
           onMute: _toggleMute,
-          onTalk: _toggleTalk,
-          onAlarm: _toggleAlarm,
-          onFillLight: _toggleFillLight,
           onResolution: _cycleResolution,
           onFullscreen: _openFullscreenLiveView,
         ),
@@ -1054,6 +1010,8 @@ class _PlaybackDownloadPanel extends StatelessWidget {
       );
     }
 
+    final eventById = {for (final event in events) event.eventId: event};
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1088,6 +1046,7 @@ class _PlaybackDownloadPanel extends StatelessWidget {
                 final clip = clips[index];
                 return _PlaybackClipTile(
                   clip: clip,
+                  event: eventById[clip.eventId],
                   busy: playingClipId == clip.clipId,
                   onTap: () => onPlayClip(clip),
                 );
@@ -1527,7 +1486,7 @@ class _TimelineMarker extends StatelessWidget {
                     ),
                   )
                 : Icon(
-                    clip == null ? Icons.circle_outlined : Icons.play_arrow_rounded,
+                    _eventIcon(entry.event?.eventType, clip?.clipType),
                     size: 12,
                     color: clip == null ? scheme.onSurfaceVariant : Colors.white,
                   ),
@@ -1537,14 +1496,45 @@ class _TimelineMarker extends StatelessWidget {
     );
   }
 }
+IconData _eventIcon(String? eventType, String? clipType) {
+  final value = (eventType ?? clipType ?? '').toLowerCase();
+  if (value.contains('person') || value.contains('human')) {
+    return Icons.person_search_outlined;
+  }
+  if (value.contains('motion') || value.contains('movement')) {
+    return Icons.directions_run_outlined;
+  }
+  if (value.contains('vehicle') || value.contains('car')) {
+    return Icons.directions_car_outlined;
+  }
+  if (value.contains('animal')) {
+    return Icons.pets_outlined;
+  }
+  if (value.contains('package') || value.contains('object')) {
+    return Icons.inventory_2_outlined;
+  }
+  return Icons.crisis_alert_outlined;
+}
+
+String _eventLabel(String? eventType, String clipType) {
+  final raw = eventType ?? (clipType == 'event' ? 'activity_detected' : clipType);
+  return raw
+      .replaceAll('_', ' ')
+      .split(' ')
+      .where((part) => part.isNotEmpty)
+      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+      .join(' ');
+}
 class _PlaybackClipTile extends StatelessWidget {
   const _PlaybackClipTile({
     required this.clip,
+    required this.event,
     required this.busy,
     required this.onTap,
   });
 
   final MediaClip clip;
+  final SecurityEvent? event;
   final bool busy;
   final VoidCallback onTap;
 
@@ -1554,6 +1544,8 @@ class _PlaybackClipTile extends StatelessWidget {
     final scheme = theme.colorScheme;
     final clipTime = _formatClipClock(clip.uploadCompletedAt);
     final duration = _formatDuration(clip.durationSeconds);
+    final eventIcon = _eventIcon(event?.eventType, clip.clipType);
+    final eventLabel = _eventLabel(event?.eventType, clip.clipType);
 
     return SizedBox(
       width: 138,
@@ -1604,10 +1596,10 @@ class _PlaybackClipTile extends StatelessWidget {
                                   color: Colors.white.withValues(alpha: 0.2),
                                 ),
                               ),
-                              child: const Icon(
-                                Icons.play_arrow_rounded,
+                              child: Icon(
+                                eventIcon,
                                 color: Colors.white,
-                                size: 24,
+                                size: 22,
                               ),
                             ),
                     ),
@@ -1627,7 +1619,7 @@ class _PlaybackClipTile extends StatelessWidget {
             ),
             const SizedBox(height: 5),
             Text(
-              clip.clipType == 'event' ? 'Activity detected' : clip.clipType,
+              eventLabel,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
@@ -1962,132 +1954,79 @@ String _formatClipClock(DateTime? value) {
 
 class _CameraActionBar extends StatelessWidget {
   const _CameraActionBar({
-    required this.isSnapshotting,
     required this.isRecording,
     required this.isMuted,
-    required this.isTalking,
-    required this.alarmOn,
-    required this.fillLightOn,
     required this.resolution,
     required this.busyKey,
-    required this.onSnapshot,
     required this.onRecord,
     required this.onMute,
-    required this.onTalk,
-    required this.onAlarm,
-    required this.onFillLight,
     required this.onResolution,
     required this.onFullscreen,
   });
 
-  final bool isSnapshotting;
   final bool isRecording;
   final bool isMuted;
-  final bool isTalking;
-  final bool alarmOn;
-  final bool fillLightOn;
   final String resolution;
   final String? busyKey;
-  final VoidCallback onSnapshot;
   final VoidCallback onRecord;
   final VoidCallback onMute;
-  final VoidCallback onTalk;
-  final VoidCallback onAlarm;
-  final VoidCallback onFillLight;
   final VoidCallback onResolution;
   final VoidCallback onFullscreen;
 
   @override
   Widget build(BuildContext context) {
+    final actions = <_CameraAction>[
+      _CameraAction(
+        icon: isRecording ? Icons.stop_circle_outlined : Icons.videocam_outlined,
+        label: isRecording ? 'Stop' : 'Record',
+        onTap: busyKey == 'recording' ? null : onRecord,
+        active: isRecording,
+        busy: busyKey == 'recording',
+      ),
+      _CameraAction(
+        icon: isMuted ? Icons.volume_off_outlined : Icons.volume_up_outlined,
+        label: isMuted ? 'Muted' : 'Mute',
+        onTap: busyKey == 'audio_mute' ? null : onMute,
+        active: isMuted,
+        busy: busyKey == 'audio_mute',
+      ),
+      _CameraAction(
+        icon: Icons.hd_outlined,
+        label: resolution,
+        onTap: busyKey == 'resolution' ? null : onResolution,
+        busy: busyKey == 'resolution',
+      ),
+      _CameraAction(
+        icon: Icons.fullscreen_outlined,
+        label: 'Full',
+        onTap: onFullscreen,
+      ),
+    ];
+
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final tileWidth = constraints.maxWidth < 420
-              ? (constraints.maxWidth - AppSpacing.sm) / 2
-              : (constraints.maxWidth - (AppSpacing.sm * 3)) / 4;
+          // 4 icons per row on phones; a single row on wider surfaces.
+          final perRow = constraints.maxWidth < 520 ? 4 : actions.length;
+          const spacing = AppSpacing.sm;
+          final itemWidth =
+              (constraints.maxWidth - spacing * (perRow - 1)) / perRow;
           return Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
+            spacing: spacing,
+            runSpacing: AppSpacing.md,
             children: [
-              _ActionTile(
-                width: tileWidth,
-                child: _CameraActionChip(
-                  icon: isSnapshotting
-                      ? Icons.hourglass_top_outlined
-                      : Icons.camera_alt_outlined,
-                  label: isSnapshotting ? 'Capturing' : 'Snapshot',
-                  onTap: isSnapshotting ? null : onSnapshot,
-                  active: true,
+              for (final action in actions)
+                SizedBox(
+                  width: itemWidth,
+                  child: _CameraActionButton(
+                    icon: action.icon,
+                    label: action.label,
+                    onTap: action.onTap,
+                    active: action.active,
+                    busy: action.busy,
+                  ),
                 ),
-              ),
-              _ActionTile(
-                width: tileWidth,
-                child: _CameraActionChip(
-                  icon: isRecording ? Icons.stop_circle_outlined : Icons.videocam_outlined,
-                  label: isRecording ? 'Stop' : 'Record',
-                  onTap: busyKey == 'recording' ? null : onRecord,
-                  active: isRecording,
-                  busy: busyKey == 'recording',
-                ),
-              ),
-              _ActionTile(
-                width: tileWidth,
-                child: _CameraActionChip(
-                  icon: isMuted ? Icons.volume_off_outlined : Icons.volume_up_outlined,
-                  label: isMuted ? 'Muted' : 'Mute',
-                  onTap: busyKey == 'audio_mute' ? null : onMute,
-                  active: isMuted,
-                  busy: busyKey == 'audio_mute',
-                ),
-              ),
-              _ActionTile(
-                width: tileWidth,
-                child: _CameraActionChip(
-                  icon: isTalking ? Icons.mic_outlined : Icons.mic_none_outlined,
-                  label: isTalking ? 'Talking' : 'Talk',
-                  onTap: busyKey == 'talk' ? null : onTalk,
-                  active: isTalking,
-                  busy: busyKey == 'talk',
-                ),
-              ),
-              _ActionTile(
-                width: tileWidth,
-                child: _CameraActionChip(
-                  icon: alarmOn ? Icons.notifications_active_outlined : Icons.notifications_outlined,
-                  label: alarmOn ? 'Alarm on' : 'Alarm',
-                  onTap: busyKey == 'alarm' ? null : onAlarm,
-                  active: alarmOn,
-                  busy: busyKey == 'alarm',
-                ),
-              ),
-              _ActionTile(
-                width: tileWidth,
-                child: _CameraActionChip(
-                  icon: fillLightOn ? Icons.lightbulb : Icons.lightbulb_outline,
-                  label: fillLightOn ? 'Light on' : 'Light',
-                  onTap: busyKey == 'fill_light' ? null : onFillLight,
-                  active: fillLightOn,
-                  busy: busyKey == 'fill_light',
-                ),
-              ),
-              _ActionTile(
-                width: tileWidth,
-                child: _CameraActionChip(
-                  icon: Icons.hd_outlined,
-                  label: resolution,
-                  onTap: busyKey == 'resolution' ? null : onResolution,
-                  busy: busyKey == 'resolution',
-                ),
-              ),
-              _ActionTile(
-                width: tileWidth,
-                child: _CameraActionChip(
-                  icon: Icons.fullscreen_outlined,
-                  label: 'Full',
-                  onTap: onFullscreen,
-                ),
-              ),
             ],
           );
         },
@@ -2096,20 +2035,28 @@ class _CameraActionBar extends StatelessWidget {
   }
 }
 
-class _ActionTile extends StatelessWidget {
-  const _ActionTile({required this.width, required this.child});
+/// Immutable descriptor for one camera control, resolved from the current
+/// device state before layout.
+class _CameraAction {
+  const _CameraAction({
+    required this.icon,
+    required this.label,
+    this.onTap,
+    this.active = false,
+    this.busy = false,
+  });
 
-  final double width;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(width: width.clamp(132, 220).toDouble(), child: child);
-  }
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final bool active;
+  final bool busy;
 }
 
-class _CameraActionChip extends StatelessWidget {
-  const _CameraActionChip({
+/// Circular icon button with a caption underneath, matching the PTZ pad style.
+/// Neutral by default; filled with the accent colour only while [active].
+class _CameraActionButton extends StatelessWidget {
+  const _CameraActionButton({
     required this.icon,
     required this.label,
     this.onTap,
@@ -2137,45 +2084,55 @@ class _CameraActionChip extends StatelessWidget {
 
     return Tooltip(
       message: enabled ? label : '$label unavailable',
-      child: InkWell(
-        borderRadius: AppRadius.mdAll,
-        onTap: onTap,
-        child: Container(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: AppRadius.mdAll,
-            border: Border.all(
-              color: enabled && active ? scheme.primary : scheme.outlineVariant,
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              busy
-                  ? SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: fg,
-                      ),
-                    )
-                  : Icon(icon, size: 18, color: fg),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: fg,
-                  fontWeight: FontWeight.w700,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              customBorder: const CircleBorder(),
+              child: Ink(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: bg,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: enabled && active
+                        ? scheme.primary
+                        : scheme.outlineVariant,
+                  ),
+                ),
+                child: Center(
+                  child: busy
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: fg,
+                          ),
+                        )
+                      : Icon(icon, size: 22, color: fg),
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: enabled ? scheme.onSurface : scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
