@@ -25,6 +25,10 @@ Copy-Item config/firebase.example.json config/firebase.json
 
 The local `config/firebase.json` file is ignored by Git. Keep backend secrets and Firebase Admin service account files out of the Flutter app. Email/password accounts must verify their email before the backend accepts the session.
 
+## Push Notifications
+
+The app registers FCM tokens with the backend after sign-in, refreshes them when Firebase rotates the token, deregisters on logout, and shows foreground alerts in-app. For web background push, fill `web/firebase-messaging-sw.js` with the same Firebase Web app values used in `config/firebase.json`, plus `FIREBASE_MESSAGING_VAPID_KEY`.
+
 Run with the local config:
 
 ```powershell

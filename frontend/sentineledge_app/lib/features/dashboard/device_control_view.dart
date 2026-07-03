@@ -55,6 +55,13 @@ class _DeviceControlViewState extends State<DeviceControlView> {
 
   bool _isMoving = false;
   bool _isSnapshotting = false;
+  bool _isRecording = false;
+  bool _isMuted = false;
+  bool _isTalking = false;
+  bool _alarmOn = false;
+  bool _fillLightOn = false;
+  String _resolution = 'Auto';
+  String? _cameraControlBusy;
   bool _isDeleting = false;
   bool _isLoadingEvents = false;
   bool _isLoadingPlayback = false;
@@ -272,6 +279,43 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     await _loadPlaybackClips();
   }
 
+
+  Future<void> _saveDevicePreferences({
+    bool? isFavorite,
+    List<CameraPreset>? presets,
+    int? ptzCorrectionPan,
+    int? ptzCorrectionTilt,
+  }) async {
+    final nextFavorite = isFavorite ?? _device.isFavorite;
+    final nextPresets = presets ?? _device.presets;
+    final nextPanCorrection = ptzCorrectionPan ?? _device.ptzCorrectionPan;
+    final nextTiltCorrection = ptzCorrectionTilt ?? _device.ptzCorrectionTilt;
+    try {
+      final updated = await widget.apiClient.updateDevice(
+        deviceId: _device.deviceId,
+        name: _device.name,
+        location: _device.location,
+        isFavorite: nextFavorite,
+        presets: nextPresets,
+        ptzCorrectionPan: nextPanCorrection,
+        ptzCorrectionTilt: nextTiltCorrection,
+      );
+      if (!mounted) return;
+      setState(() => _device = updated);
+      await widget.onChanged();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+      _toast(error.toString());
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    await _saveDevicePreferences(isFavorite: !_device.isFavorite);
+    if (!mounted) return;
+    _toast(_device.isFavorite ? 'Camera favorited' : 'Favorite removed');
+  }
+
   Future<void> _sendPan(int angle) async {
     final target = angle.clamp(0, 180);
     setState(() {
@@ -347,6 +391,159 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     } finally {
       if (mounted) setState(() => _isSnapshotting = false);
     }
+  }
+
+
+  Future<void> _sendCameraControl({
+    required String busyKey,
+    required String action,
+    bool? enabled,
+    String? resolution,
+    required VoidCallback applyLocalState,
+    required String successLabel,
+  }) async {
+    setState(() {
+      _cameraControlBusy = busyKey;
+      _error = null;
+    });
+    try {
+      final result = await widget.apiClient.controlDevice(
+        _device.deviceId,
+        action: action,
+        enabled: enabled,
+        resolution: resolution,
+      );
+      if (!mounted) return;
+      setState(applyLocalState);
+      _toast('$successLabel - ${result.status}');
+      await widget.onChanged();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+      _toast(error.toString());
+    } finally {
+      if (mounted) setState(() => _cameraControlBusy = null);
+    }
+  }
+
+  Future<void> _toggleRecording() async {
+    final next = !_isRecording;
+    await _sendCameraControl(
+      busyKey: 'recording',
+      action: 'recording',
+      enabled: next,
+      applyLocalState: () => _isRecording = next,
+      successLabel: next ? 'Recording started' : 'Recording stopped',
+    );
+  }
+
+  Future<void> _toggleMute() async {
+    final next = !_isMuted;
+    await _sendCameraControl(
+      busyKey: 'audio_mute',
+      action: 'audio_mute',
+      enabled: next,
+      applyLocalState: () => _isMuted = next,
+      successLabel: next ? 'Audio muted' : 'Audio unmuted',
+    );
+  }
+
+  Future<void> _toggleTalk() async {
+    final next = !_isTalking;
+    await _sendCameraControl(
+      busyKey: 'talk',
+      action: 'talk',
+      enabled: next,
+      applyLocalState: () => _isTalking = next,
+      successLabel: next ? 'Talk enabled' : 'Talk disabled',
+    );
+  }
+
+  Future<void> _toggleAlarm() async {
+    final next = !_alarmOn;
+    await _sendCameraControl(
+      busyKey: 'alarm',
+      action: 'alarm',
+      enabled: next,
+      applyLocalState: () => _alarmOn = next,
+      successLabel: next ? 'Alarm enabled' : 'Alarm disabled',
+    );
+  }
+
+  Future<void> _toggleFillLight() async {
+    final next = !_fillLightOn;
+    await _sendCameraControl(
+      busyKey: 'fill_light',
+      action: 'fill_light',
+      enabled: next,
+      applyLocalState: () => _fillLightOn = next,
+      successLabel: next ? 'Fill light on' : 'Fill light off',
+    );
+  }
+
+  Future<void> _cycleResolution() async {
+    const values = ['Auto', '720p', '1080p'];
+    final next = values[(values.indexOf(_resolution) + 1) % values.length];
+    await _sendCameraControl(
+      busyKey: 'resolution',
+      action: 'resolution',
+      resolution: next.toLowerCase(),
+      applyLocalState: () => _resolution = next,
+      successLabel: 'Resolution $next',
+    );
+  }
+
+  Future<void> _openFullscreenLiveView() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog.fullscreen(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _device.name,
+                        style: Theme.of(context).textTheme.titleMedium,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close fullscreen',
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: _LiveView(
+                    device: _device,
+                    panAngle: _panAngle,
+                    tiltAngle: _tiltAngle,
+                    snapshot: _snapshot,
+                    snapshotAt: _snapshotAt,
+                    liveStreamUrl: _device.healthStatus == 'online'
+                        ? _streamUrl
+                        : null,
+                    isSnapshotting: _isSnapshotting,
+                    onSnapshot: _takeSnapshot,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// Confirms, then unregisters this camera. On success pops back to the
@@ -474,6 +671,14 @@ class _DeviceControlViewState extends State<DeviceControlView> {
             child: Center(child: StatusPill.fromStatus(_device.healthStatus)),
           ),
           IconButton(
+            tooltip: _device.isFavorite ? 'Remove favorite' : 'Favorite camera',
+            onPressed: _isDeleting ? null : _toggleFavorite,
+            icon: Icon(
+              _device.isFavorite ? Icons.star : Icons.star_border,
+              color: _device.isFavorite ? AppColors.warning : null,
+            ),
+          ),
+          IconButton(
             tooltip: 'Refresh',
             onPressed: _isDeleting ? null : _refreshDevice,
             icon: const Icon(Icons.refresh),
@@ -556,7 +761,21 @@ class _DeviceControlViewState extends State<DeviceControlView> {
         const SizedBox(height: AppSpacing.sm),
         _CameraActionBar(
           isSnapshotting: _isSnapshotting,
+          isRecording: _isRecording,
+          isMuted: _isMuted,
+          isTalking: _isTalking,
+          alarmOn: _alarmOn,
+          fillLightOn: _fillLightOn,
+          resolution: _resolution,
+          busyKey: _cameraControlBusy,
           onSnapshot: _takeSnapshot,
+          onRecord: _toggleRecording,
+          onMute: _toggleMute,
+          onTalk: _toggleTalk,
+          onAlarm: _toggleAlarm,
+          onFillLight: _toggleFillLight,
+          onResolution: _cycleResolution,
+          onFullscreen: _openFullscreenLiveView,
         ),
         const SizedBox(height: AppSpacing.sm),
         _compactPtzSurface(compact: compact),
@@ -1744,66 +1963,148 @@ String _formatClipClock(DateTime? value) {
 class _CameraActionBar extends StatelessWidget {
   const _CameraActionBar({
     required this.isSnapshotting,
+    required this.isRecording,
+    required this.isMuted,
+    required this.isTalking,
+    required this.alarmOn,
+    required this.fillLightOn,
+    required this.resolution,
+    required this.busyKey,
     required this.onSnapshot,
+    required this.onRecord,
+    required this.onMute,
+    required this.onTalk,
+    required this.onAlarm,
+    required this.onFillLight,
+    required this.onResolution,
+    required this.onFullscreen,
   });
 
   final bool isSnapshotting;
+  final bool isRecording;
+  final bool isMuted;
+  final bool isTalking;
+  final bool alarmOn;
+  final bool fillLightOn;
+  final String resolution;
+  final String? busyKey;
   final VoidCallback onSnapshot;
+  final VoidCallback onRecord;
+  final VoidCallback onMute;
+  final VoidCallback onTalk;
+  final VoidCallback onAlarm;
+  final VoidCallback onFillLight;
+  final VoidCallback onResolution;
+  final VoidCallback onFullscreen;
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _CameraActionChip(
-              icon: isSnapshotting
-                  ? Icons.hourglass_top_outlined
-                  : Icons.camera_alt_outlined,
-              label: isSnapshotting ? 'Capturing' : 'Snapshot',
-              onTap: isSnapshotting ? null : onSnapshot,
-              active: true,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          const Expanded(
-            child: _CameraActionChip(
-              icon: Icons.videocam_outlined,
-              label: 'Record',
-              disabledReason: 'Recording is not connected yet',
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          const Expanded(
-            child: _CameraActionChip(
-              icon: Icons.volume_off_outlined,
-              label: 'Mute',
-              disabledReason: 'Audio streaming is not connected yet',
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          const Expanded(
-            child: _CameraActionChip(
-              icon: Icons.hd_outlined,
-              label: 'Auto',
-              disabledReason: 'Resolution switching is not connected yet',
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          const Expanded(
-            child: _CameraActionChip(
-              icon: Icons.fullscreen_outlined,
-              label: 'Full',
-              disabledReason: 'Fullscreen live video is not connected yet',
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final tileWidth = constraints.maxWidth < 420
+              ? (constraints.maxWidth - AppSpacing.sm) / 2
+              : (constraints.maxWidth - (AppSpacing.sm * 3)) / 4;
+          return Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _ActionTile(
+                width: tileWidth,
+                child: _CameraActionChip(
+                  icon: isSnapshotting
+                      ? Icons.hourglass_top_outlined
+                      : Icons.camera_alt_outlined,
+                  label: isSnapshotting ? 'Capturing' : 'Snapshot',
+                  onTap: isSnapshotting ? null : onSnapshot,
+                  active: true,
+                ),
+              ),
+              _ActionTile(
+                width: tileWidth,
+                child: _CameraActionChip(
+                  icon: isRecording ? Icons.stop_circle_outlined : Icons.videocam_outlined,
+                  label: isRecording ? 'Stop' : 'Record',
+                  onTap: busyKey == 'recording' ? null : onRecord,
+                  active: isRecording,
+                  busy: busyKey == 'recording',
+                ),
+              ),
+              _ActionTile(
+                width: tileWidth,
+                child: _CameraActionChip(
+                  icon: isMuted ? Icons.volume_off_outlined : Icons.volume_up_outlined,
+                  label: isMuted ? 'Muted' : 'Mute',
+                  onTap: busyKey == 'audio_mute' ? null : onMute,
+                  active: isMuted,
+                  busy: busyKey == 'audio_mute',
+                ),
+              ),
+              _ActionTile(
+                width: tileWidth,
+                child: _CameraActionChip(
+                  icon: isTalking ? Icons.mic_outlined : Icons.mic_none_outlined,
+                  label: isTalking ? 'Talking' : 'Talk',
+                  onTap: busyKey == 'talk' ? null : onTalk,
+                  active: isTalking,
+                  busy: busyKey == 'talk',
+                ),
+              ),
+              _ActionTile(
+                width: tileWidth,
+                child: _CameraActionChip(
+                  icon: alarmOn ? Icons.notifications_active_outlined : Icons.notifications_outlined,
+                  label: alarmOn ? 'Alarm on' : 'Alarm',
+                  onTap: busyKey == 'alarm' ? null : onAlarm,
+                  active: alarmOn,
+                  busy: busyKey == 'alarm',
+                ),
+              ),
+              _ActionTile(
+                width: tileWidth,
+                child: _CameraActionChip(
+                  icon: fillLightOn ? Icons.lightbulb : Icons.lightbulb_outline,
+                  label: fillLightOn ? 'Light on' : 'Light',
+                  onTap: busyKey == 'fill_light' ? null : onFillLight,
+                  active: fillLightOn,
+                  busy: busyKey == 'fill_light',
+                ),
+              ),
+              _ActionTile(
+                width: tileWidth,
+                child: _CameraActionChip(
+                  icon: Icons.hd_outlined,
+                  label: resolution,
+                  onTap: busyKey == 'resolution' ? null : onResolution,
+                  busy: busyKey == 'resolution',
+                ),
+              ),
+              _ActionTile(
+                width: tileWidth,
+                child: _CameraActionChip(
+                  icon: Icons.fullscreen_outlined,
+                  label: 'Full',
+                  onTap: onFullscreen,
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({required this.width, required this.child});
+
+  final double width;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(width: width.clamp(132, 220).toDouble(), child: child);
   }
 }
 
@@ -1812,15 +2113,15 @@ class _CameraActionChip extends StatelessWidget {
     required this.icon,
     required this.label,
     this.onTap,
-    this.disabledReason,
     this.active = false,
+    this.busy = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
-  final String? disabledReason;
   final bool active;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -1835,7 +2136,7 @@ class _CameraActionChip extends StatelessWidget {
         : scheme.surfaceContainerHighest;
 
     return Tooltip(
-      message: enabled ? label : (disabledReason ?? '$label unavailable'),
+      message: enabled ? label : '$label unavailable',
       child: InkWell(
         borderRadius: AppRadius.mdAll,
         onTap: onTap,
@@ -1852,7 +2153,16 @@ class _CameraActionChip extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: fg),
+              busy
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: fg,
+                      ),
+                    )
+                  : Icon(icon, size: 18, color: fg),
               const SizedBox(height: 2),
               Text(
                 label,
@@ -2068,8 +2378,6 @@ class _GlassChip extends StatelessWidget {
 // Controls
 // ---------------------------------------------------------------------------
 
-/// Compact PTZ pad. Horizontal buttons drive pan, vertical buttons drive tilt,
-/// and the center button recenters both to 90 degrees.
 class _DirectionPad extends StatelessWidget {
   const _DirectionPad({
     required this.busy,
@@ -2332,3 +2640,4 @@ class _AgentToggleTile extends StatelessWidget {
     );
   }
 }
+

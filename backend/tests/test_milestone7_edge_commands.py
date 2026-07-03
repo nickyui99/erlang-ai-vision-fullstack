@@ -233,6 +233,72 @@ def test_snapshot_command_relay_result() -> None:
     assert command["payload"] == {}
 
 
+
+def test_device_control_command_relay_result_and_audit() -> None:
+    client = _client()
+
+    with client.websocket_connect("/api/v1/edge/ws", headers=EDGE_HEADERS) as websocket:
+        response_holder: dict[str, object] = {}
+
+        def post_control() -> None:
+            response_holder["response"] = client.post(
+                "/api/v1/devices/dev_m7/control",
+                json={"action": "fill_light", "enabled": True},
+            )
+
+        thread = threading.Thread(target=post_control)
+        thread.start()
+        command = websocket.receive_json()
+        websocket.send_json(
+            {
+                "type": "response.command_result",
+                "request_id": command["request_id"],
+                "status": "ok",
+                "payload": {"action": "fill_light", "enabled": True},
+            }
+        )
+        thread.join(timeout=3)
+
+    response = response_holder["response"]
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "ok"
+    assert command["type"] == "command.fill_light"
+    assert command["device_id"] == "dev_m7"
+    assert command["payload"] == {"action": "fill_light", "enabled": True}
+
+    audits = asyncio.run(_audit_rows())
+    assert len(audits) == 1
+    assert audits[0].tool_name == "device_fill_light"
+    assert audits[0].called_by == "user"
+    assert audits[0].arguments["payload"] == {"action": "fill_light", "enabled": True}
+    assert audits[0].result["status"] == "ok"
+
+
+def test_update_device_persists_camera_preferences() -> None:
+    client = _client()
+
+    response = client.put(
+        "/api/v1/devices/dev_m7",
+        json={
+            "name": "Front Door",
+            "location": "Porch",
+            "is_favorite": True,
+            "presets": [{"label": "Entry", "pan": 45, "tilt": 95}],
+            "ptz_correction_pan": -3,
+            "ptz_correction_tilt": 4,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["is_favorite"] is True
+    assert data["presets"] == [{"label": "Entry", "pan": 45, "tilt": 95}]
+    assert data["ptz_correction_pan"] == -3
+    assert data["ptz_correction_tilt"] == 4
+
+    read_response = client.get("/api/v1/devices/dev_m7")
+    assert read_response.status_code == 200
+    assert read_response.json()["data"]["presets"][0]["label"] == "Entry"
 def test_command_endpoint_auth_and_ownership_checks() -> None:
     unauthenticated = TestClient(app)
     response = unauthenticated.post("/api/v1/devices/dev_m7/pan", json={"angle": 45})
@@ -360,3 +426,4 @@ def test_delete_unknown_device_returns_404() -> None:
     response = _client().delete("/api/v1/devices/dev_missing")
 
     assert response.status_code == 404
+

@@ -55,7 +55,7 @@ void main() {
   });
 
   testWidgets(
-    'camera controls show snapshot result and disabled placeholders',
+    'camera controls show snapshot result and active PTZ preferences',
     (WidgetTester tester) async {
       final apiClient = _FakeSentinelEdgeApiClient();
 
@@ -71,12 +71,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.byTooltip('Favorite camera'), findsOneWidget);
       expect(find.text('Record'), findsOneWidget);
 
       await tester.drag(find.byType(ListView), const Offset(0, -500));
       await tester.pumpAndSettle();
 
       expect(find.byTooltip('Tilt up'), findsOneWidget);
+      expect(find.text('Presets'), findsOneWidget);
+      expect(find.text('No saved presets yet'), findsOneWidget);
 
       await tester.drag(find.byType(ListView), const Offset(0, 500));
       await tester.pumpAndSettle();
@@ -175,4 +178,6 @@ class _FakeSentinelEdgeApiClient extends SentinelEdgeApiClient {
     required String deviceId,
   }) async {}
 }
+
+
 
