@@ -154,6 +154,12 @@ def _apply_secret_values(secret_values: dict[str, Any]) -> None:
 
 
 def load_alicloud_kms_secret(env_file: Path) -> None:
+    # BaseSettings reads .env after this loader runs, but _apply_secret_values
+    # only treats process env vars as explicit overrides. Promote a local
+    # DATABASE_URL from .env first so KMS cannot redirect local dev to RDS.
+    dotenv_database_url = _read_dotenv_key(env_file, "DATABASE_URL")
+    if dotenv_database_url and "DATABASE_URL" not in os.environ:
+        os.environ["DATABASE_URL"] = dotenv_database_url
     primary_secret_name = _read_dotenv_key(env_file, "ALICLOUD_KMS_SECRET_NAME")
     db_secret_name = _read_dotenv_key(env_file, "ALICLOUD_KMS_DB_SECRET_NAME")
     secret_names = _secret_names(primary_secret_name, db_secret_name)

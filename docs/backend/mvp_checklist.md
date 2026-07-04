@@ -19,14 +19,18 @@ Backend Milestones 1–9 are done. The gap to a hands-free, end-to-end demo:
 2. **Rule compiler is a stub.** `_compile_agent_rule` maps *every* rule to
    `{detectors:[person], min_confidence:0.75}` — it ignores the rule text. Make
    it translate the rule into real detector classes/thresholds.
-3. **Milestone 10** — retention, real Alibaba OSS (today
-   `PlaceholderMediaUrlService`), SQLite→Postgres check, and ECI deployment.
-4. **Frontend** — FCM token registration + push display; the disabled
-   market-style camera controls (record/audio/alarm/light/resolution/fullscreen).
+3. **Milestone 10** - cleanup execution, OSS object deletion, local recording
+   deletion signaling, SQLite to PostgreSQL verification, and deployed ECI smoke
+   testing. The cloud RDS instance, retention settings, soft-delete playback
+   blocking, OSS signed URLs, and the ECI deployment script are already in place.
+4. **Frontend / edge controls** - Milestone 8.5 is functionally complete except mobile/emulator visual QA and real LaptopEdge/firmware handlers for the remaining ESP-supported camera action-row controls.
 
 Helper scripts: `scripts/simulate_event.py` (fake events), `scripts/verify_smoke.py`
 (live Qwen check), `scripts/seed_local_device.py` (local device + token),
-`scripts/stream_simulator.py` (fake video).
+`scripts/stream_simulator.py` (fake video), `scripts/migrate_sqlite_to_rds.py`
+(SQLite to ApsaraDB RDS PostgreSQL copy/check), and
+`scripts/deployment/backend.ps1` (Docker build, smoke test, optional ACR/ECI
+deploy).
 
 ## Milestone 1: Foundation
 
@@ -128,20 +132,34 @@ Notes:
 - [x] Make Cameras the primary frontend tab.
 - [x] Replace the device list with smart-camera style cards.
 - [x] Add a camera control screen with live/snapshot surface and quick action dock.
-- [x] Add disabled placeholders for unsupported market-style controls: record, mute, talk, alarm, light, resolution, fullscreen.
+- [x] Add market-style controls for record, mute, talk, alarm, light, resolution, and fullscreen.
 - [x] Redesign PTZ as a circular controller.
-- [x] Add UI-only favorite/preset chips and PTZ correction entry point.
+- [x] Persist camera favorites, presets, and PTZ correction from the camera control screen.
 - [x] Reframe agent assignment as camera Protection / Detection Rules.
 - [x] Convert event review into a timeline-style camera app view.
 - [x] Keep event IDs and stage output behind Technical details.
-- [x] Add Flutter widget coverage for camera-first dashboard, camera controls, disabled placeholders, PTZ access, and snapshot display.
+- [x] Add Flutter widget coverage for camera-first dashboard, camera controls, active command controls, PTZ access, and snapshot display.
 
 Remaining frontend work:
-- [ ] Register FCM tokens from Flutter and display push notifications.
-- [ ] Add backend + UI support for recording, audio mute/talk, alarm, fill light, resolution switching, and fullscreen live video.
-- [ ] Persist camera presets/favorites and PTZ correction once backend APIs exist.
+- [x] Register FCM tokens from Flutter and display push notifications.
+- [x] Add backend + UI support for recording, audio mute, resolution switching, and fullscreen live video.
+- [x] Persist camera presets/favorites and PTZ correction via `PUT /api/v1/devices/{device_id}`.
 - [x] Add real live stream rendering through signed MJPEG/latest-frame backend endpoints.
+- [ ] Implement real LaptopEdge/firmware handlers for ESP-supported camera action-row controls: recording, audio mute, and resolution switching.
 - [ ] Run mobile/emulator visual QA for the camera screens.
+
+Notes:
+- Flutter push registration uses `firebase_messaging`, registers tokens with
+  `POST /api/v1/notifications/tokens`, deregisters on logout, listens for token
+  refresh, and shows foreground FCM alerts with an in-app snackbar.
+- Web background push requires replacing the placeholders in
+  `web/firebase-messaging-sw.js` with the deployed Firebase Web app values; native
+  mobile display still needs emulator/device QA.
+- Market-style controls relay through `POST /api/v1/devices/{device_id}/control`
+  and audited edge messages (`command.recording`, `command.audio_mute`,
+  `command.resolution`). Unsupported talk, alarm, and fill-light controls were removed from the UI because the ESP rig does not support them.
+  LaptopEdge/firmware still need to implement the remaining command handlers for real device effects.
+- Camera favorites, presets, and PTZ correction are persisted on the device record and returned by device list/detail endpoints.
 
 ## Milestone 9: AI Verification and MCP
 
@@ -165,15 +183,29 @@ Notes:
 
 ## Milestone 10: Retention and Deployment
 
-- [ ] Add retention config.
+- [x] Add retention config. (`MEDIA_RETENTION_DAYS`, `DAILY_RECORDING_RETENTION_HOURS`)
 - [ ] Add cleanup job strategy.
-- [ ] Block playback for deleted media.
+- [x] Block playback for deleted media. (`clips.py`, `recordings.py`, and local media token paths)
 - [ ] Delete expired OSS objects.
 - [ ] Mark local recordings for edge deletion.
-- [ ] Test SQLite-to-PostgreSQL migration compatibility.
-- [ ] Prepare ECI deployment.
-- [ ] Configure HTTPS ingress.
+- [x] ApsaraDB RDS PostgreSQL instance is provisioned in cloud.
+- [ ] Run and verify SQLite-to-PostgreSQL migration/smoke tests against the cloud RDS target.
+- [x] Prepare ECI deployment. (`scripts/deployment/backend.ps1`)
+- [ ] Configure production HTTPS ingress.
 - [ ] Test REST, SSE, and WebSocket in deployed environment.
+- [x] Add real OSS signed upload/playback/download URL generation when OSS settings are configured.
+
+Notes:
+- `MediaUrlService` now signs Alibaba OSS URLs directly when
+  `ALICLOUD_OSS_ENDPOINT`, `ALICLOUD_OSS_BUCKET`, `ALIBABA_CLOUD_ACCESS_KEY_ID`,
+  and `ALIBABA_CLOUD_ACCESS_KEY_SECRET` are set. Local/offline tests still use
+  `placeholder://` URLs intentionally.
+- `scripts/deployment/backend.ps1 -Deploy` can build, push to ACR, and create
+  the ECI container group with a Caddy sidecar. The current script exposes HTTP
+  on the standing EIP; production HTTPS/ALB validation remains open.
+- The cloud RDS target already exists. `scripts/migrate_sqlite_to_rds.py` is the
+  one-shot SQLite to RDS copy/verification helper; the migration validation item
+  stays open until it has been run against that target and smoke tests pass.
 
 ## MVP Done Definition
 
@@ -188,6 +220,8 @@ Notes:
 - [x] User can request signed clip playback URL.
 - [x] Backend can send a push alert (FCM) for a high-severity event.
 - [x] Backend passes `/healthz` and `/readyz`.
+- [ ] Backend is deployed to Alibaba Cloud ECI and passes deployed REST/SSE/WebSocket smoke tests.
+
 
 
 
