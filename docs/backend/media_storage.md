@@ -52,7 +52,11 @@ Clients should not store permanent OSS URLs.
 4. Backend validates user ownership and clip status.
 5. Backend returns short-lived playback URL.
 
-Signed playback URLs should expire quickly. The current planned default is 900 seconds.
+Signed playback URLs should expire quickly. The current default is 900 seconds.
+
+When Alibaba OSS settings are configured, the backend signs OSS upload,
+playback, and download URLs directly. Local/offline tests intentionally return
+`placeholder://` URLs so the media flow can run without cloud credentials.
 
 ## Local Recording Flow
 

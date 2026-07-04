@@ -983,6 +983,19 @@ The backend MVP is complete when:
 
 ---
 
+### Current MVP status
+
+As of 2026-07-03, the local/backend implementation covers the functional MVP path through Milestones 1-9: auth, device registration, agent assignment, edge event ingestion, media metadata, signed playback URLs, SSE, edge command relay, FCM alert records, Qwen verification, and audited MCP-style tools.
+
+The remaining backend plan work is Milestone 10 / deployment hardening:
+
+- Add a production cleanup job or scheduled endpoint.
+- Delete expired OSS objects.
+- Mark local-edge recordings for deletion after retention expiry.
+- Use the already-provisioned cloud ApsaraDB RDS PostgreSQL instance for SQLite-to-RDS migration verification.
+- Validate ECI deployment end to end, including REST, SSE, WebSocket, and health checks.
+- Put production HTTPS ingress in front of ECI and validate WSS/SSE behavior.
+
 ## 12. Future Improvements
 
 - Native mobile notification bridge
