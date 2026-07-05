@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../design/app_colors.dart';
 import '../../design/app_motion.dart';
@@ -12,15 +13,36 @@ import '../../services/realtime/realtime_client.dart';
 import '../../shared/console_widgets.dart';
 import 'add_camera_wizard.dart';
 import 'agent_templates.dart';
-import 'device_control_view.dart';
 
 const _aiAgentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
+
+/// The console tabs, in sidebar/nav-bar order, each with the URL path segment
+/// it maps to (`/console/<path>`). The ordinal is the tab index used by the
+/// navigation widgets and the body switch.
+enum WorkspaceSection {
+  cameras('cameras'),
+  overview('overview'),
+  agents('agents'),
+  events('events'),
+  settings('settings');
+
+  const WorkspaceSection(this.path);
+
+  final String path;
+
+  int get tabIndex => index;
+
+  static WorkspaceSection fromIndex(int index) =>
+      values[index.clamp(0, values.length - 1)];
+}
 
 class WorkspaceView extends StatefulWidget {
   const WorkspaceView({
     required this.user,
     required this.apiClient,
     required this.onSignOut,
+    this.section = WorkspaceSection.cameras,
+    this.selectedEventId,
     this.autoLoad = true,
     this.initialDevices = const [],
     this.initialAgents = const [],
@@ -30,6 +52,14 @@ class WorkspaceView extends StatefulWidget {
   final BackendUser user;
   final SentinelEdgeApiClient apiClient;
   final Future<void> Function() onSignOut;
+
+  /// The active tab, driven by the URL (`/console/<section>`).
+  final WorkspaceSection section;
+
+  /// The event selected in the Events tab, driven by the URL
+  /// (`/console/events/<eventId>`); null when no event is selected.
+  final String? selectedEventId;
+
   final bool autoLoad;
   final List<EdgeDevice> initialDevices;
   final List<SurveillanceAgent> initialAgents;
@@ -80,6 +110,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   @override
   void initState() {
     super.initState();
+    _selectedTab = widget.section.tabIndex;
+    _selectedEventId = widget.selectedEventId;
     _devices = widget.initialDevices;
     _agents = widget.initialAgents;
     _selectedDeviceId = _chooseExisting(
@@ -92,6 +124,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
     if (widget.autoLoad) {
       _refreshAll(showSuccess: false);
+      if (_sectionLoadsEvents) {
+        _loadEvents(showSuccess: false);
+      }
     }
     _realtimeConnection = connectRealtime(
       onMessage: _handleRealtimeMessage,
@@ -100,6 +135,41 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         setState(() => _realtimeStatus = status);
       },
     );
+  }
+
+  /// The Overview and Events tabs both render the event timeline, so both need
+  /// the events list loaded when entered (or deep-linked).
+  bool get _sectionLoadsEvents =>
+      widget.section == WorkspaceSection.events ||
+      widget.section == WorkspaceSection.overview;
+
+  @override
+  void didUpdateWidget(covariant WorkspaceView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The URL changed: sync the active tab and the selected event from the
+    // route rather than from local taps.
+    if (oldWidget.section != widget.section) {
+      setState(() => _selectedTab = widget.section.tabIndex);
+      if (_sectionLoadsEvents && _events.isEmpty) {
+        _loadEvents(showSuccess: false);
+      }
+    }
+    if (oldWidget.selectedEventId != widget.selectedEventId) {
+      _applySelectedEvent(widget.selectedEventId);
+    }
+  }
+
+  void _applySelectedEvent(String? eventId) {
+    setState(() {
+      _selectedEventId = eventId;
+      _lastPlaybackUrl = null;
+      _eventClips = const [];
+      _eventAudit = const [];
+    });
+    if (eventId != null) {
+      _loadEventClips(eventId);
+      _loadEventAudit(eventId);
+    }
   }
 
   @override
@@ -292,19 +362,14 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   }
 
   Future<void> _openDeviceControl(EdgeDevice device) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => DeviceControlView(
-          device: device,
-          apiClient: widget.apiClient,
-          agents: _agents,
-          onChanged: () async {
-            await _refreshDevicesOnly();
-            await _refreshAgentsOnly();
-          },
-        ),
-      ),
-    );
+    setState(() => _selectedDeviceId = device.deviceId);
+    // The camera detail is a real route (/console/cameras/:deviceId), so the
+    // URL is shareable and survives refresh. Refresh the fleet on return since
+    // the detail screen can rename/delete the camera or change protection.
+    await context.push('/console/cameras/${device.deviceId}');
+    if (!mounted) return;
+    await _refreshDevicesOnly();
+    await _refreshAgentsOnly();
   }
 
   Future<void> _openRegisterDeviceDialog() async {
@@ -442,12 +507,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   }
 
   void _selectTab(int index) {
-    setState(() => _selectedTab = index);
-    if ((_destinations[index].label == 'Overview' ||
-            _destinations[index].label == 'Events') &&
-        _events.isEmpty) {
-      _loadEvents(showSuccess: false);
-    }
+    // Navigate rather than setState: the URL becomes the source of truth and
+    // didUpdateWidget syncs _selectedTab (and lazy-loads events) in response.
+    context.go('/console/${WorkspaceSection.fromIndex(index).path}');
   }
 
   void _handleRealtimeMessage(RealtimeMessage message) {
@@ -1007,10 +1069,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                     return _CameraDeviceCard(
                       device: device,
                       selected: _selectedDeviceId == device.deviceId,
-                      onTap: () {
-                        setState(() => _selectedDeviceId = device.deviceId);
-                        _openDeviceControl(device);
-                      },
+                      onTap: () => _openDeviceControl(device),
                     );
                   },
                 ),
@@ -1336,14 +1395,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                 (event) => _EventTimelineCard(
                   event: event,
                   selected: _selectedEventId == event.eventId,
-                  onTap: () {
-                    setState(() {
-                      _selectedEventId = event.eventId;
-                      _lastPlaybackUrl = null;
-                    });
-                    _loadEventClips(event.eventId);
-                    _loadEventAudit(event.eventId);
-                  },
+                  onTap: () =>
+                      context.go('/console/events/${event.eventId}'),
                 ),
               ),
           ],
@@ -2523,17 +2576,27 @@ class _AiAgentChatFab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (compact) {
+      // The orb is its own dark glass surface + glow, so the FAB itself is
+      // transparent and flat — the aurora provides the shape and shadow.
       return FloatingActionButton(
         tooltip: 'Erlang AI Agent',
         onPressed: onPressed,
-        child: const _AiAgentIconMark(size: 34),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        highlightElevation: 0,
+        focusElevation: 0,
+        hoverElevation: 0,
+        child: const _AnimatedAiAgentIcon(size: 56),
       );
     }
 
     return FloatingActionButton.extended(
       tooltip: 'Erlang AI Agent',
       onPressed: onPressed,
-      icon: const _AiAgentIconMark(size: 26),
+      backgroundColor: AppColors.darkSurface,
+      foregroundColor: Colors.white,
+      icon: const _AnimatedAiAgentIcon(size: 34),
       label: const Text('AI Agent'),
     );
   }
@@ -2653,52 +2716,162 @@ class _AnimatedAiAgentIconState extends State<_AnimatedAiAgentIcon>
   @override
   Widget build(BuildContext context) {
     final reducedMotion = AppMotion.reduced(context);
-    final theme = Theme.of(context);
-    final innerPadding = widget.size * 0.16;
 
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
         final t = reducedMotion ? 0.0 : _controller.value;
-        return Container(
-          width: widget.size,
-          height: widget.size,
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: SweepGradient(
-              transform: GradientRotation(t * math.pi * 2),
-              colors: const [
-                AppColors.primaryPressed,
-                AppColors.accentOrange,
-                AppColors.primaryContainer,
-                AppColors.primary,
-                AppColors.primaryPressed,
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.26),
-                blurRadius: 22,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Container(
-            padding: EdgeInsets.all(innerPadding),
+        // 0..1 breathing curve that drives the soft pulsing outer glow.
+        final breath = 0.5 + 0.5 * math.sin(t * math.pi * 2);
+        return SizedBox.square(
+          dimension: widget.size,
+          child: DecoratedBox(
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: theme.colorScheme.surface,
-              border: Border.all(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.55),
+              // Twin coloured glows offset to opposite sides make the whole
+              // orb read as a single soft light source, not a flat disc.
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.16 + breath * 0.16),
+                  blurRadius: widget.size * (0.24 + breath * 0.14),
+                  spreadRadius: widget.size * 0.01,
+                  offset: Offset(-widget.size * 0.04, widget.size * 0.06),
+                ),
+                BoxShadow(
+                  color: AppColors.info.withValues(alpha: 0.18 + breath * 0.16),
+                  blurRadius: widget.size * (0.28 + breath * 0.16),
+                  spreadRadius: widget.size * 0.01,
+                  offset: Offset(widget.size * 0.04, widget.size * 0.10),
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: CustomPaint(
+                painter: _AgentAuroraPainter(progress: t),
+                child: Center(
+                  // The mascot floats directly on the aurora — its own
+                  // transparent bubble shape lets the glow show through.
+                  child: _AiAgentIconMark(size: widget.size * 0.74),
+                ),
               ),
             ),
-            child: _AiAgentIconMark(size: widget.size * 0.56),
           ),
         );
       },
     );
   }
+}
+
+/// A calm "liquid aurora" background: a dark glass disc lit from within by two
+/// drifting pools of light — one red, one blue — blended additively so where
+/// they overlap the light brightens toward magenta/white instead of muddying.
+class _AgentAuroraPainter extends CustomPainter {
+  const _AgentAuroraPainter({required this.progress});
+
+  final double progress;
+
+  static const _red = Color(0xFFF03A24);
+  static const _blue = Color(0xFF2E6BF0);
+  static const _spark = Color(0xFFFF4D7D);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final center = rect.center;
+    final radius = size.shortestSide / 2;
+    final phase = progress * math.pi * 2;
+    final breath = 0.5 + 0.5 * math.sin(phase);
+    final drift = math.sin(phase);
+
+    // 1. Dark glass base so the coloured light reads as a glow.
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..shader = const RadialGradient(
+          colors: [Color(0xFF17213B), Color(0xFF080B14)],
+          stops: [0.0, 1.0],
+        ).createShader(rect),
+    );
+
+    // Keep every glow contained within the disc.
+    canvas.save();
+    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: center, radius: radius)));
+
+    void glow(double angle, double dist, double blobRadius, Color color, double alpha) {
+      final c = center + Offset(math.cos(angle) * dist, math.sin(angle) * dist);
+      final r = Rect.fromCircle(center: c, radius: blobRadius);
+      canvas.drawCircle(
+        c,
+        blobRadius,
+        Paint()
+          ..blendMode = BlendMode.plus // additive: overlaps brighten, never mud
+          ..shader = RadialGradient(
+            colors: [color.withValues(alpha: alpha), color.withValues(alpha: 0)],
+            stops: const [0.0, 1.0],
+          ).createShader(r),
+      );
+    }
+
+    // 2. Red and blue pools drifting on opposite sides, breathing in size.
+    glow(phase * 0.9, radius * (0.34 + 0.08 * drift),
+        radius * (0.82 + 0.10 * breath), _red, 0.80);
+    glow(phase * 0.9 + math.pi + 0.5, radius * (0.36 - 0.08 * drift),
+        radius * (0.84 + 0.10 * (1 - breath)), _blue, 0.82);
+    // A small mingling spark keeps the centre alive without clutter.
+    glow(-phase * 0.6, radius * 0.16 * drift,
+        radius * (0.42 + 0.08 * breath), _spark, 0.28);
+
+    // 3. Glassy specular highlight, upper-left.
+    final hl = center + Offset(-radius * 0.30, -radius * 0.34);
+    canvas.drawCircle(
+      hl,
+      radius * 0.60,
+      Paint()
+        ..blendMode = BlendMode.plus
+        ..shader = RadialGradient(
+          colors: [Colors.white.withValues(alpha: 0.20), Colors.white.withValues(alpha: 0)],
+          stops: const [0.0, 1.0],
+        ).createShader(Rect.fromCircle(center: hl, radius: radius * 0.60)),
+    );
+
+    // 4. Gentle light lift behind the mascot so its dark outline stays legible.
+    canvas.drawCircle(
+      center,
+      radius * 0.52,
+      Paint()
+        ..blendMode = BlendMode.plus
+        ..shader = RadialGradient(
+          colors: [Colors.white.withValues(alpha: 0.10), Colors.white.withValues(alpha: 0)],
+          stops: const [0.0, 1.0],
+        ).createShader(Rect.fromCircle(center: center, radius: radius * 0.52)),
+    );
+
+    // 5. A soft highlight arc sweeping the rim — definition without a hard ring.
+    canvas.drawCircle(
+      center,
+      radius - 1,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..shader = SweepGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.0),
+            Colors.white.withValues(alpha: 0.26),
+            Colors.white.withValues(alpha: 0.0),
+            Colors.white.withValues(alpha: 0.0),
+          ],
+          stops: const [0.0, 0.12, 0.36, 1.0],
+          transform: GradientRotation(phase),
+        ).createShader(Rect.fromCircle(center: center, radius: radius)),
+    );
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _AgentAuroraPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 class _AgentSuggestionRow extends StatelessWidget {

@@ -1,82 +1,34 @@
-import 'dart:async';
-
 import 'dart:math' as math;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../app/session_controller.dart';
 import '../../design/app_colors.dart';
 import '../../design/app_shadows.dart';
 import '../../design/app_spacing.dart';
 import '../../firebase_options.dart';
 import '../../services/backend_auth_client.dart';
-import '../../services/push_notification_service.dart';
 import '../../shared/console_widgets.dart';
-import '../dashboard/workspace_view.dart';
 
-class AuthShell extends StatefulWidget {
-  const AuthShell({super.key});
+/// Full-page sign in. Owns the Firebase sign-in flows and hands the resulting
+/// user to [SessionController]; the router redirect moves to `/console` once the
+/// session goes signed-in, so this page never navigates imperatively.
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
 
   @override
-  State<AuthShell> createState() => _AuthShellState();
+  State<LoginPage> createState() => _LoginPageState();
 }
 
-class _AuthShellState extends State<AuthShell> {
-  final BackendAuthClient _authClient = BackendAuthClient();
-  final SentinelEdgeApiClient _apiClient = SentinelEdgeApiClient();
-  final PushNotificationService _pushNotifications = PushNotificationService();
-  BackendUser? _backendUser;
+class _LoginPageState extends State<LoginPage> {
   String? _error;
-  bool _isLoading = true;
+  bool _isLoading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _restoreSession();
-  }
-
-  @override
-  void dispose() {
-    unawaited(_pushNotifications.dispose());
-    super.dispose();
-  }
-
-  Future<void> _restoreSession() async {
-    try {
-      final backendUser = await _apiClient.currentUser();
-      if (!mounted) return;
-      setState(() {
-        _backendUser = backendUser;
-        _isLoading = false;
-      });
-      unawaited(_registerPushNotifications());
-      return;
-    } catch (_) {
-      // The backend session cookie may be absent after a fresh browser profile.
-      // Firebase can still have a persisted Google user, so refresh backend auth.
-    }
-
-    try {
-      if (DefaultFirebaseOptions.isConfigured) {
-        final firebaseUser = FirebaseAuth.instance.currentUser;
-        if (firebaseUser != null) {
-          final backendUser = await _loginBackendWithFirebaseUser(firebaseUser);
-          if (!mounted) return;
-          setState(() => _backendUser = backendUser);
-          unawaited(_registerPushNotifications());
-        }
-      }
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _error = error.toString());
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
+  SessionController get _session => SessionScope.of(context);
 
   Future<void> _signInWithGoogleProvider() async {
     if (!DefaultFirebaseOptions.isConfigured) {
@@ -84,22 +36,23 @@ class _AuthShellState extends State<AuthShell> {
       return;
     }
 
+    final messenger = ScaffoldMessenger.maybeOf(context);
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      await _clearFirebaseSession();
+      await _session.clearFirebaseSession();
       final userCredential = await _signInWithGoogle();
       final firebaseUser = userCredential.user;
       if (firebaseUser == null) {
         throw StateError('Firebase did not return a signed-in user.');
       }
-      final backendUser = await _loginBackendWithFirebaseUser(firebaseUser);
-      if (!mounted) return;
-      setState(() => _backendUser = backendUser);
-      unawaited(_registerPushNotifications());
+      await _session.completeSignInWithFirebaseUser(
+        firebaseUser,
+        messenger: messenger,
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
@@ -116,13 +69,14 @@ class _AuthShellState extends State<AuthShell> {
       return;
     }
 
+    final messenger = ScaffoldMessenger.maybeOf(context);
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      await _clearFirebaseSession();
+      await _session.clearFirebaseSession();
       final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
@@ -131,10 +85,10 @@ class _AuthShellState extends State<AuthShell> {
       if (firebaseUser == null) {
         throw StateError('Firebase did not return a signed-in user.');
       }
-      final backendUser = await _loginBackendWithFirebaseUser(firebaseUser);
-      if (!mounted) return;
-      setState(() => _backendUser = backendUser);
-      unawaited(_registerPushNotifications());
+      await _session.completeSignInWithFirebaseUser(
+        firebaseUser,
+        messenger: messenger,
+      );
     } on BackendAuthException catch (error) {
       if (!mounted) return;
       if (error.code == 'email_not_verified') {
@@ -157,7 +111,10 @@ class _AuthShellState extends State<AuthShell> {
     }
   }
 
-  Future<void> _createEmailPasswordAccount(String email, String password) async {
+  Future<void> _createEmailPasswordAccount(
+    String email,
+    String password,
+  ) async {
     if (!DefaultFirebaseOptions.isConfigured) {
       setState(() => _error = 'Firebase options are not configured yet.');
       return;
@@ -169,7 +126,7 @@ class _AuthShellState extends State<AuthShell> {
     });
 
     try {
-      await _clearFirebaseSession();
+      await _session.clearFirebaseSession();
       final credential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: email, password: password);
       await credential.user?.sendEmailVerification();
@@ -189,43 +146,6 @@ class _AuthShellState extends State<AuthShell> {
     }
   }
 
-  Future<BackendUser> _loginBackendWithFirebaseUser(User firebaseUser) async {
-    var idToken = await firebaseUser.getIdToken(true);
-    if (idToken == null || idToken.isEmpty) {
-      throw StateError('Firebase did not return an ID token.');
-    }
-
-    try {
-      return await _authClient.loginWithFirebaseIdToken(idToken);
-    } on BackendAuthException catch (error) {
-      if (error.code != 'invalid_firebase_token') rethrow;
-      await firebaseUser.reload();
-      final refreshedUser = FirebaseAuth.instance.currentUser;
-      idToken = await refreshedUser?.getIdToken(true);
-      if (idToken == null || idToken.isEmpty) rethrow;
-      return _authClient.loginWithFirebaseIdToken(idToken);
-    }
-  }
-
-  Future<void> _registerPushNotifications() async {
-    try {
-      await _pushNotifications.registerForCurrentUser(
-        _apiClient,
-        messenger: ScaffoldMessenger.maybeOf(context),
-      );
-    } catch (_) {
-      // Push registration is best-effort; sign-in and camera control should not
-      // fail just because notification permission or browser setup is missing.
-    }
-  }
-
-  Future<void> _clearFirebaseSession() async {
-    await FirebaseAuth.instance.signOut();
-    if (!kIsWeb) {
-      await GoogleSignIn.instance.signOut();
-    }
-  }
-
   Future<UserCredential> _signInWithGoogle() async {
     final auth = FirebaseAuth.instance;
     if (kIsWeb) {
@@ -242,39 +162,16 @@ class _AuthShellState extends State<AuthShell> {
     return auth.signInWithCredential(credential);
   }
 
-  Future<void> _signOut() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-    try {
-      await _pushNotifications.deregisterForCurrentUser(_apiClient);
-      await _clearFirebaseSession();
-      await _authClient.logout();
-      if (!mounted) return;
-      setState(() => _backendUser = null);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _error = error.toString());
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final user = _backendUser;
-    return user == null
-        ? SignInView(
-            error: _error,
-            isLoading: _isLoading,
-            onGoogleSignIn: _signInWithGoogleProvider,
-            onEmailSignIn: _signInWithEmailPassword,
-            onEmailCreate: _createEmailPasswordAccount,
-          )
-        : WorkspaceView(user: user, apiClient: _apiClient, onSignOut: _signOut);
+    return SignInView(
+      error: _error,
+      isLoading: _isLoading,
+      onGoogleSignIn: _signInWithGoogleProvider,
+      onEmailSignIn: _signInWithEmailPassword,
+      onEmailCreate: _createEmailPasswordAccount,
+      onBackToLanding: () => context.go('/'),
+    );
   }
 }
 
@@ -285,6 +182,7 @@ class SignInView extends StatelessWidget {
     required this.onGoogleSignIn,
     required this.onEmailSignIn,
     required this.onEmailCreate,
+    required this.onBackToLanding,
     super.key,
   });
 
@@ -294,14 +192,19 @@ class SignInView extends StatelessWidget {
   final Future<void> Function(String email, String password) onEmailSignIn;
   final Future<void> Function(String email, String password) onEmailCreate;
 
+  /// Navigates back to the landing page.
+  final VoidCallback onBackToLanding;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final narrow = MediaQuery.sizeOf(context).width < 760;
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
+        child: Stack(
+          children: [
+            Center(
+              child: SingleChildScrollView(
             padding: EdgeInsets.symmetric(
               horizontal: AppSpacing.xl,
               vertical: narrow ? AppSpacing.lg : AppSpacing.xl,
@@ -362,7 +265,18 @@ class SignInView extends StatelessWidget {
                 },
               ),
             ),
-          ),
+              ),
+            ),
+            Positioned(
+              top: AppSpacing.sm,
+              left: AppSpacing.sm,
+              child: TextButton.icon(
+                onPressed: onBackToLanding,
+                icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                label: const Text('Back to home'),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -751,4 +665,3 @@ class _SignalPill extends StatelessWidget {
     );
   }
 }
-

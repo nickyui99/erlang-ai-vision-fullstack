@@ -1,13 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:sentineledge_app/app/session_controller.dart';
+import 'package:sentineledge_app/features/auth/login_page.dart';
+import 'package:sentineledge_app/features/dashboard/console_page.dart';
 import 'package:sentineledge_app/features/dashboard/device_control_view.dart';
 import 'package:sentineledge_app/features/dashboard/workspace_view.dart';
-import 'package:sentineledge_app/main.dart';
 import 'package:sentineledge_app/services/backend_auth_client.dart';
+
+/// Hosts [child] under a [SessionScope] and a minimal [GoRouter] that also
+/// serves the camera-detail route, so widgets that navigate with `context.go`
+/// / `context.push` work in tests.
+Widget _routerHost(
+  Widget child, {
+  required SentinelEdgeApiClient apiClient,
+}) {
+  final session = SessionController(apiClient: apiClient);
+  final router = GoRouter(
+    routes: [
+      GoRoute(path: '/', builder: (context, state) => child),
+      GoRoute(
+        path: '/console/cameras/:deviceId',
+        builder: (context, state) =>
+            DeviceControlPage(deviceId: state.pathParameters['deviceId']!),
+      ),
+    ],
+  );
+  return SessionScope(
+    controller: session,
+    child: MaterialApp.router(routerConfig: router),
+  );
+}
+
+/// Pumps a couple of frames with a fixed duration. Used instead of
+/// [WidgetTester.pumpAndSettle] for the router-hosted test: go_router keeps a
+/// frame scheduled, so pumpAndSettle never returns.
+Future<void> _settle(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(seconds: 1));
+}
 
 void main() {
   testWidgets('shows sign in action', (WidgetTester tester) async {
-    await tester.pumpWidget(const SentinelEdgeApp());
+    final session = SessionController(apiClient: _FakeSentinelEdgeApiClient());
+    await tester.pumpWidget(
+      SessionScope(
+        controller: session,
+        child: const MaterialApp(home: LoginPage()),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('Erlang AI Vision'), findsOneWidget);
@@ -20,8 +61,8 @@ void main() {
     final apiClient = _FakeSentinelEdgeApiClient();
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: WorkspaceView(
+      _routerHost(
+        WorkspaceView(
           user: _user,
           apiClient: apiClient,
           onSignOut: () async {},
@@ -29,9 +70,10 @@ void main() {
           initialDevices: const [_camera],
           initialAgents: const [_rule],
         ),
+        apiClient: apiClient,
       ),
     );
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     expect(find.text('Cameras'), findsWidgets);
     expect(find.text('Front Door'), findsOneWidget);
@@ -41,14 +83,14 @@ void main() {
     final cameraTitle = find.text('Front Door');
     await tester.ensureVisible(cameraTitle);
     await tester.tap(cameraTitle);
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     expect(find.text('Snapshot'), findsWidgets);
     expect(find.text('Record'), findsOneWidget);
     expect(find.text('Mute'), findsOneWidget);
 
     await tester.drag(find.byType(ListView), const Offset(0, -500));
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     expect(find.byTooltip('Pan left'), findsOneWidget);
     expect(find.text('Person detection'), findsOneWidget);
