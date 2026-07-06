@@ -7,16 +7,33 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.builder import run_agent_builder
 from app.agents.compiler import compile_agent_rule
 from app.api.deps import get_current_user, get_db_session
 from app.models.agent import Agent
 from app.models.device import Device
 from app.models.user import User
-from app.schemas.agent import AgentAssign, AgentCreate, AgentRead, AgentUpdate
+from app.schemas.agent import (
+    AgentAssign,
+    AgentBuilderRequest,
+    AgentCreate,
+    AgentRead,
+    AgentUpdate,
+)
 from app.services.realtime_bus import realtime_bus
 
 
 router = APIRouter(prefix="/agents", tags=["agents"])
+
+
+@router.post("/builder")
+async def agent_builder(
+    payload: AgentBuilderRequest,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Conversational rule builder: one chat turn -> reply + proposed rule preview."""
+    result = await run_agent_builder([turn.model_dump() for turn in payload.messages])
+    return {"data": result}
 
 
 def _new_agent_id() -> str:

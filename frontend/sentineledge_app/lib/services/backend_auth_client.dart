@@ -216,6 +216,17 @@ class SentinelEdgeApiClient {
     return SurveillanceAgent.fromJson(body['data'] as Map<String, dynamic>);
   }
 
+  /// One turn of the conversational agent builder. Send the full history;
+  /// get back the assistant reply plus (when ready) a proposed rule + preview.
+  Future<AgentBuilderReply> agentBuilder(
+    List<Map<String, String>> messages,
+  ) async {
+    final body = await _postObject('/api/v1/agents/builder', {
+      'messages': messages,
+    });
+    return AgentBuilderReply.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
   Future<SurveillanceAgent> updateAgent({
     required String agentId,
     required String name,
@@ -645,6 +656,55 @@ class SurveillanceAgent {
       compiledEdgeConfig: Map<String, dynamic>.from(
         json['compiled_edge_config'] as Map? ?? const {},
       ),
+    );
+  }
+}
+
+/// One turn from the conversational agent builder.
+class AgentBuilderReply {
+  const AgentBuilderReply({
+    required this.reply,
+    this.rule,
+    this.name,
+    this.compiledEdgeConfig,
+  });
+
+  final String reply;
+
+  /// The proposed rule text, or null while the assistant still needs info.
+  final String? rule;
+
+  /// A suggested short name for the rule, when available.
+  final String? name;
+
+  /// Preview of what the rule will detect (classes, schedule, ...).
+  final Map<String, dynamic>? compiledEdgeConfig;
+
+  List<String> get classes =>
+      (compiledEdgeConfig?['classes'] as List?)
+          ?.map((e) => e.toString())
+          .toList() ??
+      const [];
+
+  /// A short "HH:MM–HH:MM" window if the rule is time-scoped, else null.
+  String? get scheduleLabel {
+    final schedule = compiledEdgeConfig?['schedule'];
+    if (schedule is Map && schedule['start'] != null && schedule['end'] != null) {
+      return '${schedule['start']}–${schedule['end']}';
+    }
+    return null;
+  }
+
+  factory AgentBuilderReply.fromJson(Map<String, dynamic> json) {
+    final rule = json['rule']?.toString();
+    final name = json['name']?.toString();
+    return AgentBuilderReply(
+      reply: json['reply']?.toString() ?? '',
+      rule: (rule == null || rule.isEmpty) ? null : rule,
+      name: (name == null || name.isEmpty) ? null : name,
+      compiledEdgeConfig: json['compiled_edge_config'] is Map
+          ? Map<String, dynamic>.from(json['compiled_edge_config'] as Map)
+          : null,
     );
   }
 }

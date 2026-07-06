@@ -41,6 +41,15 @@ build/
 *.sqlite3
 !*.example.db
 
+# database backups (not caught by *.db)
+*.db.bak*
+*.bak-*
+
+# demo simulation: source clips are committed (used for deployment); the JPEG
+# frames are generated from them by scripts/extract_demo_frames.py, so ignore
+# those (regenerate on build/deploy).
+data/demo_frames/
+
 # OS / editor noise
 .DS_Store
 Thumbs.db

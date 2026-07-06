@@ -1,7 +1,8 @@
-from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas._datetime import UTCDatetime
 
 
 ChatRole = Literal["user", "assistant", "system"]
@@ -22,7 +23,7 @@ class ChatMessageRead(BaseModel):
     session_id: str
     role: ChatRole
     content: str
-    created_at: datetime
+    created_at: UTCDatetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -31,7 +32,7 @@ class ChatSessionRead(BaseModel):
     session_id: str
     user_id: str
     title: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
 
     model_config = ConfigDict(from_attributes=True)

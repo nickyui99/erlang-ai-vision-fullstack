@@ -1,7 +1,8 @@
-from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.schemas._datetime import UTCDatetime
 
 
 DeviceHealthStatus = Literal["unknown", "online", "degraded", "offline"]
@@ -50,9 +51,9 @@ class DeviceRead(BaseModel):
     presets: list[CameraPreset] = Field(default_factory=list)
     ptz_correction_pan: int = 0
     ptz_correction_tilt: int = 0
-    last_seen: datetime | None = None
-    created_at: datetime
-    updated_at: datetime
+    last_seen: UTCDatetime | None = None
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
 
     @field_validator("presets", mode="before")
     @classmethod
@@ -69,4 +70,4 @@ class DeviceRegistrationRead(BaseModel):
 
 class LiveStreamUrlRead(BaseModel):
     stream_url: str
-    expires_at: datetime
+    expires_at: UTCDatetime

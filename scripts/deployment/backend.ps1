@@ -67,6 +67,21 @@ $Image = "$Name`:$Tag"
 # --- Build -----------------------------------------------------------------
 
 if (-not $SkipBuild) {
+    # Demo simulation frames ship in the image (Option A): they're git-ignored
+    # and generated locally, so ensure the folder exists for the Dockerfile COPY
+    # and warn if it's empty (demo would have no video to play).
+    $FramesDir = Join-Path $RepoRoot "data/demo_frames"
+    if (-not (Test-Path $FramesDir)) {
+        New-Item -ItemType Directory -Force -Path $FramesDir | Out-Null
+    }
+    $FrameCount = @(Get-ChildItem -Path $FramesDir -Recurse -Filter *.jpg -ErrorAction SilentlyContinue).Count
+    if ($FrameCount -eq 0) {
+        Write-Warning "data/demo_frames is empty - the deployed demo will have no video. Run scripts/extract_demo_frames.py --videos-dir first (LaptopEdge venv)."
+    }
+    else {
+        Write-Host "Bundling $FrameCount demo frame(s) into the image." -ForegroundColor Cyan
+    }
+
     Write-Host "Building image: $Image" -ForegroundColor Cyan
     docker build -f $Dockerfile -t $Image -t "$Name`:local" $RepoRoot
     if ($LASTEXITCODE -ne 0) { Write-Error "docker build failed." }

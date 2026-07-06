@@ -23,6 +23,7 @@ from app.schemas.device import DeviceCreate, DeviceRead, DeviceRegistrationRead,
 from app.schemas.media import ClipRead, RecordingRead
 from app.services.edge_command_hub import EdgeCommandTimeoutError, EdgeNotConnectedError, edge_command_hub
 from app.services.video_stream_broker import video_stream_broker
+from app.services.demo_simulator import demo_simulator
 
 
 _STREAM_TOKEN_PURPOSE = "live_stream"
@@ -284,6 +285,9 @@ async def create_device_stream_url(
         _STREAM_TOKEN_PURPOSE,
         ttl,
     )
+    # Demo cameras (judge account) are simulated server-side: opening the live
+    # view starts the frame loop + VLM triage. No-op for real devices.
+    await demo_simulator.touch(device.device_id, current_user.user_id)
     base = str(request.base_url).rstrip("/")
     stream_url = f"{base}{settings.api_prefix}/devices/{device.device_id}/stream?token={token}"
     data = LiveStreamUrlRead(
@@ -320,6 +324,8 @@ async def stream_device_latest_frame(
         )
     await _get_owned_device(session, user_id, device_id)
 
+    # Keep a demo camera's simulation alive while the web client polls frames.
+    await demo_simulator.touch(device_id, user_id)
     frame = video_stream_broker.latest_frame(device_id)
     if not frame:
         raise HTTPException(
@@ -354,11 +360,15 @@ async def stream_device_video(
         )
     await _get_owned_device(session, user_id, device_id)
 
+    # Start/refresh the demo simulation for this camera (no-op for real devices).
+    await demo_simulator.touch(device_id, user_id)
     queue = await video_stream_broker.subscribe(device_id)
 
     async def frame_generator():
         try:
             while not await request.is_disconnected():
+                # Refresh demo-sim activity so it keeps running while watched.
+                demo_simulator.keepalive(device_id)
                 try:
                     frame = await asyncio.wait_for(queue.get(), timeout=10)
                 except asyncio.TimeoutError:

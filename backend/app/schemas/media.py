@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -41,14 +40,14 @@ class ClipRead(BaseModel):
     checksum_sha256: str | None = None
     status: str
     upload_id: str | None = None
-    upload_started_at: datetime | None = None
-    upload_completed_at: datetime | None = None
-    upload_expires_at: datetime | None = None
+    upload_started_at: UTCDatetime | None = None
+    upload_completed_at: UTCDatetime | None = None
+    upload_expires_at: UTCDatetime | None = None
     upload_error: str | None = None
-    created_at: datetime
-    updated_at: datetime
-    deleted_at: datetime | None = None
-    expires_at: datetime | None = None
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
+    deleted_at: UTCDatetime | None = None
+    expires_at: UTCDatetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -57,26 +56,26 @@ class ClipUploadUrlRead(BaseModel):
     clip_id: str
     upload_url: str
     oss_object_key: str
-    upload_expires_at: datetime
+    upload_expires_at: UTCDatetime
     clip: ClipRead
 
 
 class ClipPlaybackUrlRead(BaseModel):
     clip_id: str
     playback_url: str
-    expires_at: datetime
+    expires_at: UTCDatetime
 
 
 class ClipDownloadUrlRead(BaseModel):
     clip_id: str
     download_url: str
-    expires_at: datetime
+    expires_at: UTCDatetime
 
 
 class RecordingPlaybackUrlRead(BaseModel):
     recording_id: str
     playback_url: str
-    expires_at: datetime
+    expires_at: UTCDatetime
 
 class EdgeRecordingCreate(BaseModel):
     recording_id: str | None = Field(default=None, max_length=64)
@@ -96,8 +95,8 @@ class RecordingRead(BaseModel):
     recording_id: str
     user_id: str
     device_id: str
-    start_time: datetime
-    end_time: datetime
+    start_time: UTCDatetime
+    end_time: UTCDatetime
     storage_type: str
     storage_path: str | None = None
     oss_object_key: str | None = None
@@ -106,9 +105,9 @@ class RecordingRead(BaseModel):
     mime_type: str | None = None
     checksum_sha256: str | None = None
     status: str
-    retention_until: datetime | None = None
-    created_at: datetime
-    updated_at: datetime
-    deleted_at: datetime | None = None
+    retention_until: UTCDatetime | None = None
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
+    deleted_at: UTCDatetime | None = None
 
     model_config = ConfigDict(from_attributes=True)

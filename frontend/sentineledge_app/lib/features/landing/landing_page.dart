@@ -9,6 +9,8 @@ const _logoAsset = 'assets/brand/erlang-ai-vision-logo-light.png';
 const _cameraIconAsset = 'assets/brand/erlang-ai-camera-tile-icon.png';
 const _agentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
 const _scenarioAsset = 'assets/landing/edge-ai-scenario.png';
+const _architectureFlowAsset =
+    'assets/landing/erlang-ai-vision-architecture-flow.png';
 const _githubUrl = 'https://github.com/nickyui99/SentinelEdge-Fullstack';
 const _iotRepoUrl = 'https://github.com/KennethChua1998/SentinelEdge_IOT';
 const _laptopEdgeRepoUrl = 'https://github.com/KennethChua1998/SentinelEdge_LaptopEdge';
@@ -1573,8 +1575,44 @@ class _WorkflowSection extends StatelessWidget {
                 'posts detected events for verification.',
           ),
           const SizedBox(height: AppSpacing.xxl),
-          _WorkflowDiagram(compact: compact),
+          _ArchitectureFlowImage(compact: compact),
         ],
+      ),
+    );
+  }
+}
+
+class _ArchitectureFlowImage extends StatelessWidget {
+  const _ArchitectureFlowImage({required this.compact});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.neutral900,
+        borderRadius: AppRadius.lgAll,
+        border: Border.all(color: AppColors.lightBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(
+        _architectureFlowAsset,
+        width: double.infinity,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        semanticLabel: 'Erlang AI Vision architecture flow',
+        errorBuilder: (context, error, stackTrace) => Padding(
+          padding: EdgeInsets.all(compact ? AppSpacing.md : AppSpacing.lg),
+          child: _WorkflowDiagram(compact: compact),
+        ),
       ),
     );
   }
@@ -1718,34 +1756,6 @@ class _CloudArchitectureSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = [
-      _ScoreItem(
-        percent: 'Cloud',
-        title: 'Alibaba Cloud backend',
-        body:
-            'FastAPI runs behind Caddy with release builds served same-origin; deployment scripts target OSS, ACR, ECI, RDS-ready networking, and a standing EIP.',
-      ),
-      _ScoreItem(
-        percent: 'AI',
-        title: 'Qwen verification service',
-        body:
-            'Qwen Cloud turns raw detections into explainable verification with '
-            'live snapshots, camera movement, device health, recent clips, and event history.',
-      ),
-      _ScoreItem(
-        percent: 'Edge',
-        title: 'Camera and bridge layer',
-        body:
-            'ESP32 camera streams, local detectors, command relay, clips, and health telemetry stay close to the device before cloud enrichment.',
-      ),
-      _ScoreItem(
-        percent: 'Web',
-        title: 'Flutter operator console',
-        body:
-            'The web app links the product landing page, login-backed console, architecture route, live streams, agents, events, and audit trails.',
-      ),
-    ];
-
     return _DarkSection(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1758,13 +1768,59 @@ class _CloudArchitectureSection extends StatelessWidget {
                 'The architecture keeps camera traffic practical for local networks while using Alibaba Cloud and Qwen for deployment, identity, storage, verification, and review.',
           ),
           const SizedBox(height: AppSpacing.xxl),
-          _ScoreGrid(compact: compact, items: items),
+          _CloudArchitecturePlaceholder(compact: compact),
         ],
       ),
     );
   }
 }
 
+class _CloudArchitecturePlaceholder extends StatelessWidget {
+  const _CloudArchitecturePlaceholder({required this.compact});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      constraints: BoxConstraints(minHeight: compact ? 220 : 360),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: AppRadius.lgAll,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.image_outlined,
+              size: compact ? 36 : 48,
+              color: AppColors.neutral300,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Cloud architecture image placeholder',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Replace this with the final architecture visual.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.neutral300,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 class _ProjectResourcesSection extends StatelessWidget {
   const _ProjectResourcesSection({required this.compact});
 
@@ -1845,83 +1901,6 @@ class _LightProofCard extends StatelessWidget {
           Text(item.title, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
           Text(item.body, style: Theme.of(context).textTheme.bodyMedium),
-        ],
-      ),
-    );
-  }
-}
-
-class _ScoreGrid extends StatelessWidget {
-  const _ScoreGrid({required this.compact, required this.items});
-
-  final bool compact;
-  final List<_ScoreItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    if (compact) {
-      return Column(
-        children: items
-            .map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                  child: _ScoreCard(item: item),
-                ))
-            .toList(),
-      );
-    }
-
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: AppSpacing.lg,
-      mainAxisSpacing: AppSpacing.lg,
-      childAspectRatio: 2.6,
-      children: items.map((item) => _ScoreCard(item: item)).toList(),
-    );
-  }
-}
-
-class _ScoreCard extends StatelessWidget {
-  const _ScoreCard({required this.item});
-
-  final _ScoreItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: AppRadius.lgAll,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            item.percent,
-            style: AppTypography.tabular(
-              Theme.of(context).textTheme.headlineSmall!.copyWith(color: AppColors.accentOrange),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.lg),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  item.body,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.neutral300),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -2033,13 +2012,6 @@ class _RepoButton extends StatelessWidget {
       ),
     );
   }
-}
-class _ScoreItem {
-  const _ScoreItem({required this.percent, required this.title, required this.body});
-
-  final String percent;
-  final String title;
-  final String body;
 }
 class _FooterCta extends StatelessWidget {
   const _FooterCta({required this.onLogin});
