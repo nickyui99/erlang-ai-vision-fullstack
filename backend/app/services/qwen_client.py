@@ -13,6 +13,8 @@ and repair live in :mod:`app.services.verification_service`.
 from __future__ import annotations
 
 import json
+import logging
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -23,12 +25,82 @@ from app.core.config import settings
 from app.schemas.verification import VerificationRequest
 
 
+log = logging.getLogger("app.services.qwen_client")
+
+
 class QwenError(Exception):
     """Qwen verification failed (network, HTTP, or transport error)."""
 
 
 class QwenTimeoutError(QwenError):
     """Qwen did not respond within the configured timeout."""
+
+
+@dataclass(frozen=True)
+class ModelProvider:
+    """One model endpoint to try: a model name plus where to call it."""
+
+    model: str
+    base_url: str
+    api_key: str
+
+
+def _parse_provider(entry: str, default_base: str, default_key: str) -> ModelProvider | None:
+    """Parse a chain entry: ``"model"`` (default endpoint) or ``"model@base_url"``.
+
+    ``model@base_url`` points at a separate OpenAI-compatible server (e.g. a local
+    Ollama VLM) and uses the local api key. Returns None for blank entries.
+    """
+
+    entry = entry.strip()
+    if not entry:
+        return None
+    if "@" in entry:
+        model, _, base_url = entry.partition("@")
+        model, base_url = model.strip(), base_url.strip().rstrip("/")
+        if not model or not base_url:
+            return None
+        return ModelProvider(model=model, base_url=base_url, api_key=settings.qwen_local_api_key)
+    return ModelProvider(model=entry, base_url=default_base.rstrip("/"), api_key=default_key)
+
+
+def _split_models(raw: str) -> list[str]:
+    return [item.strip() for item in (raw or "").split(",") if item.strip()]
+
+
+def _payload_has_image(payload: dict) -> bool:
+    """True if any message carries image content (an OpenAI-style image_url part)."""
+
+    for message in payload.get("messages") or []:
+        content = message.get("content")
+        if isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "image_url":
+                    return True
+    return False
+
+
+# Substrings that mark a quota / rate-limit / arrears failure (case-insensitive).
+_QUOTA_PATTERN = re.compile(
+    r"quota|arrear|insufficient|balance|throttl|allocat|rate\s*limit|exceeded",
+    re.IGNORECASE,
+)
+
+
+def _is_quota_error(status_code: int, body: str) -> bool:
+    """Whether an HTTP error means "out of quota / rate-limited" (so try the next model)."""
+
+    if status_code == 429:
+        return True
+    if status_code in (400, 402, 403):
+        return bool(_QUOTA_PATTERN.search(body or ""))
+    return False
+
+
+def _async_client(timeout: float) -> httpx.AsyncClient:
+    """Construct the HTTP client. Indirected so tests can stub the transport."""
+
+    return httpx.AsyncClient(timeout=timeout)
 
 
 @dataclass
@@ -69,19 +141,41 @@ class QwenClient(BaseQwenClient):
         model: str | None = None,
         timeout_seconds: float | None = None,
     ) -> None:
-        self._api_key = api_key if api_key is not None else settings.qwen_api_key
-        self._base_url = (base_url or settings.qwen_base_url).rstrip("/")
-        self._model = model or settings.qwen_model
+        default_key = api_key if api_key is not None else settings.qwen_api_key
+        default_base = (base_url or settings.qwen_base_url).rstrip("/")
+        entry = model or settings.qwen_model
+        # The primary may itself carry an "@base_url" (e.g. to make a local VLM primary).
+        self._primary = _parse_provider(entry, default_base, default_key) or ModelProvider(
+            model=entry, base_url=default_base, api_key=default_key
+        )
+        self._default_base = default_base
+        self._default_key = default_key
         self._timeout = timeout_seconds if timeout_seconds is not None else settings.qwen_timeout_seconds
 
-    async def _post_chat(self, payload: dict) -> dict:
-        headers = {"Authorization": f"Bearer {self._api_key}"}
+    def _candidate_providers(self, *, is_vision: bool) -> list[ModelProvider]:
+        """Primary first, then the modality-matched fallback chain, de-duped by model."""
+
+        raw = settings.qwen_vision_fallback_models if is_vision else settings.qwen_text_fallback_models
+        providers = [self._primary]
+        seen = {self._primary.model}
+        for item in _split_models(raw):
+            provider = _parse_provider(item, self._default_base, self._default_key)
+            if provider and provider.model not in seen:
+                providers.append(provider)
+                seen.add(provider.model)
+        return providers
+
+    async def _try_provider(self, provider: ModelProvider, payload: dict) -> dict:
+        """POST one request to a single provider. Raises QwenError/QwenTimeoutError."""
+
+        headers = {"Authorization": f"Bearer {provider.api_key}"}
+        body = {**payload, "model": provider.model}
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with _async_client(self._timeout) as client:
                 response = await client.post(
-                    f"{self._base_url}/chat/completions",
+                    f"{provider.base_url}/chat/completions",
                     headers=headers,
-                    json=payload,
+                    json=body,
                 )
         except httpx.TimeoutException as exc:
             raise QwenTimeoutError("Qwen request timed out") from exc
@@ -95,16 +189,59 @@ class QwenClient(BaseQwenClient):
         except ValueError as exc:
             raise QwenError("Qwen response was not valid JSON") from exc
 
+    async def _post_chat(self, payload: dict) -> dict:
+        """Try each candidate model in turn, advancing on quota/transport failures.
+
+        Advances to the next provider on a quota/rate-limit error, HTTP >=500, a
+        timeout, or a connection error; fails fast on other 4xx (a bad request or
+        auth error every provider would hit identically). Raises the last error once
+        the chain is exhausted so callers keep their existing degrade-on-QwenError paths.
+        """
+
+        providers = self._candidate_providers(is_vision=_payload_has_image(payload))
+        last_error: QwenError | None = None
+        for index, provider in enumerate(providers):
+            try:
+                return await self._try_provider(provider, payload)
+            except QwenTimeoutError as exc:
+                last_error = exc
+            except QwenError as exc:
+                if not self._should_advance(exc):
+                    raise
+                last_error = exc
+            log.warning(
+                "Qwen model %r failed (%s); trying fallback %d/%d",
+                provider.model, last_error, index + 1, len(providers),
+            )
+        raise last_error or QwenError("no Qwen model providers configured")
+
+    @staticmethod
+    def _should_advance(error: QwenError) -> bool:
+        """Whether to try the next provider given a failed attempt's error."""
+
+        message = str(error)
+        # Transport/connection failures ("Qwen request failed: ...") — try the next one.
+        if message.startswith("Qwen request failed"):
+            return True
+        match = re.search(r"HTTP (\d{3})", message)
+        if not match:
+            return False  # e.g. malformed-JSON body: don't burn the whole chain.
+        status = int(match.group(1))
+        if status >= 500:
+            return True
+        return _is_quota_error(status, message)
+
     async def verify(self, request: VerificationRequest, *, repair: bool = False) -> str:
         messages = build_verification_messages(request, repair=repair)
-        data = await self._post_chat({"model": self._model, "messages": messages, "temperature": 0})
+        # The concrete model is chosen per attempt by _post_chat's provider chain.
+        data = await self._post_chat({"messages": messages, "temperature": 0})
         try:
             return data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
             raise QwenError("Qwen response was not in the expected shape") from exc
 
     async def chat(self, messages: list[dict], *, tools: list[dict] | None = None) -> QwenResponse:
-        payload: dict = {"model": self._model, "messages": messages, "temperature": 0}
+        payload: dict = {"messages": messages, "temperature": 0}
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
@@ -187,13 +324,15 @@ class MockQwenClient(BaseQwenClient):
         )
 
 
-def get_qwen_client() -> BaseQwenClient:
+def get_qwen_client(model: str | None = None) -> BaseQwenClient:
     """Pick the client for the current environment.
 
     Tests and key-less environments get the mock so verification is always
     exercisable offline; a configured non-test environment gets the real client.
+    ``model`` overrides the primary model (e.g. a text model for chat); fallbacks
+    are still applied by the client based on the request modality.
     """
 
     if settings.app_env == "test" or not settings.qwen_api_key:
         return MockQwenClient()
-    return QwenClient()
+    return QwenClient(model=model)

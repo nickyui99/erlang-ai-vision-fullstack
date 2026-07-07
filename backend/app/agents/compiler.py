@@ -109,7 +109,7 @@ def _compiler_messages(nl_rule: str) -> list[dict]:
 
 
 async def _llm_compile(nl_rule: str) -> dict:
-    client = QwenClient(model=settings.qwen_compiler_model)
+    client = QwenClient(model=settings.qwen_text_model)
     response = await client.chat(_compiler_messages(nl_rule))
     obj = _extract_json(response.content)
     if obj is None:

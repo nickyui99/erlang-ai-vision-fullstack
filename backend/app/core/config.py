@@ -2,7 +2,7 @@ from functools import lru_cache
 import os
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.google_secrets import load_google_secret_manager_secrets
@@ -58,9 +58,29 @@ class Settings(BaseSettings):
         validation_alias="QWEN_BASE_URL",
     )
     qwen_model: str = Field(default="qwen-vl-max", validation_alias="QWEN_MODEL")
-    # NL-rule compilation is text-only, so it uses a cheaper text model (not the vision model).
-    # Falls back to a deterministic keyword compiler in test/key-less environments.
-    qwen_compiler_model: str = Field(default="qwen-plus", validation_alias="QWEN_COMPILER_MODEL")
+    # Text tasks (NL-rule compiler, agent builder, chat) are text-only, so they use a
+    # text model (not the vision model). Free-first: the primary is a free-tier model and
+    # the paid tail only runs once free quota is spent. Falls back to a deterministic
+    # keyword compiler in test/key-less environments. QWEN_COMPILER_MODEL is still honoured
+    # as a legacy alias so existing deployments keep working.
+    qwen_text_model: str = Field(
+        default="qwen3.7-plus",
+        validation_alias=AliasChoices("QWEN_TEXT_MODEL", "QWEN_COMPILER_MODEL"),
+    )
+    # Ordered fallback chains, tried after the primary on quota/rate-limit/connection
+    # errors (see QwenClient). Comma-separated "model" (DashScope) or "model@base_url"
+    # (e.g. a local Ollama VLM). Text: free models first, paid qwen-plus as last resort.
+    # Vision: the free tier has no image model, so we fall back to a local Ollama VLM.
+    qwen_text_fallback_models: str = Field(
+        default="qwen3.7-max,glm-5.1,deepseek-v4-pro,deepseek-v4-flash,qwen-plus",
+        validation_alias="QWEN_TEXT_FALLBACK_MODELS",
+    )
+    qwen_vision_fallback_models: str = Field(
+        default="qwen3.5:0.8b@http://localhost:11434/v1",
+        validation_alias="QWEN_VISION_FALLBACK_MODELS",
+    )
+    # API key for "model@base_url" fallback endpoints (local servers). Ollama ignores it.
+    qwen_local_api_key: str = Field(default="ollama", validation_alias="QWEN_LOCAL_API_KEY")
     qwen_timeout_seconds: float = Field(default=20, validation_alias="QWEN_TIMEOUT_SECONDS")
     qwen_max_tool_turns: int = Field(default=4, validation_alias="QWEN_MAX_TOOL_TURNS")
 
