@@ -266,6 +266,7 @@ Common SSE events include `device.health_changed`, `event.created`, `clip.availa
 | `403` | Authenticated but not allowed. |
 | `404` | Resource not found or not owned. |
 | `409` | Idempotency conflict or duplicate state. |
+| `410` | Media past its retention period (`clip_expired` / `recording_expired`). |
 | `422` | Validation error. |
 | `500` | Unexpected backend error. |
 | `503` | Dependency unavailable or edge disconnected. |

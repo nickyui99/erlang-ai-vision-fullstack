@@ -356,10 +356,8 @@ Start with:
 
 ## Remaining Work
 
-- Add production retention and cleanup jobs.
 - Run and validate the SQLite-to-RDS migration against the existing cloud RDS instance and complete deployed ECI REST/SSE/WebSocket smoke tests.
 - Configure and validate production HTTPS ingress in front of ECI.
-- Add expired OSS object deletion and local recording deletion signaling.
 - Complete Flutter push notification registration and native/mobile QA.
 - Keep backend docs in sync with the separate LaptopEdge and IOT repos as their contracts evolve.
 

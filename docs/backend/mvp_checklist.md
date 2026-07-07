@@ -183,11 +183,11 @@ Notes:
 
 ## Milestone 10: Retention and Deployment
 
-- [x] Add retention config. (`MEDIA_RETENTION_DAYS`, `DAILY_RECORDING_RETENTION_HOURS`)
-- [ ] Add cleanup job strategy.
+- [x] Add retention config. (`MEDIA_RETENTION_DAYS`, `DAILY_RECORDING_RETENTION_HOURS`, `MEDIA_SWEEP_INTERVAL_SECONDS`)
+- [x] Add cleanup job strategy. (`media_retention_service` sweep via app lifespan; playback also rejects expired media with `410`)
 - [x] Block playback for deleted media. (`clips.py`, `recordings.py`, and local media token paths)
-- [ ] Delete expired OSS objects.
-- [ ] Mark local recordings for edge deletion.
+- [x] Delete expired OSS objects. (bucket lifecycle rules via `scripts/deployment/media-bucket.ps1`)
+- [x] Mark local recordings for edge deletion. (sweep sets `status="deleted"`/`deleted_at` once `retention_until` passes)
 - [x] ApsaraDB RDS PostgreSQL instance is provisioned in cloud.
 - [ ] Run and verify SQLite-to-PostgreSQL migration/smoke tests against the cloud RDS target.
 - [x] Prepare ECI deployment. (`scripts/deployment/backend.ps1`)

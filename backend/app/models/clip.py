@@ -12,6 +12,7 @@ class Clip(Base):
         UniqueConstraint("device_id", "idempotency_key", name="uq_clips_device_idempotency_key"),
         Index("idx_clips_event_id", "event_id"),
         Index("idx_clips_user_id", "user_id"),
+        Index("idx_clips_expires_at", "expires_at"),
     )
 
     clip_id: Mapped[str] = mapped_column(String(64), primary_key=True)

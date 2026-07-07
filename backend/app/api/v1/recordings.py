@@ -13,6 +13,7 @@ from app.core.security import create_signed_token, verify_signed_token
 from app.models.recording import Recording
 from app.models.user import User
 from app.schemas.media import RecordingPlaybackUrlRead
+from app.services import media_retention_service
 from app.services.media_url_service import media_url_service
 
 
@@ -40,6 +41,11 @@ async def signed_recording_playback_url(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "not_found", "message": "Recording was not found"},
+        )
+    if media_retention_service.is_expired(recording.retention_until):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail={"code": "recording_expired", "message": "Recording has passed its retention period"},
         )
 
     if settings.app_env == "development" and not media_url_service.oss_configured and _DEV_SAMPLE_VIDEO.exists():
@@ -101,6 +107,11 @@ async def stream_dev_recording_media(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "not_found", "message": "Recording was not found"},
+        )
+    if media_retention_service.is_expired(recording.retention_until):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail={"code": "recording_expired", "message": "Recording has passed its retention period"},
         )
     if settings.app_env != "development" or not _DEV_SAMPLE_VIDEO.exists():
         raise HTTPException(

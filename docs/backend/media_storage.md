@@ -76,21 +76,25 @@ The backend can show that a recording exists without having the bytes. Playback 
 
 ## Retention
 
-Recommended defaults:
+Enforced defaults:
 
-| Media type | Default retention |
-|---|---|
-| Daily local recordings | 24 to 72 hours |
-| Event clips | 7 days |
-| Emergency clips | 30 days |
-| Thumbnails/keyframes | Same as event clip |
+| Media type | Retention | Stamped as |
+|---|---|---|
+| Event clips (incl. thumbnails) | `MEDIA_RETENTION_DAYS` (7 days) | `clips.expires_at` at upload-URL creation |
+| Daily local recordings | `DAILY_RECORDING_RETENTION_HOURS` (72 hours) | `recordings.retention_until` at registration |
+
+Enforcement has three layers:
+
+1. **Read-time check** — signed-url/download endpoints return `410` (`clip_expired` / `recording_expired`) once the stamp passes, before any sweep runs.
+2. **DB sweep** — `media_retention_service.run_sweep_loop` (started from the app lifespan, cadence `MEDIA_SWEEP_INTERVAL_SECONDS`, `<= 0` disables) soft-deletes expired rows (`status="deleted"` + `deleted_at`) and fails `pending_upload`/`uploading` clips older than 24 hours. It marks rows only and never talks to OSS.
+3. **OSS lifecycle rules** — `scripts/deployment/media-bucket.ps1` applies bucket rules that delete `events/` objects after `MEDIA_RETENTION_DAYS` and `recordings/` objects after 3 days. Rerun it whenever `MEDIA_RETENTION_DAYS` changes (it reads the repo `.env`; pass `-EventRetentionDays` when KMS is authoritative).
+
+Drift note: OSS lifecycle counts from object last-modified time and evaluates roughly daily, so bytes can outlive `expires_at` by a day or two. That is the safe direction — the DB and read-time checks always expire first, so nothing playable ever points at deleted bytes. The reverse (bytes gone, row still live) cannot happen. Worst case, a signed URL minted just before expiry stays fetchable for up to `SIGNED_URL_TTL_SECONDS` (900 s).
 
 Deletion rules:
 
 - Set `deleted_at` for soft delete.
 - Block playback when `deleted_at` is set.
-- Delete OSS object for uploaded clips when retention expires.
-- Mark local recordings for edge deletion when retention expires.
 - Keep audit records for user-triggered or system-triggered deletion.
 
 ## Object Key Pattern

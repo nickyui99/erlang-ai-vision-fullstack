@@ -1,3 +1,6 @@
+import asyncio
+from contextlib import asynccontextmanager, suppress
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,6 +9,19 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.errors import register_exception_handlers
 from app.core.middleware import RequestIdMiddleware
+from app.services import media_retention_service
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    sweep_task: asyncio.Task | None = None
+    if settings.media_sweep_interval_seconds > 0:
+        sweep_task = asyncio.create_task(media_retention_service.run_sweep_loop())
+    yield
+    if sweep_task is not None:
+        sweep_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await sweep_task
 
 
 def create_app() -> FastAPI:
@@ -14,6 +30,7 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         docs_url="/docs" if settings.app_env != "production" else None,
         redoc_url="/redoc" if settings.app_env != "production" else None,
+        lifespan=_lifespan,
     )
 
     app.add_middleware(

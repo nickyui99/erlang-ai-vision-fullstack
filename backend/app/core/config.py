@@ -74,6 +74,9 @@ class Settings(BaseSettings):
         default=72,
         validation_alias="DAILY_RECORDING_RETENTION_HOURS",
     )
+    # <= 0 disables the retention sweep loop. Bytes in OSS are deleted by the
+    # bucket lifecycle rules (scripts/deployment/media-bucket.ps1), not by the app.
+    media_sweep_interval_seconds: int = Field(default=3600, validation_alias="MEDIA_SWEEP_INTERVAL_SECONDS")
 
     # Demo simulation (judge/demo account only). When enabled, the backend can
     # play pre-extracted video frames into a demo camera's live view and triage

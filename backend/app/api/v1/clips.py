@@ -13,6 +13,7 @@ from app.models.clip import Clip
 from app.models.user import User
 from app.schemas.media import ClipDownloadUrlRead, ClipPlaybackUrlRead
 from app.core.security import create_signed_token, verify_signed_token
+from app.services import media_retention_service
 from app.services.media_url_service import media_url_service
 
 
@@ -41,6 +42,11 @@ async def signed_clip_playback_url(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "not_found", "message": "Clip was not found"},
+        )
+    if media_retention_service.is_expired(clip.expires_at):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail={"code": "clip_expired", "message": "Clip has passed its retention period"},
         )
     if clip.status != "available" or not clip.oss_object_key:
         raise HTTPException(
@@ -87,6 +93,11 @@ async def signed_clip_download_url(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "not_found", "message": "Clip was not found"},
+        )
+    if media_retention_service.is_expired(clip.expires_at):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail={"code": "clip_expired", "message": "Clip has passed its retention period"},
         )
     if clip.status != "available" or not clip.oss_object_key:
         raise HTTPException(
@@ -141,6 +152,11 @@ async def stream_dev_clip_media(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "not_found", "message": "Clip was not found"},
         )
+    if media_retention_service.is_expired(clip.expires_at):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail={"code": "clip_expired", "message": "Clip has passed its retention period"},
+        )
     if clip.status != "available" or clip.oss_object_key != object_key:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -189,6 +205,11 @@ async def download_dev_clip_media(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "not_found", "message": "Clip was not found"},
+        )
+    if media_retention_service.is_expired(clip.expires_at):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail={"code": "clip_expired", "message": "Clip has passed its retention period"},
         )
     if clip.status != "available" or clip.oss_object_key != object_key:
         raise HTTPException(

@@ -61,7 +61,7 @@ async def list_event_clips(
     await _get_owned_event(session, current_user.user_id, event_id)
     result = await session.execute(
         select(Clip)
-        .where(Clip.event_id == event_id, Clip.user_id == current_user.user_id)
+        .where(Clip.event_id == event_id, Clip.user_id == current_user.user_id, Clip.deleted_at.is_(None))
         .order_by(Clip.created_at.desc())
     )
     clips = [ClipRead.model_validate(clip).model_dump(mode="json") for clip in result.scalars()]
