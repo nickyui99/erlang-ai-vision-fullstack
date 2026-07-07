@@ -71,7 +71,11 @@ flowchart TD
 
 Agents are now definition-first. Creating an agent can leave `device_id` null. Assigning an agent to a camera creates a per-device sub-agent with `parent_agent_id`, `device_id`, state `armed`, and a compiled edge config. Unassigning deletes that sub-agent.
 
-The current compiler is intentionally simple and emits a person-detection config. Rich natural-language compilation is future work.
+Rules are compiled by `app/agents/compiler.py` using a Qwen Cloud text model (`QWEN_COMPILER_MODEL`, default `qwen-plus`), producing the edge `compiled_edge_config` (`classes`, `min_confidence`, `dwell_s`, `cooldown_s`, optional `schedule`/`roi`) plus a `compiled_prompt`. It falls back to a deterministic keyword compiler in test/key-less environments or on any error, so agent creation never fails. Users can also draft rules conversationally via the agent builder (`app/agents/builder.py`, `POST /api/v1/agents/builder`).
+
+## Demo Simulation
+
+For demos without hardware, `app/services/demo_simulator.py` drives a camera server-side: it loops pre-extracted frames into the video broker (on-demand while a viewer watches) and periodically sends a keyframe to the Qwen-VL API to triage against the camera's rule, creating real events. It is strictly gated — active only when `DEMO_SIMULATION_ENABLED=true`, the `device_id` starts with `DEMO_SIM_DEVICE_PREFIX` (default `dev_judge_`), and a frame folder exists (`DEMO_FRAMES_DIR`). Normal accounts are unaffected. See the README "Demo Simulation & Judge Account" section.
 
 ## Live Video Flow
 

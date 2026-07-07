@@ -4,6 +4,8 @@ Base API prefix: `/api/v1`
 
 Interactive docs are available at `http://localhost:8000/docs` in development.
 
+All datetimes in responses are serialized as UTC with a trailing `Z` (e.g. `2026-07-06T11:34:45Z`). SQLite drops timezone info on storage, so the schema layer normalizes it — clients can parse as UTC and convert to local time.
+
 ## Authentication Model
 
 | Actor | Auth method | Used for |
@@ -48,9 +50,12 @@ Authorization: Bearer <firebase_id_token>
 | `POST` | `/api/v1/devices/{device_id}/pan` | User session | Relay horizontal pan command, `angle: 0..180`. |
 | `POST` | `/api/v1/devices/{device_id}/tilt` | User session | Relay vertical tilt command, `angle: 60..140`. |
 | `POST` | `/api/v1/devices/{device_id}/snapshot` | User session | Request a fresh snapshot through the edge command channel. |
+| `POST` | `/api/v1/devices/{device_id}/control` | User session | Relay a device control command (e.g. recording/resolution toggles). |
 | `POST` | `/api/v1/devices/{device_id}/stream-url` | User session | Mint short-lived signed stream URL. |
 | `GET` | `/api/v1/devices/{device_id}/stream` | Signed query token | MJPEG live stream. |
 | `GET` | `/api/v1/devices/{device_id}/stream-frame` | Signed query token | Latest JPEG frame fallback for Flutter web polling. |
+| `GET` | `/api/v1/devices/{device_id}/clips` | User session | List clips for a device (`limit`, `status`, `clip_type`). |
+| `GET` | `/api/v1/devices/{device_id}/recordings` | User session | List recordings for a device (`limit`, `status`). |
 
 Example device registration:
 
@@ -85,6 +90,7 @@ Example tilt request:
 | `PUT` | `/api/v1/agents/{agent_id}` | User session | Update name/location/rule and recompile edge config. |
 | `POST` | `/api/v1/agents/{agent_id}/assign` | User session | Assign a definition to a camera; creates or returns an armed per-device sub-agent. |
 | `POST` | `/api/v1/agents/{agent_id}/unassign` | User session | Remove a definition from a camera by deleting the per-device sub-agent. |
+| `POST` | `/api/v1/agents/builder` | User session | Conversational agent builder: one chat turn in, `{reply, rule, name, compiled_edge_config}` out. |
 
 Example create:
 
@@ -102,7 +108,38 @@ Example assign:
 { "device_id": "dev_123" }
 ```
 
-Current compiler behavior: `_compile_agent_rule` normalizes the text and emits a simple person detector config with `detectors: ["person"]`, `min_confidence: 0.75`, and `rule_text`. Rich NL rule compilation is future work.
+Compiler behavior (`app/agents/compiler.py`): a Qwen Cloud text model (`QWEN_COMPILER_MODEL`, default `qwen-plus`) compiles `nl_rule` into the edge `compiled_edge_config` — `classes` (COCO video + YAMNet audio labels), `min_confidence`, `dwell_s`, `cooldown_s`, and optional `schedule`/`roi` — plus a `compiled_prompt`. It never fails agent creation: in test/key-less environments or on any LLM/parse error it falls back to a deterministic keyword compiler.
+
+Builder example (`POST /api/v1/agents/builder`):
+
+```json
+{ "messages": [{ "role": "user", "content": "tell me if a car pulls into the driveway" }] }
+```
+
+Response:
+
+```json
+{
+  "data": {
+    "reply": "Got it — I'll watch for vehicles entering the driveway.",
+    "rule": "Alert me when a vehicle pulls into the driveway.",
+    "name": "Driveway Vehicle Watch",
+    "compiled_edge_config": { "classes": ["car", "truck", "motorcycle", "bus"], "min_confidence": 0.5, "dwell_s": 2.0, "cooldown_s": 45.0 }
+  }
+}
+```
+
+`rule`/`name` are `null` while the assistant still needs more detail; send the running conversation back each turn.
+
+## Chat (AI assistant)
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/chat/sessions` | User session | Create a chat session (optionally seed the first message). |
+| `GET` | `/api/v1/chat/sessions` | User session | List the user's chat sessions. |
+| `POST` | `/api/v1/chat/sessions/{session_id}/messages` | User session | Post a message and get the assistant reply. |
+| `GET` | `/api/v1/chat/sessions/{session_id}/messages` | User session | List messages in a session. |
+| `DELETE` | `/api/v1/chat/sessions/{session_id}` | User session | Delete a session. |
 
 ## Edge APIs
 
@@ -197,7 +234,9 @@ The edge bridge connects to `WS /api/v1/edge/stream` and sends one JPEG frame pe
 | `GET` | `/api/v1/events/{event_id}` | User session | Get event details. |
 | `GET` | `/api/v1/events/{event_id}/clips` | User session | List clips for an event. |
 | `GET` | `/api/v1/events/{event_id}/audit` | User session | List Qwen/tool command audit trail for an event. |
-| `POST` | `/api/v1/clips/{clip_id}/signed-url` | User session | Generate temporary playback URL. |
+| `POST` | `/api/v1/clips/{clip_id}/signed-url` | User session | Generate temporary clip playback URL. |
+| `POST` | `/api/v1/clips/{clip_id}/download-url` | User session | Generate temporary clip download URL. |
+| `POST` | `/api/v1/recordings/{recording_id}/signed-url` | User session | Generate temporary recording playback URL. |
 
 ## Notifications and Realtime
 
