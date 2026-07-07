@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
 
 from app.agents import compiler  # noqa: E402
 from app.agents.compiler import (  # noqa: E402
+    _clean_camera_control,
     _clean_classes,
     _clean_roi,
     _clean_schedule,
@@ -38,7 +39,9 @@ from app.models.device import Device  # noqa: E402
 from app.models.user import User  # noqa: E402
 
 
-_SUPPORTED_KEYS = {"classes", "min_confidence", "dwell_s", "cooldown_s", "schedule", "roi"}
+_SUPPORTED_KEYS = {
+    "classes", "min_confidence", "dwell_s", "cooldown_s", "schedule", "roi", "camera_control",
+}
 
 
 # ------------------------------------------------------------------- keyword compiler
@@ -112,6 +115,45 @@ def test_validate_roi_shape():
 def test_validate_omits_absent_optional_keys():
     config = _validate_config({"classes": ["person"]})
     assert "schedule" not in config and "roi" not in config
+
+
+# ----------------------------------------------------------------- camera control
+
+def test_validate_always_includes_camera_control_defaulting_to_none():
+    config = _validate_config({"classes": ["person"]})
+    cc = config["camera_control"]
+    assert cc["behavior"] == "none"           # no motion implied -> fixed camera
+    assert cc["target_classes"] == ["person"]  # defaults to the rule's video classes
+
+
+def test_validate_camera_control_sanitizes_behavior_and_targets():
+    cc = _clean_camera_control(
+        {"behavior": "spin", "target_classes": ["person", "glass-break", "dragon"],
+         "prompt": "  watch them  "},
+        ["person"],
+    )
+    assert cc["behavior"] == "none"                 # unknown behavior rejected
+    assert cc["target_classes"] == ["person"]        # audio/unknown classes dropped
+    assert cc["prompt"] == "watch them"
+
+
+def test_validate_camera_control_accepts_follow():
+    cc = _clean_camera_control({"behavior": "FOLLOW"}, ["person", "dog"])
+    assert cc["behavior"] == "follow"
+    assert cc["target_classes"] == ["person", "dog"]
+
+
+def test_keyword_follow_verb_sets_follow_behavior():
+    _, config = asyncio.run(
+        compile_agent_rule("Follow anyone who walks in and keep them on camera.")
+    )
+    assert config["camera_control"]["behavior"] == "follow"
+    assert config["camera_control"]["target_classes"] == ["person"]
+
+
+def test_keyword_no_motion_verb_defaults_to_none():
+    _, config = asyncio.run(compile_agent_rule("Alert me if a person is at the door."))
+    assert config["camera_control"]["behavior"] == "none"
 
 
 # ----------------------------------------------------------------- endpoint wiring

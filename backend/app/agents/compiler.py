@@ -43,6 +43,14 @@ _VIDEO_CLASSES = frozenset({
 _AUDIO_CLASSES = frozenset({"glass-break", "scream", "crying", "gunshot", "alarm"})
 _ALLOWED_CLASSES = _VIDEO_CLASSES | _AUDIO_CLASSES
 
+# Camera-control behaviors an agent may drive when a device is in "agent" control mode
+# (SentinelEdge_LaptopEdge AgentController reads compiled_edge_config["camera_control"]).
+#   follow  - keep a target class centered (LLM-driven pan/tilt)
+#   patrol  - sweep the pan range on a cadence
+#   scan    - pan to inspect when a target is detected, else hold
+#   none    - do not move the camera (default)
+_CAMERA_BEHAVIORS = frozenset({"follow", "patrol", "scan", "none"})
+
 _DEFAULTS = {"min_confidence": 0.5, "dwell_s": 3.0, "cooldown_s": 30.0}
 _HHMM = re.compile(r"^\d{1,2}:\d{2}$")
 
@@ -78,6 +86,10 @@ _SYSTEM_PROMPT = (
     '  "cooldown_s":     number of seconds to suppress re-fires after one fires (default 30)\n'
     '  "schedule":       optional {"days":[0-6 Mon=0], "start":"HH:MM", "end":"HH:MM"} — include '
     "ONLY if the rule names a time/day window; overnight windows (start>end) are allowed\n"
+    '  "camera_control": optional {"behavior":"follow|patrol|scan|none", "target_classes":[...], '
+    '"prompt":"short goal"} — how a camera should MOVE when this agent drives it. Use "follow" '
+    'to keep a subject centered, "patrol" to sweep, "scan" to look when something appears, "none" '
+    "for a fixed camera. Include ONLY if the rule implies camera motion; omit otherwise.\n"
     '  "compiled_prompt": a single crisp restatement of the rule for a verification model\n'
     "Allowed VIDEO classes are the COCO-80 set (person, dog, cat, car, bicycle, backpack, "
     "handbag, suitcase, knife, ...). Allowed AUDIO classes are exactly: glass-break, scream, "
@@ -89,6 +101,11 @@ _FEWSHOT = [
     ("Alert me when a person is present in the room.",
      {"classes": ["person"], "min_confidence": 0.4, "dwell_s": 1.0, "cooldown_s": 15.0,
       "compiled_prompt": "A person is present in the room."}),
+    ("Follow anyone who walks into the living room and keep them on camera.",
+     {"classes": ["person"], "min_confidence": 0.4, "dwell_s": 1.0, "cooldown_s": 15.0,
+      "camera_control": {"behavior": "follow", "target_classes": ["person"],
+                         "prompt": "Keep the person centered in frame as they move."},
+      "compiled_prompt": "A person is present in the living room; keep them centered."}),
     ("Alert me if an unfamiliar person lingers at the front door after 9pm.",
      {"classes": ["person"], "min_confidence": 0.5, "dwell_s": 4.0, "cooldown_s": 30.0,
       "schedule": {"days": [0, 1, 2, 3, 4, 5, 6], "start": "21:00", "end": "06:00"},
@@ -151,7 +168,37 @@ def _validate_config(obj: dict) -> dict:
     roi = _clean_roi(obj.get("roi"))
     if roi:
         config["roi"] = roi
+    config["camera_control"] = _clean_camera_control(obj.get("camera_control"), config["classes"])
     return config
+
+
+def _clean_camera_control(value, classes: list[str]) -> dict:
+    """Coerce the loosely-shaped camera_control block into a safe one. Never trusts the LLM.
+
+    Always returns a dict (behavior defaults to "none" = fixed camera), so the edge can read
+    ``compiled_edge_config["camera_control"]`` unconditionally. target_classes is restricted to
+    VIDEO classes (you can only pan toward something the camera sees) and defaults to the rule's
+    own video classes (or person).
+    """
+    behavior = "none"
+    targets: list[str] = []
+    prompt = ""
+    if isinstance(value, dict):
+        candidate = str(value.get("behavior", "")).strip().lower()
+        if candidate in _CAMERA_BEHAVIORS:
+            behavior = candidate
+        raw_targets = value.get("target_classes")
+        if isinstance(raw_targets, (list, tuple)):
+            for item in raw_targets:
+                name = str(item).strip().lower()
+                if name in _VIDEO_CLASSES and name not in targets:
+                    targets.append(name)
+        raw_prompt = value.get("prompt")
+        if isinstance(raw_prompt, str) and raw_prompt.strip():
+            prompt = raw_prompt.strip()
+    if not targets:
+        targets = [c for c in classes if c in _VIDEO_CLASSES] or ["person"]
+    return {"behavior": behavior, "target_classes": targets, "prompt": prompt}
 
 
 def _clean_classes(value) -> list[str]:
@@ -254,7 +301,22 @@ def _keyword_compile(normalized: str) -> tuple[str, dict]:
     schedule = _keyword_schedule(text)
     if schedule:
         config["schedule"] = schedule
+    config["camera_control"] = _keyword_camera_control(text, classes)
     return normalized, config
+
+
+def _keyword_camera_control(text: str, classes: list[str]) -> dict:
+    """Pick a camera behavior from motion verbs in the rule; default 'none' (fixed camera)."""
+    if any(kw in text for kw in ("follow", "track", "keep on camera", "keep them", "center")):
+        behavior = "follow"
+    elif any(kw in text for kw in ("patrol", "sweep", "back and forth", "pan around")):
+        behavior = "patrol"
+    elif any(kw in text for kw in ("scan", "look around", "look for", "search")):
+        behavior = "scan"
+    else:
+        behavior = "none"
+    targets = [c for c in classes if c in _VIDEO_CLASSES] or ["person"]
+    return {"behavior": behavior, "target_classes": targets, "prompt": ""}
 
 
 def _keyword_schedule(text: str) -> dict | None:

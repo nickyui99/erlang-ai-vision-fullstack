@@ -36,6 +36,12 @@ class DeviceControlCommand(BaseModel):
         return payload
 
 
+class DeviceControlModeCommand(BaseModel):
+    # Per-camera autonomous-control mode. Kept in lockstep with the edge's CONTROL_MODES and the
+    # Device.control_mode column. Mutually exclusive: only one controller owns the servo at a time.
+    mode: Literal["off", "auto_track", "agent"]
+
+
 class DeviceCommandResult(BaseModel):
     request_id: str
     status: str

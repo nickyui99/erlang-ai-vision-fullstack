@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -32,7 +31,7 @@ class EventRead(BaseModel):
     agent_id: str
     device_id: str
     idempotency_key: str
-    timestamp: datetime
+    timestamp: UTCDatetime
     event_type: str
     stage1_result: dict[str, Any] | None = None
     stage2_verdict: dict[str, Any] | None = None
@@ -42,7 +41,7 @@ class EventRead(BaseModel):
     summary: str | None = None
     degraded: bool
     status: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
 
     model_config = ConfigDict(from_attributes=True)

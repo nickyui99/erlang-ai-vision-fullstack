@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../design/app_colors.dart';
 import '../../design/app_motion.dart';
@@ -12,15 +13,36 @@ import '../../services/realtime/realtime_client.dart';
 import '../../shared/console_widgets.dart';
 import 'add_camera_wizard.dart';
 import 'agent_templates.dart';
-import 'device_control_view.dart';
 
 const _aiAgentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
+
+/// The console tabs, in sidebar/nav-bar order, each with the URL path segment
+/// it maps to (`/console/<path>`). The ordinal is the tab index used by the
+/// navigation widgets and the body switch.
+enum WorkspaceSection {
+  cameras('cameras'),
+  overview('overview'),
+  agents('agents'),
+  events('events'),
+  settings('settings');
+
+  const WorkspaceSection(this.path);
+
+  final String path;
+
+  int get tabIndex => index;
+
+  static WorkspaceSection fromIndex(int index) =>
+      values[index.clamp(0, values.length - 1)];
+}
 
 class WorkspaceView extends StatefulWidget {
   const WorkspaceView({
     required this.user,
     required this.apiClient,
     required this.onSignOut,
+    this.section = WorkspaceSection.cameras,
+    this.selectedEventId,
     this.autoLoad = true,
     this.initialDevices = const [],
     this.initialAgents = const [],
@@ -30,6 +52,14 @@ class WorkspaceView extends StatefulWidget {
   final BackendUser user;
   final SentinelEdgeApiClient apiClient;
   final Future<void> Function() onSignOut;
+
+  /// The active tab, driven by the URL (`/console/<section>`).
+  final WorkspaceSection section;
+
+  /// The event selected in the Events tab, driven by the URL
+  /// (`/console/events/<eventId>`); null when no event is selected.
+  final String? selectedEventId;
+
   final bool autoLoad;
   final List<EdgeDevice> initialDevices;
   final List<SurveillanceAgent> initialAgents;
@@ -52,7 +82,6 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   String? _selectedDeviceId;
   String? _selectedAgentId;
   String? _selectedEventId;
-  String? _assigningAgentId;
   ClipPlaybackUrl? _lastPlaybackUrl;
   String? _error;
   int _selectedTab = 0;
@@ -61,7 +90,6 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   // its own busy state; this stays false so the launcher button never spins.
   final bool _isRegisteringDevice = false;
   bool _isCreatingAgent = false;
-  bool _isChangingAgentState = false;
   bool _isLoadingEvents = false;
   bool _isLoadingClips = false;
   bool _isLoadingAudit = false;
@@ -71,7 +99,6 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       _isRefreshing ||
       _isRegisteringDevice ||
       _isCreatingAgent ||
-      _isChangingAgentState ||
       _isLoadingEvents ||
       _isLoadingClips ||
       _isLoadingAudit ||
@@ -80,6 +107,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   @override
   void initState() {
     super.initState();
+    _selectedTab = widget.section.tabIndex;
+    _selectedEventId = widget.selectedEventId;
     _devices = widget.initialDevices;
     _agents = widget.initialAgents;
     _selectedDeviceId = _chooseExisting(
@@ -92,6 +121,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
     if (widget.autoLoad) {
       _refreshAll(showSuccess: false);
+      if (_sectionLoadsEvents) {
+        _loadEvents(showSuccess: false);
+      }
     }
     _realtimeConnection = connectRealtime(
       onMessage: _handleRealtimeMessage,
@@ -100,6 +132,41 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         setState(() => _realtimeStatus = status);
       },
     );
+  }
+
+  /// The Overview and Events tabs both render the event timeline, so both need
+  /// the events list loaded when entered (or deep-linked).
+  bool get _sectionLoadsEvents =>
+      widget.section == WorkspaceSection.events ||
+      widget.section == WorkspaceSection.overview;
+
+  @override
+  void didUpdateWidget(covariant WorkspaceView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The URL changed: sync the active tab and the selected event from the
+    // route rather than from local taps.
+    if (oldWidget.section != widget.section) {
+      setState(() => _selectedTab = widget.section.tabIndex);
+      if (_sectionLoadsEvents && _events.isEmpty) {
+        _loadEvents(showSuccess: false);
+      }
+    }
+    if (oldWidget.selectedEventId != widget.selectedEventId) {
+      _applySelectedEvent(widget.selectedEventId);
+    }
+  }
+
+  void _applySelectedEvent(String? eventId) {
+    setState(() {
+      _selectedEventId = eventId;
+      _lastPlaybackUrl = null;
+      _eventClips = const [];
+      _eventAudit = const [];
+    });
+    if (eventId != null) {
+      _loadEventClips(eventId);
+      _loadEventAudit(eventId);
+    }
   }
 
   @override
@@ -292,19 +359,14 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   }
 
   Future<void> _openDeviceControl(EdgeDevice device) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => DeviceControlView(
-          device: device,
-          apiClient: widget.apiClient,
-          agents: _agents,
-          onChanged: () async {
-            await _refreshDevicesOnly();
-            await _refreshAgentsOnly();
-          },
-        ),
-      ),
-    );
+    setState(() => _selectedDeviceId = device.deviceId);
+    // The camera detail is a real route (/console/cameras/:deviceId), so the
+    // URL is shareable and survives refresh. Refresh the fleet on return since
+    // the detail screen can rename/delete the camera or change protection.
+    await context.push('/console/cameras/${device.deviceId}');
+    if (!mounted) return;
+    await _refreshDevicesOnly();
+    await _refreshAgentsOnly();
   }
 
   Future<void> _openRegisterDeviceDialog() async {
@@ -320,9 +382,17 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   }
 
   Future<void> _openCreateAgentDialog() async {
+    final mode = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => const _CreateAgentChooser(),
+    );
+    if (mode == null || !mounted) return;
     final result = await showDialog<_AgentFormResult>(
       context: context,
-      builder: (_) => const _AgentFormDialog(),
+      builder: (_) => mode == 'ai'
+          ? _AgentBuilderDialog(apiClient: widget.apiClient)
+          : const _AgentFormDialog(),
     );
     if (result == null) return;
     await _createAgent(
@@ -341,9 +411,17 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   }
 
   Future<void> _openEditAgentDialog(SurveillanceAgent agent) async {
+    final mode = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => const _CreateAgentChooser(isEdit: true),
+    );
+    if (mode == null || !mounted) return;
     final result = await showDialog<_AgentFormResult>(
       context: context,
-      builder: (_) => _AgentFormDialog(agent: agent),
+      builder: (_) => mode == 'ai'
+          ? _AgentBuilderDialog(apiClient: widget.apiClient, initialAgent: agent)
+          : _AgentFormDialog(agent: agent),
     );
     if (result == null) return;
     await _saveAgentEdits(
@@ -404,50 +482,15 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
   }
 
-  Future<void> _assignAgent(String agentId, String deviceId) async {
-    await _run(
-      successMessage: 'Agent assigned',
-      setBusy: (value) {
-        _isChangingAgentState = value;
-        _assigningAgentId = value ? agentId : null;
-      },
-      action: () async {
-        await widget.apiClient.assignAgent(agentId, deviceId: deviceId);
-        final agents = await widget.apiClient.listAgents();
-        if (!mounted) return;
-        setState(() => _agents = agents);
-      },
-    );
-  }
-
-  Future<void> _unassignAgent(String agentId, String deviceId) async {
-    await _run(
-      successMessage: 'Agent unassigned',
-      setBusy: (value) {
-        _isChangingAgentState = value;
-        _assigningAgentId = value ? agentId : null;
-      },
-      action: () async {
-        await widget.apiClient.unassignAgent(agentId, deviceId: deviceId);
-        final agents = await widget.apiClient.listAgents();
-        if (!mounted) return;
-        setState(() => _agents = agents);
-      },
-    );
-  }
-
   bool _shouldReturnToSignIn(Object error) {
     return error is BackendAuthException &&
         (error.code == 'not_authenticated' || error.code == 'invalid_session');
   }
 
   void _selectTab(int index) {
-    setState(() => _selectedTab = index);
-    if ((_destinations[index].label == 'Overview' ||
-            _destinations[index].label == 'Events') &&
-        _events.isEmpty) {
-      _loadEvents(showSuccess: false);
-    }
+    // Navigate rather than setState: the URL becomes the source of truth and
+    // didUpdateWidget syncs _selectedTab (and lazy-loads events) in response.
+    context.go('/console/${WorkspaceSection.fromIndex(index).path}');
   }
 
   void _handleRealtimeMessage(RealtimeMessage message) {
@@ -471,6 +514,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         }
         break;
       case 'device.health_changed':
+      case 'device.control_mode_changed':
         _refreshDevicesOnly();
         break;
       case 'agent.state_changed':
@@ -934,6 +978,40 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
   }
 
+  // Camera dashboard sort order.
+  static const Map<String, String> _deviceSortLabels = {
+    'favorites': 'Favorites first',
+    'name': 'Name (A–Z)',
+    'status': 'Status (online first)',
+    'recent': 'Recently active',
+  };
+  String _deviceSort = 'favorites';
+
+  int _deviceComparator(EdgeDevice a, EdgeDevice b) {
+    switch (_deviceSort) {
+      case 'name':
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      case 'status':
+        final ra = a.healthStatus == 'online' ? 0 : 1;
+        final rb = b.healthStatus == 'online' ? 0 : 1;
+        final byStatus = ra.compareTo(rb);
+        return byStatus != 0
+            ? byStatus
+            : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      case 'recent':
+        final at = a.lastSeen?.millisecondsSinceEpoch ?? 0;
+        final bt = b.lastSeen?.millisecondsSinceEpoch ?? 0;
+        final byRecent = bt.compareTo(at); // most recent first
+        return byRecent != 0
+            ? byRecent
+            : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      case 'favorites':
+      default:
+        if (a.isFavorite != b.isFavorite) return a.isFavorite ? -1 : 1;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    }
+  }
+
   Widget _devicePanel(bool compact) {
     final query = _deviceSearchController.text.trim().toLowerCase();
     final visibleDevices = _devices.where((device) {
@@ -941,7 +1019,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       return device.name.toLowerCase().contains(query) ||
           (device.location ?? '').toLowerCase().contains(query) ||
           device.healthStatus.toLowerCase().contains(query);
-    }).toList();
+    }).toList()
+      ..sort(_deviceComparator);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -960,13 +1039,36 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           ),
           child: Column(
             children: [
-              TextField(
-                controller: _deviceSearchController,
-                onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Search cameras',
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _deviceSearchController,
+                      onChanged: (_) => setState(() {}),
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        hintText: 'Search cameras',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  DropdownButton<String>(
+                    value: _deviceSort,
+                    underline: const SizedBox.shrink(),
+                    icon: const Icon(Icons.sort),
+                    borderRadius: AppRadius.mdAll,
+                    items: [
+                      for (final entry in _deviceSortLabels.entries)
+                        DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                    ],
+                    onChanged: (value) => setState(
+                      () => _deviceSort = value ?? 'favorites',
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: AppSpacing.md),
               if (_isRefreshing && _devices.isEmpty)
@@ -1007,78 +1109,46 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                     return _CameraDeviceCard(
                       device: device,
                       selected: _selectedDeviceId == device.deviceId,
-                      onTap: () {
-                        setState(() => _selectedDeviceId = device.deviceId);
-                        _openDeviceControl(device);
-                      },
+                      armedCount: _armedCountForDevice(device.deviceId),
+                      onTap: () => _openDeviceControl(device),
+                      onArmTap: () => _openQuickArm(device),
                     );
                   },
                 ),
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        _armingPanel(),
       ],
-    );
-  }
-
-  Widget _armingPanel() {
-    final selectedDevice = _devices
-        .where((device) => device.deviceId == _selectedDeviceId)
-        .firstOrNull;
-    final definitions = _definitions;
-    return ConsolePanel(
-      title: 'Protection',
-      subtitle: selectedDevice == null
-          ? 'Select a camera to arm detection rules'
-          : 'Detection rules for ${selectedDevice.name}',
-      icon: Icons.shield_outlined,
-      child: selectedDevice == null
-          ? const EmptyState(
-              icon: Icons.videocam_off_outlined,
-              title: 'No camera selected',
-              message:
-                  'Pick a camera above, then arm the detection rules that should watch it.',
-              compact: true,
-            )
-          : definitions.isEmpty
-          ? const EmptyState(
-              icon: Icons.radar_outlined,
-              title: 'No detection rules yet',
-              message:
-                  'Create a rule in the Agents tab, then arm it for this camera.',
-              compact: true,
-            )
-          : Column(
-              children: definitions.map((agent) {
-                return _AssignAgentTile(
-                  agent: agent,
-                  assigned: _isAssigned(agent.agentId, selectedDevice.deviceId),
-                  assignmentCount: _assignmentCount(agent.agentId),
-                  busy: _assigningAgentId == agent.agentId,
-                  enabled: !_isChangingAgentState,
-                  onChanged: (assign) => assign
-                      ? _assignAgent(agent.agentId, selectedDevice.deviceId)
-                      : _unassignAgent(agent.agentId, selectedDevice.deviceId),
-                );
-              }).toList(),
-            ),
     );
   }
 
   List<SurveillanceAgent> get _definitions =>
       _agents.where((agent) => agent.isDefinition).toList();
 
+  // Rules armed on a camera = sub-agents bound to that device.
+  int _armedCountForDevice(String deviceId) => _agents
+      .where((agent) => !agent.isDefinition && agent.deviceId == deviceId)
+      .length;
+
+  Future<void> _openQuickArm(EdgeDevice device) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => _QuickArmSheet(
+        device: device,
+        apiClient: widget.apiClient,
+        agents: _agents,
+        onChanged: _refreshAgentsOnly,
+      ),
+    );
+  }
+
   Iterable<SurveillanceAgent> _subsForDefinition(String definitionId) =>
       _agents.where((agent) => agent.parentAgentId == definitionId);
 
   int _assignmentCount(String definitionId) =>
       _subsForDefinition(definitionId).length;
-
-  bool _isAssigned(String definitionId, String deviceId) => _subsForDefinition(
-    definitionId,
-  ).any((agent) => agent.deviceId == deviceId);
 
   Widget _agentPanel(bool compact) {
     final query = _agentSearchController.text.trim().toLowerCase();
@@ -1336,14 +1406,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                 (event) => _EventTimelineCard(
                   event: event,
                   selected: _selectedEventId == event.eventId,
-                  onTap: () {
-                    setState(() {
-                      _selectedEventId = event.eventId;
-                      _lastPlaybackUrl = null;
-                    });
-                    _loadEventClips(event.eventId);
-                    _loadEventAudit(event.eventId);
-                  },
+                  onTap: () =>
+                      context.go('/console/events/${event.eventId}'),
                 ),
               ),
           ],
@@ -1438,12 +1502,16 @@ class _CameraDeviceCard extends StatelessWidget {
   const _CameraDeviceCard({
     required this.device,
     required this.selected,
+    required this.armedCount,
     required this.onTap,
+    required this.onArmTap,
   });
 
   final EdgeDevice device;
   final bool selected;
+  final int armedCount;
   final VoidCallback onTap;
+  final VoidCallback onArmTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1451,73 +1519,429 @@ class _CameraDeviceCard extends StatelessWidget {
     final scheme = theme.colorScheme;
     final online = device.healthStatus == 'online';
     final statusColor = StatusToneColor.fromStatus(device.healthStatus).base;
-    final tileFill = online
+    final bodyFill = online
         ? scheme.surface
         : Color.alphaBlend(
             scheme.onSurface.withValues(alpha: 0.045),
             scheme.surface,
           );
+    // Warm sunset gradient for live cameras; a quiet slate gradient when offline.
+    final headerColors = online
+        ? const [Color(0xFFFF4E50), Color(0xFFF9D423)]
+        : const [Color(0xFF334155), Color(0xFF475569), Color(0xFF64748B)];
 
     return AppCard(
       selected: selected,
       hoverable: true,
       padding: EdgeInsets.zero,
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: AppMotion.duration(context, AppMotion.fast),
-        curve: AppMotion.easeOut,
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: tileFill,
-          borderRadius: AppRadius.lgAll,
-        ),
+      child: ClipRRect(
+        borderRadius: AppRadius.lgAll,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Opacity(
-                  opacity: online ? 1 : 0.42,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Image.asset(
-                      'assets/brand/erlang-ai-camera-tile-icon.png',
-                      width: 44,
-                      height: 44,
-                      fit: BoxFit.cover,
+            // Gradient header — fills the top and carries the thumbnail + status.
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: headerColors,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(13),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.28),
+                      ),
+                    ),
+                    child: Opacity(
+                      opacity: online ? 1 : 0.6,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(9),
+                        child: Image.asset(
+                          'assets/brand/erlang-ai-camera-tile-icon.png',
+                          width: 34,
+                          height: 34,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                const Spacer(),
-                _CameraStatusBadge(
-                  label: online ? 'Live' : 'Offline',
-                  color: statusColor,
-                  muted: !online,
-                ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              device.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: online ? scheme.onSurface : scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
+                  const Spacer(),
+                  _GlassStatusPill(
+                    label: online ? 'Live' : 'Offline',
+                    dotColor: statusColor,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              device.location ?? _cameraSummary(device),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
+            // Body — name, location, and the favorite heart pinned bottom-right.
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                color: bodyFill,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      device.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: online
+                            ? scheme.onSurface
+                            : scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      device.location ?? _cameraSummary(device),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        _ArmShieldChip(count: armedCount, onTap: onArmTap),
+                        const Spacer(),
+                        if (device.isFavorite)
+                          const Icon(
+                            Icons.favorite,
+                            size: 18,
+                            color: AppColors.danger,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Tappable armed-status chip on a camera card. Opens the quick-arm sheet.
+class _ArmShieldChip extends StatelessWidget {
+  const _ArmShieldChip({required this.count, required this.onTap});
+
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final armed = count > 0;
+    final color = armed ? AppColors.success : scheme.onSurfaceVariant;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: AppRadius.pillAll,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: armed ? 0.12 : 0.06),
+            borderRadius: AppRadius.pillAll,
+            border: Border.all(
+              color: color.withValues(alpha: armed ? 0.35 : 0.20),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                armed ? Icons.shield : Icons.shield_outlined,
+                size: 13,
+                color: color,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                armed ? '$count armed' : 'Arm',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet to arm/disarm detection rules on a single camera. Rules whose
+/// detectors match what this camera already watches are surfaced as recommended.
+class _QuickArmSheet extends StatefulWidget {
+  const _QuickArmSheet({
+    required this.device,
+    required this.apiClient,
+    required this.agents,
+    required this.onChanged,
+  });
+
+  final EdgeDevice device;
+  final SentinelEdgeApiClient apiClient;
+  final List<SurveillanceAgent> agents;
+  final Future<void> Function() onChanged;
+
+  @override
+  State<_QuickArmSheet> createState() => _QuickArmSheetState();
+}
+
+class _QuickArmSheetState extends State<_QuickArmSheet> {
+  late List<SurveillanceAgent> _agents = widget.agents;
+  String? _busyId;
+  String? _error;
+
+  List<SurveillanceAgent> get _definitions =>
+      _agents.where((agent) => agent.isDefinition).toList();
+
+  bool _armed(String definitionId) => _agents.any(
+    (agent) =>
+        agent.parentAgentId == definitionId &&
+        agent.deviceId == widget.device.deviceId,
+  );
+
+  Set<String> _classesOf(SurveillanceAgent agent) {
+    final raw = agent.compiledEdgeConfig['classes'];
+    return raw is List ? raw.map((e) => e.toString()).toSet() : <String>{};
+  }
+
+  // What this camera already watches, inferred from its armed sub-agents.
+  Set<String> get _deviceClasses => _agents
+      .where((agent) => agent.deviceId == widget.device.deviceId)
+      .expand(_classesOf)
+      .toSet();
+
+  bool _recommended(SurveillanceAgent definition) {
+    final deviceClasses = _deviceClasses;
+    if (deviceClasses.isEmpty) return false;
+    return _classesOf(definition).intersection(deviceClasses).isNotEmpty;
+  }
+
+  Future<void> _reload() async {
+    final agents = await widget.apiClient.listAgents();
+    if (!mounted) return;
+    setState(() => _agents = agents);
+    await widget.onChanged();
+  }
+
+  Future<void> _toggle(SurveillanceAgent definition, bool arm) async {
+    setState(() {
+      _busyId = definition.agentId;
+      _error = null;
+    });
+    try {
+      if (arm) {
+        await widget.apiClient.assignAgent(
+          definition.agentId,
+          deviceId: widget.device.deviceId,
+        );
+      } else {
+        await widget.apiClient.unassignAgent(
+          definition.agentId,
+          deviceId: widget.device.deviceId,
+        );
+      }
+      await _reload();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _busyId = null);
+    }
+  }
+
+  Future<void> _armRecommended() async {
+    for (final definition in _definitions.where(_recommended)) {
+      if (!_armed(definition.agentId)) {
+        await _toggle(definition, true);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final definitions = _definitions;
+    final recommended = definitions.where(_recommended).toList();
+    final others = definitions.where((d) => !_recommended(d)).toList();
+    final unarmedRecommended = recommended
+        .where((d) => !_armed(d.agentId))
+        .toList();
+
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            0,
+            AppSpacing.lg,
+            AppSpacing.lg,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Arm ${widget.device.name}', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 2),
+              Text(
+                'Choose which detection rules watch this camera',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              if (definitions.isEmpty)
+                const _CompactSheetEmpty()
+              else
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (recommended.isNotEmpty)
+                          _sectionLabel('Recommended for this scene'),
+                        ...recommended.map(_ruleRow),
+                        if (others.isNotEmpty) _sectionLabel('Other rules'),
+                        ...others.map(_ruleRow),
+                      ],
+                    ),
+                  ),
+                ),
+              if (unarmedRecommended.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                AppButton(
+                  label: 'Arm recommended (${unarmedRecommended.length})',
+                  icon: Icons.shield_outlined,
+                  onPressed: _busyId == null ? _armRecommended : null,
+                  expand: true,
+                ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                AppBanner(text: _error!),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text) => Padding(
+    padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: 4),
+    child: Text(
+      text.toUpperCase(),
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+        letterSpacing: 0.6,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
+
+  Widget _ruleRow(SurveillanceAgent definition) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final armed = _armed(definition.agentId);
+    final busy = _busyId == definition.agentId;
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLowest,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  definition.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  definition.rule,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          if (busy)
+            const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            Switch(
+              value: armed,
+              onChanged: _busyId == null
+                  ? (value) => _toggle(definition, value)
+                  : null,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactSheetEmpty extends StatelessWidget {
+  const _CompactSheetEmpty();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+      child: Column(
+        children: [
+          Icon(
+            Icons.radar_outlined,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text('No detection rules yet', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 4),
+          Text(
+            'Create a rule in the Agents tab, then arm it here.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1529,16 +1953,11 @@ String _cameraSummary(EdgeDevice device) {
   return 'Camera device';
 }
 
-class _CameraStatusBadge extends StatelessWidget {
-  const _CameraStatusBadge({
-    required this.label,
-    required this.color,
-    required this.muted,
-  });
+class _GlassStatusPill extends StatelessWidget {
+  const _GlassStatusPill({required this.label, required this.dotColor});
 
   final String label;
-  final Color color;
-  final bool muted;
+  final Color dotColor;
 
   @override
   Widget build(BuildContext context) {
@@ -1546,15 +1965,27 @@ class _CameraStatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: muted ? 0.08 : 0.14),
+        color: Colors.white.withValues(alpha: 0.18),
         borderRadius: AppRadius.pillAll,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
       ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w800,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2523,17 +2954,27 @@ class _AiAgentChatFab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (compact) {
+      // The orb is its own dark glass surface + glow, so the FAB itself is
+      // transparent and flat — the aurora provides the shape and shadow.
       return FloatingActionButton(
         tooltip: 'Erlang AI Agent',
         onPressed: onPressed,
-        child: const _AiAgentIconMark(size: 34),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        highlightElevation: 0,
+        focusElevation: 0,
+        hoverElevation: 0,
+        child: const _AnimatedAiAgentIcon(size: 56),
       );
     }
 
     return FloatingActionButton.extended(
       tooltip: 'Erlang AI Agent',
       onPressed: onPressed,
-      icon: const _AiAgentIconMark(size: 26),
+      backgroundColor: AppColors.darkSurface,
+      foregroundColor: Colors.white,
+      icon: const _AnimatedAiAgentIcon(size: 34),
       label: const Text('AI Agent'),
     );
   }
@@ -2653,52 +3094,162 @@ class _AnimatedAiAgentIconState extends State<_AnimatedAiAgentIcon>
   @override
   Widget build(BuildContext context) {
     final reducedMotion = AppMotion.reduced(context);
-    final theme = Theme.of(context);
-    final innerPadding = widget.size * 0.16;
 
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
         final t = reducedMotion ? 0.0 : _controller.value;
-        return Container(
-          width: widget.size,
-          height: widget.size,
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: SweepGradient(
-              transform: GradientRotation(t * math.pi * 2),
-              colors: const [
-                AppColors.primaryPressed,
-                AppColors.accentOrange,
-                AppColors.primaryContainer,
-                AppColors.primary,
-                AppColors.primaryPressed,
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.26),
-                blurRadius: 22,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Container(
-            padding: EdgeInsets.all(innerPadding),
+        // 0..1 breathing curve that drives the soft pulsing outer glow.
+        final breath = 0.5 + 0.5 * math.sin(t * math.pi * 2);
+        return SizedBox.square(
+          dimension: widget.size,
+          child: DecoratedBox(
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: theme.colorScheme.surface,
-              border: Border.all(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.55),
+              // Twin coloured glows offset to opposite sides make the whole
+              // orb read as a single soft light source, not a flat disc.
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.16 + breath * 0.16),
+                  blurRadius: widget.size * (0.24 + breath * 0.14),
+                  spreadRadius: widget.size * 0.01,
+                  offset: Offset(-widget.size * 0.04, widget.size * 0.06),
+                ),
+                BoxShadow(
+                  color: AppColors.info.withValues(alpha: 0.18 + breath * 0.16),
+                  blurRadius: widget.size * (0.28 + breath * 0.16),
+                  spreadRadius: widget.size * 0.01,
+                  offset: Offset(widget.size * 0.04, widget.size * 0.10),
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: CustomPaint(
+                painter: _AgentAuroraPainter(progress: t),
+                child: Center(
+                  // The mascot floats directly on the aurora — its own
+                  // transparent bubble shape lets the glow show through.
+                  child: _AiAgentIconMark(size: widget.size * 0.74),
+                ),
               ),
             ),
-            child: _AiAgentIconMark(size: widget.size * 0.56),
           ),
         );
       },
     );
   }
+}
+
+/// A calm "liquid aurora" background: a dark glass disc lit from within by two
+/// drifting pools of light — one red, one blue — blended additively so where
+/// they overlap the light brightens toward magenta/white instead of muddying.
+class _AgentAuroraPainter extends CustomPainter {
+  const _AgentAuroraPainter({required this.progress});
+
+  final double progress;
+
+  static const _red = Color(0xFFF03A24);
+  static const _blue = Color(0xFF2E6BF0);
+  static const _spark = Color(0xFFFF4D7D);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final center = rect.center;
+    final radius = size.shortestSide / 2;
+    final phase = progress * math.pi * 2;
+    final breath = 0.5 + 0.5 * math.sin(phase);
+    final drift = math.sin(phase);
+
+    // 1. Dark glass base so the coloured light reads as a glow.
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..shader = const RadialGradient(
+          colors: [Color(0xFF17213B), Color(0xFF080B14)],
+          stops: [0.0, 1.0],
+        ).createShader(rect),
+    );
+
+    // Keep every glow contained within the disc.
+    canvas.save();
+    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: center, radius: radius)));
+
+    void glow(double angle, double dist, double blobRadius, Color color, double alpha) {
+      final c = center + Offset(math.cos(angle) * dist, math.sin(angle) * dist);
+      final r = Rect.fromCircle(center: c, radius: blobRadius);
+      canvas.drawCircle(
+        c,
+        blobRadius,
+        Paint()
+          ..blendMode = BlendMode.plus // additive: overlaps brighten, never mud
+          ..shader = RadialGradient(
+            colors: [color.withValues(alpha: alpha), color.withValues(alpha: 0)],
+            stops: const [0.0, 1.0],
+          ).createShader(r),
+      );
+    }
+
+    // 2. Red and blue pools drifting on opposite sides, breathing in size.
+    glow(phase * 0.9, radius * (0.34 + 0.08 * drift),
+        radius * (0.82 + 0.10 * breath), _red, 0.80);
+    glow(phase * 0.9 + math.pi + 0.5, radius * (0.36 - 0.08 * drift),
+        radius * (0.84 + 0.10 * (1 - breath)), _blue, 0.82);
+    // A small mingling spark keeps the centre alive without clutter.
+    glow(-phase * 0.6, radius * 0.16 * drift,
+        radius * (0.42 + 0.08 * breath), _spark, 0.28);
+
+    // 3. Glassy specular highlight, upper-left.
+    final hl = center + Offset(-radius * 0.30, -radius * 0.34);
+    canvas.drawCircle(
+      hl,
+      radius * 0.60,
+      Paint()
+        ..blendMode = BlendMode.plus
+        ..shader = RadialGradient(
+          colors: [Colors.white.withValues(alpha: 0.20), Colors.white.withValues(alpha: 0)],
+          stops: const [0.0, 1.0],
+        ).createShader(Rect.fromCircle(center: hl, radius: radius * 0.60)),
+    );
+
+    // 4. Gentle light lift behind the mascot so its dark outline stays legible.
+    canvas.drawCircle(
+      center,
+      radius * 0.52,
+      Paint()
+        ..blendMode = BlendMode.plus
+        ..shader = RadialGradient(
+          colors: [Colors.white.withValues(alpha: 0.10), Colors.white.withValues(alpha: 0)],
+          stops: const [0.0, 1.0],
+        ).createShader(Rect.fromCircle(center: center, radius: radius * 0.52)),
+    );
+
+    // 5. A soft highlight arc sweeping the rim — definition without a hard ring.
+    canvas.drawCircle(
+      center,
+      radius - 1,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..shader = SweepGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.0),
+            Colors.white.withValues(alpha: 0.26),
+            Colors.white.withValues(alpha: 0.0),
+            Colors.white.withValues(alpha: 0.0),
+          ],
+          stops: const [0.0, 0.12, 0.36, 1.0],
+          transform: GradientRotation(phase),
+        ).createShader(Rect.fromCircle(center: center, radius: radius)),
+    );
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _AgentAuroraPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 class _AgentSuggestionRow extends StatelessWidget {
@@ -3177,81 +3728,6 @@ class _TemplateChip extends StatelessWidget {
   }
 }
 
-class _AssignAgentTile extends StatelessWidget {
-  const _AssignAgentTile({
-    required this.agent,
-    required this.assigned,
-    required this.assignmentCount,
-    required this.busy,
-    required this.enabled,
-    required this.onChanged,
-  });
-
-  final SurveillanceAgent agent;
-  final bool assigned;
-  final int assignmentCount;
-  final bool busy;
-  final bool enabled;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final elsewhere = assignmentCount - (assigned ? 1 : 0);
-    final subtitle = elsewhere > 0
-        ? '${agent.rule}  ??  also on $elsewhere other ${elsewhere == 1 ? 'camera' : 'cameras'}'
-        : agent.rule;
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLowest,
-        borderRadius: AppRadius.mdAll,
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          IconChip(
-            icon: Icons.radar_outlined,
-            size: 34,
-            color: assigned ? AppColors.success : scheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  agent.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          if (busy)
-            const SizedBox.square(
-              dimension: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else
-            Switch(value: assigned, onChanged: enabled ? onChanged : null),
-        ],
-      ),
-    );
-  }
-}
-
 class _AgentFormResult {
   const _AgentFormResult({
     required this.name,
@@ -3404,6 +3880,535 @@ class _AgentFormDialogState extends State<_AgentFormDialog> {
           child: Text(_isEditing ? 'Save changes' : 'Create agent'),
         ),
       ],
+    );
+  }
+}
+
+/// Conversational agent builder. The user describes what to watch for; the AI
+/// refines it over a few turns and proposes a rule + preview, then saves.
+class _AgentBuilderDialog extends StatefulWidget {
+  const _AgentBuilderDialog({required this.apiClient, this.initialAgent});
+
+  final SentinelEdgeApiClient apiClient;
+
+  /// When set, the builder edits this agent: the chat is seeded with its current
+  /// rule and the proposal starts populated so it can be saved after tweaking.
+  final SurveillanceAgent? initialAgent;
+
+  @override
+  State<_AgentBuilderDialog> createState() => _AgentBuilderDialogState();
+}
+
+class _BuilderMessage {
+  const _BuilderMessage(this.role, this.text);
+  final String role; // 'user' | 'assistant'
+  final String text;
+}
+
+class _AgentBuilderDialogState extends State<_AgentBuilderDialog> {
+  final _input = TextEditingController();
+  final _nameController = TextEditingController();
+  final _scroll = ScrollController();
+  late final List<_BuilderMessage> _messages;
+  bool _sending = false;
+  String? _error;
+  String? _proposedRule;
+  List<String> _classes = const [];
+  String? _scheduleLabel;
+
+  bool get _isEdit => widget.initialAgent != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final agent = widget.initialAgent;
+    if (agent != null) {
+      // Seed the edit session: current rule shown as the proposal so the user
+      // can save right away, and the chat carries the rule as context.
+      _proposedRule = agent.rule;
+      _classes =
+          (agent.compiledEdgeConfig['classes'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [];
+      _scheduleLabel = _scheduleLabelOf(agent.compiledEdgeConfig);
+      _nameController.text = agent.name;
+      _messages = [
+        _BuilderMessage(
+          'assistant',
+          'You\'re editing "${agent.name}". Its current rule is:\n'
+              '"${agent.rule}"\n\nTell me what you\'d like to change.',
+        ),
+      ];
+    } else {
+      _messages = [
+        const _BuilderMessage(
+          'assistant',
+          "Hi! Tell me what you'd like this camera to watch for, and I'll turn "
+              'it into a detection rule.',
+        ),
+      ];
+    }
+  }
+
+  String? _scheduleLabelOf(Map<String, dynamic> config) {
+    final schedule = config['schedule'];
+    if (schedule is Map && schedule['start'] != null && schedule['end'] != null) {
+      return '${schedule['start']}–${schedule['end']}';
+    }
+    return null;
+  }
+
+  @override
+  void dispose() {
+    _input.dispose();
+    _nameController.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _input.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() {
+      _messages.add(_BuilderMessage('user', text));
+      _input.clear();
+      _sending = true;
+      _error = null;
+    });
+    _scrollToEnd();
+    try {
+      final history = _messages
+          .map((m) => {'role': m.role, 'content': m.text})
+          .toList();
+      final reply = await widget.apiClient.agentBuilder(history);
+      if (!mounted) return;
+      setState(() {
+        _messages.add(_BuilderMessage('assistant', reply.reply));
+        if (reply.rule != null) {
+          _proposedRule = reply.rule;
+          _classes = reply.classes;
+          _scheduleLabel = reply.scheduleLabel;
+          if (_nameController.text.trim().isEmpty && reply.name != null) {
+            _nameController.text = reply.name!;
+          }
+        }
+      });
+      _scrollToEnd();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  void _scrollToEnd() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  void _save() {
+    final rule = _proposedRule;
+    if (rule == null) return;
+    final typed = _nameController.text.trim();
+    final name = typed.isEmpty ? _deriveName(rule) : typed;
+    Navigator.of(context).pop(
+      _AgentFormResult(
+        name: name,
+        // Preserve the agent's location when editing; new agents have none.
+        location: widget.initialAgent?.location,
+        rule: rule,
+      ),
+    );
+  }
+
+  String _deriveName(String rule) {
+    final words = rule.replaceAll(RegExp(r'[^\w\s]'), '').split(RegExp(r'\s+'));
+    final picked = words.where((w) => w.isNotEmpty).take(4).join(' ');
+    return picked.isEmpty ? 'New rule' : picked;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Dialog(
+      insetPadding: const EdgeInsets.all(AppSpacing.lg),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 560,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.auto_awesome, color: AppColors.primary),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      _isEdit ? 'Refine agent' : 'Build an agent',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              Text(
+                _isEdit
+                    ? 'Tell the AI what to change, then save.'
+                    : 'Describe what to watch for — refine it together, then save.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Flexible(
+                child: ListView.builder(
+                  controller: _scroll,
+                  shrinkWrap: true,
+                  itemCount: _messages.length + (_sending ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index >= _messages.length) {
+                      return const _BuilderBubble(
+                        role: 'assistant',
+                        child: SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      );
+                    }
+                    final message = _messages[index];
+                    return _BuilderBubble(
+                      role: message.role,
+                      child: Text(message.text),
+                    );
+                  },
+                ),
+              ),
+              if (_proposedRule != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                _ProposalCard(
+                  rule: _proposedRule!,
+                  classes: _classes,
+                  scheduleLabel: _scheduleLabel,
+                  nameController: _nameController,
+                ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                AppBanner(text: _error!),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _input,
+                      enabled: !_sending,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _send(),
+                      decoration: const InputDecoration(
+                        hintText: 'e.g. tell me if a car pulls into the driveway',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  IconButton.filled(
+                    onPressed: _sending ? null : _send,
+                    icon: const Icon(Icons.send_rounded),
+                  ),
+                ],
+              ),
+              if (_proposedRule != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                AppButton(
+                  label: _isEdit ? 'Save changes' : 'Create agent',
+                  icon: Icons.check_circle_outline,
+                  onPressed: _sending ? null : _save,
+                  expand: true,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BuilderBubble extends StatelessWidget {
+  const _BuilderBubble({required this.role, required this.child});
+
+  final String role;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isUser = role == 'user';
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width * 0.62,
+        ),
+        decoration: BoxDecoration(
+          color: isUser ? scheme.primaryContainer : scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(14),
+            topRight: const Radius.circular(14),
+            bottomLeft: Radius.circular(isUser ? 14 : 4),
+            bottomRight: Radius.circular(isUser ? 4 : 14),
+          ),
+        ),
+        child: DefaultTextStyle.merge(
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: isUser ? scheme.onPrimaryContainer : scheme.onSurface,
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _ProposalCard extends StatelessWidget {
+  const _ProposalCard({
+    required this.rule,
+    required this.classes,
+    required this.scheduleLabel,
+    required this.nameController,
+  });
+
+  final String rule;
+  final List<String> classes;
+  final String? scheduleLabel;
+  final TextEditingController nameController;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.30)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'PROPOSED RULE',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(rule, style: theme.textTheme.bodyMedium),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final label in classes) _PreviewChip(label: label),
+              if (scheduleLabel != null)
+                _PreviewChip(label: scheduleLabel!, icon: Icons.schedule),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: nameController,
+            decoration: InputDecoration(
+              labelText: 'Agent name',
+              isDense: true,
+              filled: true,
+              fillColor: scheme.surface,
+              prefixIcon: const Icon(Icons.badge_outlined, size: 18),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PreviewChip extends StatelessWidget {
+  const _PreviewChip({required this.label, this.icon});
+
+  final String label;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: scheme.secondaryContainer,
+        borderRadius: AppRadius.pillAll,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: scheme.onSecondaryContainer),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSecondaryContainer,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Lets the user pick how to create an agent: the AI chat builder or the
+/// classic form. Returns 'ai' or 'classic'.
+class _CreateAgentChooser extends StatelessWidget {
+  const _CreateAgentChooser({this.isEdit = false});
+
+  final bool isEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          0,
+          AppSpacing.lg,
+          AppSpacing.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              isEdit ? 'Edit agent' : 'Create an agent',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              isEdit ? 'Pick how you\'d like to edit it.' : 'Pick how you\'d like to start.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _ChooserOption(
+              icon: Icons.auto_awesome,
+              iconColor: AppColors.primary,
+              title: isEdit ? 'Refine with AI' : 'Build with AI',
+              subtitle: isEdit
+                  ? 'Chat with AI to adjust this rule.'
+                  : 'Describe what to watch for and refine it in a chat.',
+              onTap: () => Navigator.of(context).pop('ai'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _ChooserOption(
+              icon: Icons.edit_note_outlined,
+              title: 'Classic form',
+              subtitle: isEdit
+                  ? 'Edit the rule fields yourself.'
+                  : 'Write the rule yourself, optionally from a template.',
+              onTap: () => Navigator.of(context).pop('classic'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChooserOption extends StatelessWidget {
+  const _ChooserOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.iconColor,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final Color? iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: AppRadius.mdAll,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLowest,
+            borderRadius: AppRadius.mdAll,
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: iconColor ?? scheme.onSurfaceVariant),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

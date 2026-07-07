@@ -74,9 +74,11 @@ Example response:
       "device_id": "dev_frontdoor_001",
       "state": "armed",
       "compiled_edge_config": {
-        "detectors": ["person"],
-        "min_confidence": 0.75,
-        "rule_text": "alert me when a person is visible"
+        "classes": ["person"],
+        "min_confidence": 0.5,
+        "dwell_s": 3.0,
+        "cooldown_s": 30.0,
+        "schedule": {"start": "22:00", "end": "06:00"}
       }
     }
   ],
@@ -84,7 +86,7 @@ Example response:
 }
 ```
 
-Current rule compilation is intentionally simple: the backend normalizes the natural language rule and emits a person detector config. Rich NL-to-detector compilation remains future work.
+`compiled_edge_config` is produced by `app/agents/compiler.py` and matches the edge `EventFilter` schema: `classes` (COCO video labels + YAMNet audio labels: `glass-break, scream, crying, gunshot, alarm`), `min_confidence`, `dwell_s`, `cooldown_s`, and optional `schedule`/`roi`. A Qwen Cloud text model compiles the rule, with a deterministic keyword fallback in test/key-less environments. Note the key is `classes` (the old `detectors` key was ignored by the edge).
 
 ## Live Video Stream
 

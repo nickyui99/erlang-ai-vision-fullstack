@@ -1,7 +1,8 @@
-from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+
+from app.schemas._datetime import UTCDatetime
 
 
 class ToolAuditRead(BaseModel):
@@ -14,6 +15,6 @@ class ToolAuditRead(BaseModel):
     arguments: dict[str, Any] | None = None
     result: dict[str, Any] | None = None
     called_by: str
-    timestamp: datetime
+    timestamp: UTCDatetime
 
     model_config = ConfigDict(from_attributes=True)

@@ -95,6 +95,21 @@ class Settings(BaseSettings):
         validation_alias="DAILY_RECORDING_RETENTION_HOURS",
     )
 
+    # Demo simulation (judge/demo account only). When enabled, the backend can
+    # play pre-extracted video frames into a demo camera's live view and triage
+    # them with the cloud VLM API — no laptop edge required. Strictly gated to
+    # devices whose id starts with demo_sim_device_prefix AND that have a frame
+    # folder under data/demo_frames/, so normal accounts are never affected.
+    demo_simulation_enabled: bool = Field(default=False, validation_alias="DEMO_SIMULATION_ENABLED")
+    demo_sim_device_prefix: str = Field(default="dev_judge_", validation_alias="DEMO_SIM_DEVICE_PREFIX")
+    # Where the pre-extracted demo frames live. Empty -> REPO_ROOT/data/demo_frames
+    # (local dev). The Docker image sets this to the path it copies frames into.
+    demo_frames_dir: str = Field(default="", validation_alias="DEMO_FRAMES_DIR")
+    demo_sim_fps: float = Field(default=10.0, validation_alias="DEMO_SIM_FPS")
+    demo_sim_triage_interval_seconds: float = Field(default=15.0, validation_alias="DEMO_SIM_TRIAGE_INTERVAL_SECONDS")
+    demo_sim_event_cooldown_seconds: float = Field(default=45.0, validation_alias="DEMO_SIM_EVENT_COOLDOWN_SECONDS")
+    demo_sim_idle_timeout_seconds: float = Field(default=30.0, validation_alias="DEMO_SIM_IDLE_TIMEOUT_SECONDS")
+
     alibaba_cloud_access_key_id: str = Field(default="", validation_alias="ALIBABA_CLOUD_ACCESS_KEY_ID")
     alibaba_cloud_access_key_secret: str = Field(default="", validation_alias="ALIBABA_CLOUD_ACCESS_KEY_SECRET")
     alicloud_oss_endpoint: str = Field(default="", validation_alias="ALICLOUD_OSS_ENDPOINT")

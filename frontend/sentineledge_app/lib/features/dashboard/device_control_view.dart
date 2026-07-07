@@ -59,6 +59,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
   bool _isMuted = false;
   String _resolution = 'Auto';
   String? _cameraControlBusy;
+  bool _isSettingMode = false;
   bool _isDeleting = false;
   bool _isLoadingEvents = false;
   bool _isLoadingPlayback = false;
@@ -368,6 +369,39 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     if (mounted) await _sendTilt(90);
   }
 
+  // Per-camera autonomous control mode: off / auto_track / agent. Mutually exclusive --
+  // exactly one controller (none / the deterministic tracker / the LLM agent) owns the servo.
+  static const List<String> _controlModes = ['off', 'auto_track', 'agent'];
+
+  Future<void> _setControlMode(String mode) async {
+    if (_isSettingMode || mode == _device.controlMode) return;
+    setState(() {
+      _isSettingMode = true;
+      _error = null;
+    });
+    try {
+      final updated = await widget.apiClient.setControlMode(
+        _device.deviceId,
+        mode,
+      );
+      if (!mounted) return;
+      setState(() => _device = updated);
+      const labels = {
+        'off': 'Auto control off',
+        'auto_track': 'Auto-tracking on',
+        'agent': 'Agent control on',
+      };
+      _toast(labels[mode] ?? 'Control mode: $mode');
+      await widget.onChanged();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+      _toast(error.toString());
+    } finally {
+      if (mounted) setState(() => _isSettingMode = false);
+    }
+  }
+
   Future<void> _takeSnapshot() async {
     setState(() {
       _isSnapshotting = true;
@@ -638,8 +672,8 @@ class _DeviceControlViewState extends State<DeviceControlView> {
             tooltip: _device.isFavorite ? 'Remove favorite' : 'Favorite camera',
             onPressed: _isDeleting ? null : _toggleFavorite,
             icon: Icon(
-              _device.isFavorite ? Icons.star : Icons.star_border,
-              color: _device.isFavorite ? AppColors.warning : null,
+              _device.isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: _device.isFavorite ? AppColors.danger : null,
             ),
           ),
           IconButton(
@@ -734,6 +768,8 @@ class _DeviceControlViewState extends State<DeviceControlView> {
           onFullscreen: _openFullscreenLiveView,
         ),
         const SizedBox(height: AppSpacing.sm),
+        _controlModeCard(compact: compact),
+        const SizedBox(height: AppSpacing.sm),
         _compactPtzSurface(compact: compact),
         const SizedBox(height: AppSpacing.sm),
         _PlaybackDownloadPanel(
@@ -749,6 +785,80 @@ class _DeviceControlViewState extends State<DeviceControlView> {
           onPlayRecording: _playRecording,
         ),
       ],
+    );
+  }
+
+  Widget _controlModeCard({required bool compact}) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    // Normalize any unexpected server value so the SegmentedButton selection is always valid.
+    final mode = _controlModes.contains(_device.controlMode)
+        ? _device.controlMode
+        : 'off';
+    final subtitle = switch (mode) {
+      'auto_track' =>
+        'The camera automatically follows a detected person.',
+      'agent' => _armedHere > 0
+          ? 'The armed agent decides how the camera pans and tilts.'
+          : 'Arm an agent under Protection so it can drive the camera.',
+      _ => 'Manual control only - the camera stays put until you move it.',
+    };
+    return AppCard(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? AppSpacing.md : AppSpacing.lg,
+        vertical: compact ? AppSpacing.sm : AppSpacing.md,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.control_camera_outlined,
+                  size: 20, color: scheme.onSurfaceVariant),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text('Camera control',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+              ),
+              if (_isSettingMode)
+                const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment<String>(
+                value: 'off',
+                icon: Icon(Icons.block_outlined),
+                label: Text('Off'),
+              ),
+              ButtonSegment<String>(
+                value: 'auto_track',
+                icon: Icon(Icons.center_focus_strong_outlined),
+                label: Text('Auto-track'),
+              ),
+              ButtonSegment<String>(
+                value: 'agent',
+                icon: Icon(Icons.smart_toy_outlined),
+                label: Text('Agent'),
+              ),
+            ],
+            selected: {mode},
+            showSelectedIcon: false,
+            onSelectionChanged: _isSettingMode
+                ? null
+                : (selection) => _setControlMode(selection.first),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(subtitle,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: scheme.onSurfaceVariant)),
+        ],
+      ),
     );
   }
 
@@ -901,22 +1011,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
           : Column(
               children: _events
                   .take(6)
-                  .map(
-                    (event) => SelectableConsoleTile(
-                      selected: false,
-                      title: event.summary?.isNotEmpty == true
-                          ? event.summary!
-                          : event.eventType,
-                      subtitle: _formatTimestamp(event.timestamp),
-                      leading: IconChip(
-                        icon: Icons.warning_amber_outlined,
-                        size: 34,
-                        color: StatusToneColor.fromStatus(event.severity).base,
-                      ),
-                      trailing: StatusPill.fromStatus(event.severity),
-                      onTap: () {},
-                    ),
-                  )
+                  .map((event) => _ActivityTile(event: event))
                   .toList(),
             ),
     );
@@ -926,6 +1021,180 @@ class _DeviceControlViewState extends State<DeviceControlView> {
 String _formatTimestamp(DateTime? value) {
   if (value == null) return 'unknown time';
   return value.toLocal().toString().split('.').first;
+}
+
+// Severity -> tone (high/critical=red, medium=amber, low=blue). fromStatus only
+// knows 'critical', so high/medium/low would otherwise all read as neutral gray.
+StatusTone _severityTone(String severity) {
+  switch (severity.toLowerCase().trim()) {
+    case 'critical':
+    case 'high':
+      return StatusTone.danger;
+    case 'medium':
+      return StatusTone.warning;
+    case 'low':
+      return StatusTone.info;
+    default:
+      return StatusTone.neutral;
+  }
+}
+
+/// A human label + tone for an event's verification status.
+(String, StatusTone) _statusMeta(String status, bool degraded) {
+  if (degraded) return ('Unverified', StatusTone.warning);
+  switch (status.toLowerCase().trim()) {
+    case 'verified':
+      return ('Verified', StatusTone.success);
+    case 'false_positive':
+      return ('False positive', StatusTone.neutral);
+    case 'dismissed':
+      return ('Dismissed', StatusTone.neutral);
+    case 'candidate':
+      return ('Reviewing', StatusTone.warning);
+    default:
+      return (_titleCase(status), StatusTone.neutral);
+  }
+}
+
+IconData _activityIcon(String eventType) {
+  switch (eventType.toLowerCase()) {
+    case 'person_detected':
+      return Icons.person_outline;
+    case 'vehicle_detected':
+      return Icons.directions_car_outlined;
+    case 'pet_detected':
+      return Icons.pets_outlined;
+    case 'object_detected':
+      return Icons.inventory_2_outlined;
+    case 'baby_crying':
+      return Icons.child_care_outlined;
+    case 'audio_threat':
+      return Icons.graphic_eq;
+    default:
+      return Icons.sensors_outlined;
+  }
+}
+
+String _titleCase(String value) => value
+    .split(RegExp(r'[_\s]+'))
+    .where((word) => word.isNotEmpty)
+    .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
+    .join(' ');
+
+String _relativeTime(DateTime? value) {
+  if (value == null) return '';
+  final delta = DateTime.now().difference(value.toLocal());
+  if (delta.isNegative || delta.inSeconds < 45) return 'just now';
+  if (delta.inMinutes < 60) return '${delta.inMinutes}m ago';
+  if (delta.inHours < 24) return '${delta.inHours}h ago';
+  if (delta.inDays < 7) return '${delta.inDays}d ago';
+  return value.toLocal().toString().split(' ').first;
+}
+
+/// Recent-activity row: event-typed icon tinted by severity, the summary, and a
+/// colored chip row (severity / verification status / confidence) plus a
+/// relative timestamp — more context than the old single-line tile.
+class _ActivityTile extends StatelessWidget {
+  const _ActivityTile({required this.event});
+
+  final SecurityEvent event;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final severityTone = _severityTone(event.severity);
+    final (statusLabel, statusTone) = _statusMeta(event.status, event.degraded);
+    final title = event.summary?.isNotEmpty == true
+        ? event.summary!
+        : _titleCase(event.eventType);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLowest,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IconChip(
+            icon: _activityIcon(event.eventType),
+            size: 38,
+            color: severityTone.base,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _MetaChip(label: _titleCase(event.severity), tone: severityTone),
+                    _MetaChip(label: statusLabel, tone: statusTone),
+                    if (event.confidence != null)
+                      _MetaChip(
+                        label: '${(event.confidence! * 100).round()}% sure',
+                        tone: StatusTone.neutral,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${_titleCase(event.eventType)} · ${_relativeTime(event.timestamp)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact colored pill for event metadata.
+class _MetaChip extends StatelessWidget {
+  const _MetaChip({required this.label, required this.tone});
+
+  final String label;
+  final StatusTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = tone.base;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: AppRadius.pillAll,
+        border: Border.all(color: color.withValues(alpha: 0.30)),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

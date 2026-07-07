@@ -58,6 +58,7 @@ class _WebRealtimeConnection implements RealtimeConnection {
       'event.created',
       'clip.available',
       'device.health_changed',
+      'device.control_mode_changed',
       'agent.state_changed',
     ]) {
       final listener = ((web.Event event) {

@@ -1,7 +1,8 @@
-from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas._datetime import UTCDatetime
 
 
 AgentState = Literal["armed", "disarmed"]
@@ -26,6 +27,15 @@ class AgentAssign(BaseModel):
     device_id: str = Field(min_length=1, max_length=64)
 
 
+class AgentBuilderTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class AgentBuilderRequest(BaseModel):
+    messages: list[AgentBuilderTurn] = Field(min_length=1, max_length=40)
+
+
 class AgentRead(BaseModel):
     agent_id: str
     user_id: str
@@ -38,8 +48,8 @@ class AgentRead(BaseModel):
     compiled_edge_config: dict[str, Any] | None = None
     state: str
     enabled: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
 
     model_config = ConfigDict(from_attributes=True)
 

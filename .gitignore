@@ -15,3 +15,46 @@ sentineledge_migration_autogen.db-journal
 backend_run.log
 backend_run.err.log
 probe_edge_auth.py
+
+# local assistant / plugin state
+.codex/
+.agents/
+skills-lock.json
+
+# Python tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Flutter / Dart build artifacts
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+
+# local databases and generated runtime state
+*.db
+*.sqlite
+*.sqlite3
+!*.example.db
+
+# database backups (not caught by *.db)
+*.db.bak*
+*.bak-*
+
+# demo simulation: source clips are committed (used for deployment); the JPEG
+# frames are generated from them by scripts/extract_demo_frames.py, so ignore
+# those (regenerate on build/deploy).
+data/demo_frames/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# logs
+*.log

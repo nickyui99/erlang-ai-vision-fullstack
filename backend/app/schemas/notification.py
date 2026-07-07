@@ -1,7 +1,8 @@
-from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas._datetime import UTCDatetime
 
 
 class PushTokenCreate(BaseModel):
@@ -12,8 +13,8 @@ class PushTokenCreate(BaseModel):
 class PushTokenRead(BaseModel):
     token_id: str
     platform: str
-    created_at: datetime
-    updated_at: datetime
-    last_used_at: datetime | None = None
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
+    last_used_at: UTCDatetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
