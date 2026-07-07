@@ -684,11 +684,13 @@ class _DeviceControlViewState extends State<DeviceControlView> {
               color: _device.isFavorite ? AppColors.danger : null,
             ),
           ),
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _isDeleting ? null : _refreshDevice,
-            icon: const Icon(Icons.refresh),
-          ),
+          // Mobile refreshes by pulling down the page instead of a button.
+          if (!compact)
+            IconButton(
+              tooltip: 'Refresh',
+              onPressed: _isDeleting ? null : _refreshDevice,
+              icon: const Icon(Icons.refresh),
+            ),
           PopupMenuButton<String>(
             tooltip: 'More',
             enabled: !_isDeleting,
@@ -717,14 +719,23 @@ class _DeviceControlViewState extends State<DeviceControlView> {
             constraints: const BoxConstraints(
               maxWidth: AppBreakpoints.contentMaxWidth,
             ),
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(
-                compact ? AppSpacing.md : AppSpacing.lg,
-                compact ? AppSpacing.sm : AppSpacing.lg,
-                compact ? AppSpacing.md : AppSpacing.lg,
-                AppSpacing.xxl,
-              ),
-              children: [
+            child: RefreshIndicator(
+              // On mobile this is the sole refresh affordance; _refreshDevice
+              // reloads the device, stream, events and clips. Harmless on web
+              // (still has the app-bar button + wheel).
+              onRefresh: _refreshDevice,
+              notificationPredicate: (_) => compact,
+              child: ListView(
+                physics: compact
+                    ? const AlwaysScrollableScrollPhysics()
+                    : null,
+                padding: EdgeInsets.fromLTRB(
+                  compact ? AppSpacing.md : AppSpacing.lg,
+                  compact ? AppSpacing.sm : AppSpacing.lg,
+                  compact ? AppSpacing.md : AppSpacing.lg,
+                  AppSpacing.xxl,
+                ),
+                children: [
                 if (_error != null) ...[
                   AppBanner(text: _error!),
                   const SizedBox(height: AppSpacing.md),
@@ -742,7 +753,8 @@ class _DeviceControlViewState extends State<DeviceControlView> {
                       Expanded(flex: 5, child: secondaryPanels),
                     ],
                   ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -789,6 +801,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
           onRefresh: _loadPlaybackClips,
           onPlayClip: _playClip,
           onPlayRecording: _playRecording,
+          showRefresh: !compact,
         ),
       ],
     );
@@ -895,7 +908,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
       icon: Icons.shield_outlined,
       child: definitions.isEmpty
           ? const _CompactEmptyRow(
-              icon: Icons.radar_outlined,
+              icon: Icons.smart_toy_outlined,
               title: 'No detection rules yet',
               message:
                   'Create a detection rule, then toggle it on here to arm this camera.',
@@ -921,16 +934,19 @@ class _DeviceControlViewState extends State<DeviceControlView> {
       title: 'Recent activity',
       subtitle: '${_events.length} detections on this camera',
       icon: Icons.history_outlined,
-      action: IconButton.filledTonal(
-        onPressed: _isLoadingEvents ? null : _loadEvents,
-        tooltip: 'Refresh activity',
-        icon: _isLoadingEvents
-            ? const SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.refresh),
-      ),
+      // Mobile refreshes via pull-to-refresh, so hide the per-panel button.
+      action: compact
+          ? null
+          : IconButton.filledTonal(
+              onPressed: _isLoadingEvents ? null : _loadEvents,
+              tooltip: 'Refresh activity',
+              icon: _isLoadingEvents
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh),
+            ),
       child: _isLoadingEvents && _events.isEmpty
           ? const SkeletonList(rows: 3)
           : _events.isEmpty
@@ -1157,6 +1173,7 @@ class _PlaybackDownloadPanel extends StatelessWidget {
     required this.onPlayClip,
     required this.onPlayRecording,
     this.error,
+    this.showRefresh = true,
   });
 
   final List<MediaClip> clips;
@@ -1170,22 +1187,27 @@ class _PlaybackDownloadPanel extends StatelessWidget {
   final Future<void> Function(MediaClip clip) onPlayClip;
   final Future<void> Function(MediaRecording recording) onPlayRecording;
 
+  /// Hidden on mobile, where the page is refreshed by pulling down.
+  final bool showRefresh;
+
   @override
   Widget build(BuildContext context) {
     return ConsolePanel(
       title: 'Playback & Download',
       subtitle: 'Check saved and downloaded videos',
       icon: Icons.history_outlined,
-      action: IconButton.filledTonal(
-        onPressed: isLoading ? null : onRefresh,
-        tooltip: 'Refresh playback clips',
-        icon: isLoading
-            ? const SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.refresh),
-      ),
+      action: showRefresh
+          ? IconButton.filledTonal(
+              onPressed: isLoading ? null : onRefresh,
+              tooltip: 'Refresh playback clips',
+              icon: isLoading
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh),
+            )
+          : null,
       child: _buildBody(context),
     );
   }
@@ -2760,7 +2782,7 @@ class _AgentToggleTile extends StatelessWidget {
       child: Row(
         children: [
           IconChip(
-            icon: Icons.radar_outlined,
+            icon: Icons.smart_toy_outlined,
             size: 34,
             color: assigned ? AppColors.success : scheme.onSurfaceVariant,
           ),

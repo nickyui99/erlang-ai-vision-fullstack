@@ -21,7 +21,11 @@ Future<void> main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     if (!kIsWeb) {
-      await GoogleSignIn.instance.initialize();
+      await GoogleSignIn.instance.initialize(
+        serverClientId: DefaultFirebaseOptions.googleWebClientId.isEmpty
+            ? null
+            : DefaultFirebaseOptions.googleWebClientId,
+      );
     }
   }
 
@@ -32,3 +36,4 @@ Future<void> main() async {
 
   runApp(SentinelEdgeApp(session: session));
 }
+

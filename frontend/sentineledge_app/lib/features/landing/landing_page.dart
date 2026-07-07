@@ -475,7 +475,7 @@ class _PreviewRail extends StatelessWidget {
     const items = [
       (Icons.videocam_outlined, true),
       (Icons.dashboard_outlined, false),
-      (Icons.radar_outlined, false),
+      (Icons.smart_toy_outlined, false),
       (Icons.timeline_outlined, false),
       (Icons.settings_outlined, false),
     ];
@@ -558,7 +558,7 @@ class _MetricStrip extends StatelessWidget {
               tone: AppColors.success,
             ),
             _MiniMetric(
-              icon: Icons.radar_outlined,
+              icon: Icons.smart_toy_outlined,
               label: 'Armed agents',
               value: '6',
               tone: AppColors.success,

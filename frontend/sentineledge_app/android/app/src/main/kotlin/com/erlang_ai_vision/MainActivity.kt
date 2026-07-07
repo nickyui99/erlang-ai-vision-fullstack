@@ -1,5 +1,6 @@
-package com.example.sentineledge_app
+package com.erlang_ai_vision
 
 import io.flutter.embedding.android.FlutterActivity
 
 class MainActivity : FlutterActivity()
+

@@ -84,6 +84,11 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   String? _selectedAgentId;
   String? _selectedEventId;
   ClipPlaybackUrl? _lastPlaybackUrl;
+  // On phones the event detail is shown in a modal bottom sheet instead of a
+  // second stacked card. These track the open sheet and let parent state
+  // changes (clip/audit loads) rebuild it.
+  bool _eventSheetOpen = false;
+  StateSetter? _eventSheetRefresh;
   String? _error;
   int _selectedTab = 0;
   bool _isRefreshing = false;
@@ -133,6 +138,13 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         setState(() => _realtimeStatus = status);
       },
     );
+    // Deep-linked straight to an event on a phone: open its detail sheet once
+    // the first frame (and MediaQuery) is available.
+    if (widget.selectedEventId != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _maybeOpenEventSheet(),
+      );
+    }
   }
 
   /// The Overview and Events tabs both render the event timeline, so both need
@@ -167,7 +179,21 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     if (eventId != null) {
       _loadEventClips(eventId);
       _loadEventAudit(eventId);
+      _maybeOpenEventSheet();
     }
+  }
+
+  /// Opens the mobile detail sheet in response to an explicit event selection.
+  /// Not called from build(), so navigating to the Events tab (which may keep a
+  /// prior selection) never auto-opens it.
+  void _maybeOpenEventSheet() {
+    if (!mounted || _eventSheetOpen || _selectedEventId == null) return;
+    final compact =
+        MediaQuery.sizeOf(context).width < AppBreakpoints.compact;
+    if (!compact) return;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _showEventDetailSheet(),
+    );
   }
 
   @override
@@ -221,11 +247,12 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       action: () async {
         final devices = await widget.apiClient.listDevices();
         final agents = await widget.apiClient.listAgents();
+        final events = await widget.apiClient.listEvents();
         if (!mounted) return;
         setState(() {
           _devices = devices;
           _agents = agents;
-          _events = const [];
+          _events = events;
           _eventClips = const [];
           _eventAudit = const [];
           _selectedDeviceId = _chooseExisting(
@@ -236,7 +263,17 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             _selectedAgentId,
             agents.map((agent) => agent.agentId),
           );
+          _selectedEventId = _chooseExisting(
+            _selectedEventId,
+            events.map((event) => event.eventId),
+          );
         });
+        // Re-hydrate the selected event's media/audit (cleared above).
+        final selected = _selectedEventId;
+        if (selected != null) {
+          await _loadEventClips(selected, showSuccess: false);
+          await _loadEventAudit(selected, showSuccess: false);
+        }
       },
     );
   }
@@ -537,6 +574,13 @@ class _WorkspaceViewState extends State<WorkspaceView> {
 
   @override
   Widget build(BuildContext context) {
+    // Any parent state change (clip/audit/playback loads) rebuilds the open
+    // mobile event-detail sheet so it reflects the latest data.
+    if (_eventSheetRefresh != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _eventSheetRefresh?.call(() {}),
+      );
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -545,6 +589,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         final destinations = _destinations;
 
         final body = _WorkspaceBody(
+          compact: compact,
           title: destinations[_selectedTab].label,
           subtitle: destinations[_selectedTab].subtitle,
           user: widget.user,
@@ -664,7 +709,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           physics: const NeverScrollableScrollPhysics(),
           crossAxisSpacing: AppSpacing.md,
           mainAxisSpacing: AppSpacing.md,
-          childAspectRatio: compact ? 1.35 : 1.55,
+          childAspectRatio: compact ? 1.1 : 1.55,
           children: [
             MetricTile(
               label: 'Online cameras',
@@ -678,7 +723,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             MetricTile(
               label: 'Armed agents',
               value: activeAssignments.toString(),
-              icon: Icons.radar_outlined,
+              icon: Icons.smart_toy_outlined,
               accent: AppColors.success,
               caption: '${unassignedDevices.length} unassigned',
             ),
@@ -880,13 +925,27 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                         detail:
                             '${event.eventType} - ${event.severity} - ${_formatDate(event.timestamp)}',
                         tone: StatusToneColor.fromStatus(event.severity),
-                        trailing: StatusPill.fromStatus(event.status),
+                        trailing: _activityStatusPill(event),
                       ),
                     )
                     .toList(),
               ),
             ),
     );
+  }
+
+  /// Trailing badge for a recent-activity row. Verified detections get a green
+  /// "AI verified" badge with a seal tick; everything else keeps its status pill.
+  Widget _activityStatusPill(SecurityEvent event) {
+    if (event.status.toLowerCase().contains('verified')) {
+      return const StatusPill(
+        label: 'AI verified',
+        tone: StatusTone.success,
+        icon: Icons.verified,
+        dot: false,
+      );
+    }
+    return StatusPill.fromStatus(event.status);
   }
 
   Widget _performancePanel({
@@ -973,14 +1032,14 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           const SizedBox(height: AppSpacing.sm),
           if (selectedAgent == null)
             const EmptyState(
-              icon: Icons.radar_outlined,
+              icon: Icons.smart_toy_outlined,
               title: 'No agent selected',
               message: 'Create or select an agent to arm surveillance rules.',
               compact: true,
             )
           else
             _FocusRow(
-              icon: Icons.radar_outlined,
+              icon: Icons.smart_toy_outlined,
               title: selectedAgent.name,
               detail: '${selectedAgent.state} ?? ${selectedAgent.rule}',
               tone: StatusToneColor.fromStatus(selectedAgent.state),
@@ -1034,87 +1093,100 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     }).toList()
       ..sort(_deviceComparator);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ConsolePanel(
-          title: 'Cameras',
-          subtitle:
-              '${_devices.length} registered - tap a card for live controls',
-          icon: Icons.videocam_outlined,
-          action: AppButton(
-            label: 'Add camera',
-            icon: Icons.add_circle_outline,
-            loading: _isRegisteringDevice,
-            loadingLabel: 'Registering',
-            onPressed: _openRegisterDeviceDialog,
-          ),
-          child: Column(
+    final addCameraAction = AppButton(
+      label: 'Add camera',
+      icon: Icons.add_circle_outline,
+      loading: _isRegisteringDevice,
+      loadingLabel: 'Registering',
+      onPressed: _openRegisterDeviceDialog,
+    );
+
+    Widget cameraContent({required bool flatMobile}) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _deviceSearchController,
-                      onChanged: (_) => setState(() {}),
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search),
-                        hintText: 'Search cameras',
-                      ),
-                    ),
+              Expanded(
+                child: TextField(
+                  controller: _deviceSearchController,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                    hintText: 'Search cameras',
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  DropdownButton<String>(
-                    value: _deviceSort,
-                    underline: const SizedBox.shrink(),
-                    icon: const Icon(Icons.sort),
-                    borderRadius: AppRadius.mdAll,
-                    items: [
-                      for (final entry in _deviceSortLabels.entries)
-                        DropdownMenuItem(
-                          value: entry.key,
-                          child: Text(entry.value),
-                        ),
-                    ],
-                    onChanged: (value) => setState(
-                      () => _deviceSort = value ?? 'favorites',
-                    ),
-                  ),
-                ],
+                ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              if (_isRefreshing && _devices.isEmpty)
-                const SkeletonList()
-              else if (_devices.isEmpty)
-                EmptyState(
-                  icon: Icons.videocam_off_outlined,
-                  title: 'No cameras registered',
-                  message:
-                      'Add your first camera or edge device to start the surveillance loop.',
-                  action: AppButton(
-                    label: 'Add camera',
-                    icon: Icons.add_circle_outline,
-                    onPressed: _openRegisterDeviceDialog,
-                  ),
-                )
-              else if (visibleDevices.isEmpty)
-                const EmptyState(
-                  icon: Icons.search_off_outlined,
-                  title: 'No matching cameras',
-                  message:
-                      'Clear the search field to show every registered device.',
-                  compact: true,
-                )
-              else
-                GridView.builder(
+              const SizedBox(width: AppSpacing.sm),
+              DropdownButton<String>(
+                value: _deviceSort,
+                underline: const SizedBox.shrink(),
+                icon: const Icon(Icons.sort),
+                borderRadius: AppRadius.mdAll,
+                items: [
+                  for (final entry in _deviceSortLabels.entries)
+                    DropdownMenuItem(
+                      value: entry.key,
+                      child: Text(entry.value),
+                    ),
+                ],
+                onChanged: (value) => setState(
+                  () => _deviceSort = value ?? 'favorites',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (_isRefreshing && _devices.isEmpty)
+            const SkeletonList()
+          else if (_devices.isEmpty)
+            EmptyState(
+              icon: Icons.videocam_off_outlined,
+              title: 'No cameras registered',
+              message:
+                  'Add your first camera or edge device to start the surveillance loop.',
+              action: AppButton(
+                label: 'Add camera',
+                icon: Icons.add_circle_outline,
+                onPressed: _openRegisterDeviceDialog,
+              ),
+            )
+          else if (visibleDevices.isEmpty)
+            const EmptyState(
+              icon: Icons.search_off_outlined,
+              title: 'No matching cameras',
+              message: 'Clear the search field to show every registered device.',
+              compact: true,
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final crossAxisCount = flatMobile
+                    ? 1
+                    : width < 360
+                        ? 1
+                        : width < 620
+                            ? 2
+                            : width < 980
+                                ? 3
+                                : 4;
+                final spacing = width < 360 ? AppSpacing.sm : AppSpacing.md;
+                final aspectRatio = crossAxisCount == 1
+                    ? (flatMobile ? 1.75 : 2.05)
+                    : width < 620
+                        ? 0.82
+                        : 1.08;
+
+                return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: visibleDevices.length,
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: compact ? 2 : 4,
-                    crossAxisSpacing: AppSpacing.md,
-                    mainAxisSpacing: AppSpacing.md,
-                    childAspectRatio: 1.08,
+                    crossAxisCount: crossAxisCount,
+                    crossAxisSpacing: spacing,
+                    mainAxisSpacing: spacing,
+                    childAspectRatio: aspectRatio,
                   ),
                   itemBuilder: (context, index) {
                     final device = visibleDevices[index];
@@ -1126,9 +1198,53 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                       onArmTap: () => _openQuickArm(device),
                     );
                   },
+                );
+              },
+            ),
+        ],
+      );
+    }
+
+    if (compact) {
+      final scheme = Theme.of(context).colorScheme;
+      final registeredLabel = _devices.isEmpty
+          ? 'No cameras yet - tap a card for live controls'
+          : '${_devices.length} registered - tap a card for live controls';
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  registeredLabel,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
                 ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              addCameraAction,
             ],
           ),
+          const SizedBox(height: AppSpacing.lg),
+          cameraContent(flatMobile: true),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ConsolePanel(
+          title: 'Cameras',
+          subtitle:
+              '${_devices.length} registered - tap a card for live controls',
+          icon: Icons.videocam_outlined,
+          action: addCameraAction,
+          child: cameraContent(flatMobile: false),
         ),
       ],
     );
@@ -1174,7 +1290,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     return ConsolePanel(
       title: 'Agents',
       subtitle: '${definitions.length} agents ?? tap to edit',
-      icon: Icons.radar_outlined,
+      icon: Icons.smart_toy_outlined,
       action: AppButton(
         label: 'Create agent',
         icon: Icons.add_task_outlined,
@@ -1197,7 +1313,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             const SkeletonList()
           else if (definitions.isEmpty)
             EmptyState(
-              icon: Icons.radar_outlined,
+              icon: Icons.smart_toy_outlined,
               title: 'No agents created',
               message:
                   'Create an agent from a template or your own rule, then assign it to a camera in the Devices tab.',
@@ -1222,23 +1338,17 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                 selected: false,
                 title: agent.name,
                 subtitle: agent.rule,
-                leading: IconChip(icon: Icons.radar_outlined, size: 34),
-                trailing: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    StatusPill(
-                      label: count > 0
-                          ? '$count ${count == 1 ? 'camera' : 'cameras'}'
-                          : 'unassigned',
-                      tone: count > 0 ? StatusTone.success : StatusTone.neutral,
-                    ),
-                    const SizedBox(height: 4),
-                    Icon(
-                      Icons.edit_outlined,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ],
+                leading: IconChip(icon: Icons.smart_toy_outlined, size: 34),
+                stackedTrailing: StatusPill(
+                  label: count > 0
+                      ? '$count ${count == 1 ? 'camera' : 'cameras'}'
+                      : 'unassigned',
+                  tone: count > 0 ? StatusTone.success : StatusTone.neutral,
+                ),
+                trailing: Icon(
+                  Icons.edit_outlined,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
                 onTap: () => _openEditAgentDialog(agent),
               );
@@ -1385,8 +1495,55 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     final selectedEvent = _events
         .where((event) => event.eventId == _selectedEventId)
         .firstOrNull;
+
+    List<Widget> eventItems({required bool flat}) {
+      if (_isLoadingEvents && _events.isEmpty) {
+        return [const SkeletonList(rows: 4)];
+      }
+      if (_events.isEmpty) {
+        return [
+          const EmptyState(
+            icon: Icons.event_busy_outlined,
+            title: 'No events yet',
+            message:
+                'Submit an edge event after arming an agent to review detections here.',
+          ),
+        ];
+      }
+      return _events
+          .map(
+            (event) => _EventTimelineCard(
+              event: event,
+              selected: _selectedEventId == event.eventId,
+              onTap: () => context.go('/console/events/${event.eventId}'),
+              flat: flat,
+            ),
+          )
+          .toList();
+    }
+
+    if (compact) {
+      // On phones the detail opens as a modal bottom sheet (triggered by
+      // selecting an event, not by rendering this tab). Drop the panel and
+      // per-event card chrome for a clean, full-width list that shows more.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Pull down to refresh — no button on mobile.
+          Text(
+            _events.isEmpty ? 'No detections yet' : '${_events.length} detections',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ...eventItems(flat: true),
+        ],
+      );
+    }
+
     return _responsivePair(
-      compact: compact,
+      compact: false,
       first: ConsolePanel(
         title: 'Event review',
         subtitle: '${_events.length} detections',
@@ -1403,26 +1560,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (_isLoadingEvents && _events.isEmpty)
-              const SkeletonList(rows: 4)
-            else if (_events.isEmpty)
-              const EmptyState(
-                icon: Icons.event_busy_outlined,
-                title: 'No events yet',
-                message:
-                    'Submit an edge event after arming an agent to review detections here.',
-              )
-            else
-              ..._events.map(
-                (event) => _EventTimelineCard(
-                  event: event,
-                  selected: _selectedEventId == event.eventId,
-                  onTap: () =>
-                      context.go('/console/events/${event.eventId}'),
-                ),
-              ),
-          ],
+          children: eventItems(flat: false),
         ),
       ),
       second: ConsolePanel(
@@ -1435,20 +1573,116 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                 title: 'Select an event',
                 message: 'Choose an event to inspect stage results and media.',
               )
-            : _EventDetail(
-                event: selectedEvent,
-                clips: _eventClips,
-                audit: _eventAudit,
-                playbackUrl: _lastPlaybackUrl,
-                isLoadingClips: _isLoadingClips,
-                isLoadingAudit: _isLoadingAudit,
-                isRequestingPlayback: _isRequestingPlayback,
-                onRefreshClips: () => _loadEventClips(selectedEvent.eventId),
-                onRefreshAudit: () => _loadEventAudit(selectedEvent.eventId),
-                onPlayback: _requestPlaybackUrl,
-              ),
+            : _eventDetailView(selectedEvent),
       ),
     );
+  }
+
+  /// The event detail body, shared by the wide-layout side panel and the mobile
+  /// modal bottom sheet. [showRefresh] hides the per-section refresh buttons on
+  /// mobile, where the sheet is refreshed by pulling down instead.
+  Widget _eventDetailView(SecurityEvent event, {bool showRefresh = true}) {
+    return _EventDetail(
+      event: event,
+      clips: _eventClips,
+      audit: _eventAudit,
+      playbackUrl: _lastPlaybackUrl,
+      isLoadingClips: _isLoadingClips,
+      isLoadingAudit: _isLoadingAudit,
+      isRequestingPlayback: _isRequestingPlayback,
+      showRefresh: showRefresh,
+      onRefreshClips: () => _loadEventClips(event.eventId),
+      onRefreshAudit: () => _loadEventAudit(event.eventId),
+      onPlayback: _requestPlaybackUrl,
+    );
+  }
+
+  /// Presents the selected event's detail in a scroll-controlled bottom sheet
+  /// (mobile only). Dismissing it clears the selection so re-tapping reopens.
+  void _showEventDetailSheet() {
+    if (_eventSheetOpen || !mounted) return;
+    _eventSheetOpen = true;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            _eventSheetRefresh = setSheetState;
+            final event = _events
+                .where((e) => e.eventId == _selectedEventId)
+                .firstOrNull;
+            if (event == null) return const SizedBox.shrink();
+            final theme = Theme.of(sheetContext);
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.9,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      0,
+                      AppSpacing.sm,
+                      AppSpacing.sm,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.manage_search_outlined,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            'Event detail',
+                            style: theme.textTheme.titleMedium,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Close',
+                          onPressed: () => Navigator.of(sheetContext).pop(),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Flexible(
+                    child: RefreshIndicator(
+                      onRefresh: () async {
+                        await _loadEventClips(event.eventId);
+                        await _loadEventAudit(event.eventId);
+                      },
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.lg,
+                          0,
+                          AppSpacing.lg,
+                          AppSpacing.lg,
+                        ),
+                        child: _eventDetailView(event, showRefresh: false),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      _eventSheetOpen = false;
+      _eventSheetRefresh = null;
+      // Clear the selection (URL back to the list) so the same event reopens.
+      if (mounted && _selectedEventId != null) {
+        context.go('/console/events');
+      }
+    });
   }
 
   Widget _responsivePair({
@@ -1492,8 +1726,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     _Destination(
       label: 'Agents',
       subtitle: 'Author and edit detection rules',
-      icon: Icons.radar_outlined,
-      selectedIcon: Icons.radar,
+      icon: Icons.auto_awesome_outlined,
+      selectedIcon: Icons.auto_awesome,
     ),
     _Destination(
       label: 'Events',
@@ -1537,9 +1771,9 @@ class _CameraDeviceCard extends StatelessWidget {
             scheme.onSurface.withValues(alpha: 0.045),
             scheme.surface,
           );
-    // Warm sunset gradient for live cameras; a quiet slate gradient when offline.
+    // Brand ember gradient for live cameras; a quiet slate gradient when offline.
     final headerColors = online
-        ? const [Color(0xFFFF4E50), Color(0xFFF9D423)]
+        ? const [Color(0xFFC91F14), Color(0xFFF03A24), Color(0xFFFF6A2A)]
         : const [Color(0xFF334155), Color(0xFF475569), Color(0xFF64748B)];
 
     return AppCard(
@@ -1940,7 +2174,7 @@ class _CompactSheetEmpty extends StatelessWidget {
       child: Column(
         children: [
           Icon(
-            Icons.radar_outlined,
+            Icons.smart_toy_outlined,
             color: theme.colorScheme.onSurfaceVariant,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -1975,7 +2209,7 @@ class _GlassStatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.18),
         borderRadius: AppRadius.pillAll,
@@ -1989,7 +2223,7 @@ class _GlassStatusPill extends StatelessWidget {
             height: 7,
             decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 5),
           Text(
             label,
             style: theme.textTheme.labelSmall?.copyWith(
@@ -2314,11 +2548,16 @@ class _EventTimelineCard extends StatelessWidget {
     required this.event,
     required this.selected,
     required this.onTap,
+    this.flat = false,
   });
 
   final SecurityEvent event;
   final bool selected;
   final VoidCallback onTap;
+
+  /// When true, render as a clean full-width list row (no card background, no
+  /// wide media strip) — used on mobile so more info fits.
+  final bool flat;
 
   @override
   Widget build(BuildContext context) {
@@ -2328,6 +2567,116 @@ class _EventTimelineCard extends StatelessWidget {
     final title = event.summary?.isNotEmpty == true
         ? event.summary!
         : event.eventType;
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Top-down layout: status pills get their own line so the title,
+        // camera and time below can use the full width.
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: [
+            StatusPill.fromStatus(event.severity),
+            StatusPill.fromStatus(event.status),
+            if (event.degraded)
+              const StatusPill(label: 'degraded', tone: StatusTone.warning),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          title,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleSmall,
+        ),
+        if (event.confidence != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            'Confidence ${(event.confidence! * 100).toStringAsFixed(0)}%',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Icon(
+              Icons.videocam_outlined,
+              size: 15,
+              color: scheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(
+                event.deviceId,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Icon(
+              Icons.schedule_outlined,
+              size: 15,
+              color: scheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(
+                _formatDate(event.timestamp),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    if (flat) {
+      // Clean list row: a thin severity accent bar, the content, and a hairline
+      // divider — no card fill or rounded chrome.
+      return Material(
+        color: selected
+            ? scheme.primaryContainer.withValues(alpha: 0.35)
+            : Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: scheme.outlineVariant),
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 4,
+                  height: 40,
+                  margin: const EdgeInsets.only(right: AppSpacing.md, top: 2),
+                  decoration: BoxDecoration(
+                    color: tone.base,
+                    borderRadius: AppRadius.pillAll,
+                  ),
+                ),
+                Expanded(child: content),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -2357,51 +2706,7 @@ class _EventTimelineCard extends StatelessWidget {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleSmall,
-                            ),
-                          ),
-                          StatusPill.fromStatus(event.severity),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        _formatDate(event.timestamp),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.videocam_outlined,
-                            size: 15,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 5),
-                          Expanded(
-                            child: Text(
-                              event.deviceId,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.labelSmall,
-                            ),
-                          ),
-                          StatusPill.fromStatus(event.status),
-                        ],
-                      ),
-                    ],
-                  ),
+                  child: content,
                 ),
               ),
             ],
@@ -2420,12 +2725,14 @@ class _AiVerificationSection extends StatelessWidget {
     required this.audit,
     required this.isLoadingAudit,
     required this.onRefresh,
+    this.showRefresh = true,
   });
 
   final Map<String, dynamic>? verdict;
   final List<ToolAuditEntry> audit;
   final bool isLoadingAudit;
   final VoidCallback onRefresh;
+  final bool showRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -2460,7 +2767,7 @@ class _AiVerificationSection extends StatelessWidget {
                   dimension: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              else
+              else if (showRefresh)
                 IconButton(
                   tooltip: 'Refresh agent activity',
                   iconSize: 18,
@@ -2652,6 +2959,7 @@ class _EventDetail extends StatelessWidget {
     required this.onRefreshClips,
     required this.onRefreshAudit,
     required this.onPlayback,
+    this.showRefresh = true,
   });
 
   final SecurityEvent event;
@@ -2664,6 +2972,10 @@ class _EventDetail extends StatelessWidget {
   final VoidCallback onRefreshClips;
   final VoidCallback onRefreshAudit;
   final Future<void> Function(MediaClip clip) onPlayback;
+
+  /// When false (mobile bottom sheet), the per-section refresh buttons are
+  /// hidden — the sheet is refreshed by pulling down instead.
+  final bool showRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -2716,6 +3028,7 @@ class _EventDetail extends StatelessWidget {
           audit: audit,
           isLoadingAudit: isLoadingAudit,
           onRefresh: onRefreshAudit,
+          showRefresh: showRefresh,
         ),
         const SizedBox(height: AppSpacing.md),
         ExpansionTile(
@@ -2735,16 +3048,17 @@ class _EventDetail extends StatelessWidget {
         Row(
           children: [
             Expanded(child: Text('Clips', style: theme.textTheme.titleSmall)),
-            IconButton.filledTonal(
-              onPressed: isLoadingClips ? null : onRefreshClips,
-              tooltip: 'Refresh clips',
-              icon: isLoadingClips
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.refresh),
-            ),
+            if (showRefresh)
+              IconButton.filledTonal(
+                onPressed: isLoadingClips ? null : onRefreshClips,
+                tooltip: 'Refresh clips',
+                icon: isLoadingClips
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh),
+              ),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -2846,35 +3160,47 @@ class _InsightRow extends StatelessWidget {
         borderRadius: AppRadius.mdAll,
         border: Border.all(color: scheme.outlineVariant),
       ),
-      child: Row(
-        children: [
-          IconChip(icon: icon, color: tone.base, size: 34),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  detail.isEmpty ? 'No detail available' : detail,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall,
-                ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // On narrow (mobile) rows, stack the status badge under the text so
+          // the title/detail get the full width instead of being ellipsized.
+          final stacked = trailing != null && constraints.maxWidth < 420;
+          final textBlock = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                detail.isEmpty ? 'No detail available' : detail,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+              if (stacked) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Align(alignment: Alignment.centerLeft, child: trailing!),
               ],
-            ),
-          ),
-          if (trailing != null) ...[
-            const SizedBox(width: AppSpacing.sm),
-            trailing!,
-          ],
-        ],
+            ],
+          );
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              IconChip(icon: icon, color: tone.base, size: 34),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(child: textBlock),
+              if (trailing != null && !stacked) ...[
+                const SizedBox(width: AppSpacing.sm),
+                trailing!,
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -3371,6 +3697,7 @@ class _AiAgentIconMark extends StatelessWidget {
 
 class _WorkspaceBody extends StatelessWidget {
   const _WorkspaceBody({
+    required this.compact,
     required this.title,
     required this.subtitle,
     required this.user,
@@ -3384,6 +3711,7 @@ class _WorkspaceBody extends StatelessWidget {
     required this.child,
   });
 
+  final bool compact;
   final String title;
   final String subtitle;
   final BackendUser user;
@@ -3391,7 +3719,7 @@ class _WorkspaceBody extends StatelessWidget {
   final bool isRefreshing;
   final RealtimeStatus realtimeStatus;
   final String? error;
-  final VoidCallback onRefresh;
+  final Future<void> Function() onRefresh;
   final Future<void> Function() onSignOut;
   final VoidCallback onDismissError;
   final Widget child;
@@ -3399,17 +3727,27 @@ class _WorkspaceBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return CustomScrollView(
+    final scrollView = CustomScrollView(
+      // Mobile refreshes via pull-to-refresh, so allow overscroll even when the
+      // content is short.
+      physics: compact ? const AlwaysScrollableScrollPhysics() : null,
       slivers: [
         SliverAppBar(
           pinned: true,
-          titleSpacing: AppSpacing.xl,
-          toolbarHeight: 72,
+          titleSpacing: compact ? AppSpacing.lg : AppSpacing.xl,
+          toolbarHeight: compact ? 68 : 72,
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(title, style: theme.textTheme.headlineSmall),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: compact
+                    ? theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)
+                    : theme.textTheme.headlineSmall,
+              ),
               Text(
                 subtitle,
                 maxLines: 1,
@@ -3419,28 +3757,31 @@ class _WorkspaceBody extends StatelessWidget {
             ],
           ),
           actions: [
-            _RealtimeStatusPill(status: realtimeStatus),
-            const SizedBox(width: AppSpacing.sm),
-            const _ThemeModeButton(),
-            const SizedBox(width: AppSpacing.sm),
-            IconButton.filledTonal(
-              onPressed: isRefreshing ? null : onRefresh,
-              tooltip: 'Refresh',
-              icon: isRefreshing
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.refresh),
-            ),
-            const SizedBox(width: AppSpacing.lg),
+            // Mobile uses pull-to-refresh instead of a button.
+            if (!compact) ...[
+              _RealtimeStatusPill(status: realtimeStatus),
+              const SizedBox(width: AppSpacing.sm),
+              const _ThemeModeButton(),
+              const SizedBox(width: AppSpacing.sm),
+              IconButton.filledTonal(
+                onPressed: isRefreshing ? null : onRefresh,
+                tooltip: 'Refresh',
+                icon: isRefreshing
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh),
+              ),
+              const SizedBox(width: AppSpacing.lg),
+            ],
           ],
         ),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.xl,
+          padding: EdgeInsets.fromLTRB(
+            compact ? AppSpacing.lg : AppSpacing.xl,
             AppSpacing.sm,
-            AppSpacing.xl,
+            compact ? AppSpacing.lg : AppSpacing.xl,
             AppSpacing.xxl,
           ),
           sliver: SliverToBoxAdapter(
@@ -3475,6 +3816,11 @@ class _WorkspaceBody extends StatelessWidget {
         ),
       ],
     );
+
+    if (compact) {
+      return RefreshIndicator(onRefresh: onRefresh, child: scrollView);
+    }
+    return scrollView;
   }
 }
 
@@ -3814,10 +4160,14 @@ class _AgentFormDialogState extends State<_AgentFormDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Cap the dialog at 460 on wide screens, but shrink to fit narrow phones
+    // (the dialog inset padding takes ~80px) so it never overflows sideways.
+    final available = MediaQuery.of(context).size.width - 80;
+    final contentWidth = available < 460 ? available : 460.0;
     return AlertDialog(
       title: Text(_isEditing ? 'Edit agent' : 'Create agent'),
       content: SizedBox(
-        width: 460,
+        width: contentWidth,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -4090,42 +4440,45 @@ class _AgentBuilderDialogState extends State<_AgentBuilderDialog> {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
+              // Chat + proposal + error scroll together so the fixed input and
+              // save button below always stay above the keyboard without
+              // overflowing when it pops up.
               Flexible(
-                child: ListView.builder(
+                child: SingleChildScrollView(
                   controller: _scroll,
-                  shrinkWrap: true,
-                  itemCount: _messages.length + (_sending ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index >= _messages.length) {
-                      return const _BuilderBubble(
-                        role: 'assistant',
-                        child: SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final message in _messages)
+                        _BuilderBubble(
+                          role: message.role,
+                          child: Text(message.text),
                         ),
-                      );
-                    }
-                    final message = _messages[index];
-                    return _BuilderBubble(
-                      role: message.role,
-                      child: Text(message.text),
-                    );
-                  },
+                      if (_sending)
+                        const _BuilderBubble(
+                          role: 'assistant',
+                          child: SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      if (_proposedRule != null) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        _ProposalCard(
+                          rule: _proposedRule!,
+                          classes: _classes,
+                          scheduleLabel: _scheduleLabel,
+                          nameController: _nameController,
+                        ),
+                      ],
+                      if (_error != null) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        AppBanner(text: _error!),
+                      ],
+                    ],
+                  ),
                 ),
               ),
-              if (_proposedRule != null) ...[
-                const SizedBox(height: AppSpacing.sm),
-                _ProposalCard(
-                  rule: _proposedRule!,
-                  classes: _classes,
-                  scheduleLabel: _scheduleLabel,
-                  nameController: _nameController,
-                ),
-              ],
-              if (_error != null) ...[
-                const SizedBox(height: AppSpacing.sm),
-                AppBanner(text: _error!),
-              ],
               const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
@@ -4453,3 +4806,4 @@ String _formatDate(DateTime? value) {
   }
   return value.toLocal().toString().split('.').first;
 }
+

@@ -5,6 +5,25 @@ import 'package:http/http.dart' as http;
 
 import 'backend_http_client.dart';
 
+String? _backendSessionCookie;
+
+Map<String, String> _withSessionCookie([Map<String, String>? headers]) {
+  return <String, String>{
+    ...?headers,
+    if (_backendSessionCookie != null) 'Cookie': _backendSessionCookie!,
+  };
+}
+
+void _captureSessionCookie(http.Response response) {
+  final setCookie = response.headers['set-cookie'];
+  if (setCookie == null || setCookie.isEmpty) return;
+
+  final cookie = setCookie.split(';').first.trim();
+  if (cookie.isNotEmpty) {
+    _backendSessionCookie = cookie;
+  }
+}
+
 class BackendAuthClient {
   BackendAuthClient({http.Client? httpClient})
     : _httpClient = httpClient ?? createBackendHttpClient();
@@ -36,6 +55,9 @@ class BackendAuthClient {
       headers: {'Authorization': 'Bearer $idToken'},
     );
     final body = _decodeObject(response);
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      _captureSessionCookie(response);
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw BackendAuthException.fromBody(
         body,
@@ -46,7 +68,14 @@ class BackendAuthClient {
   }
 
   Future<void> logout() async {
-    await _httpClient.post(Uri.parse('$baseUrl/api/v1/auth/logout'));
+    try {
+      await _httpClient.post(
+        Uri.parse('$baseUrl/api/v1/auth/logout'),
+        headers: _withSessionCookie(),
+      );
+    } finally {
+      _backendSessionCookie = null;
+    }
   }
 }
 
@@ -376,7 +405,7 @@ class SentinelEdgeApiClient {
   }) async {
     final response = await _httpClient.get(
       Uri.parse('${BackendAuthClient.baseUrl}$path'),
-      headers: headers,
+      headers: _withSessionCookie(headers),
     );
     return _handleObject(response);
   }
@@ -386,10 +415,10 @@ class SentinelEdgeApiClient {
     Map<String, dynamic>? payload, {
     Map<String, String>? headers,
   }) async {
-    final requestHeaders = <String, String>{
+    final requestHeaders = _withSessionCookie({
       if (payload != null) 'Content-Type': 'application/json',
       ...?headers,
-    };
+    });
     final response = await _httpClient.post(
       Uri.parse('${BackendAuthClient.baseUrl}$path'),
       headers: requestHeaders,
@@ -404,7 +433,7 @@ class SentinelEdgeApiClient {
   ) async {
     final response = await _httpClient.put(
       Uri.parse('${BackendAuthClient.baseUrl}$path'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _withSessionCookie({'Content-Type': 'application/json'}),
       body: jsonEncode(payload),
     );
     return _handleObject(response);
@@ -413,6 +442,7 @@ class SentinelEdgeApiClient {
   Future<void> _delete(String path) async {
     final response = await _httpClient.delete(
       Uri.parse('${BackendAuthClient.baseUrl}$path'),
+      headers: _withSessionCookie(),
     );
     // 204 No Content carries an empty body; only parse/validate on failure.
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -1033,3 +1063,4 @@ Map<String, dynamic>? _tryMap(Object? value) {
   }
   return null;
 }
+

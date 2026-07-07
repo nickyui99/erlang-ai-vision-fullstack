@@ -73,12 +73,21 @@ extension StatusToneColor on StatusTone {
       case 'live':
       case 'completed':
       case 'enabled':
+      // Event severities / resolutions that read as "all clear".
+      case 'verified':
+      case 'resolved':
+      case 'closed':
+      case 'benign':
         return StatusTone.success;
       case 'offline':
       case 'error':
       case 'failed':
       case 'disabled':
+      // High-urgency event severities / verdicts.
       case 'critical':
+      case 'high':
+      case 'threat':
+      case 'malicious':
         return StatusTone.danger;
       case 'connecting':
       case 'reconnecting':
@@ -86,10 +95,21 @@ extension StatusToneColor on StatusTone {
       case 'pending':
       case 'warning':
       case 'processing':
+      // Mid severity and events awaiting review.
+      case 'medium':
+      case 'moderate':
+      case 'reviewing':
+      case 'suspicious':
         return StatusTone.warning;
       case 'info':
       case 'idle':
       case 'disarmed':
+      // Low severity and freshly-created events are informational.
+      case 'low':
+      case 'informational':
+      case 'new':
+      case 'open':
+      case 'unreviewed':
         return StatusTone.info;
       default:
         return StatusTone.neutral;

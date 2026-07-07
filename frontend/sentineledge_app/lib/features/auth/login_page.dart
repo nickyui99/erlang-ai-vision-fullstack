@@ -170,7 +170,7 @@ class _LoginPageState extends State<LoginPage> {
       onGoogleSignIn: _signInWithGoogleProvider,
       onEmailSignIn: _signInWithEmailPassword,
       onEmailCreate: _createEmailPasswordAccount,
-      onBackToLanding: () => context.go('/'),
+      onBackToLanding: kIsWeb ? () => context.go('/') : null,
     );
   }
 }
@@ -193,98 +193,316 @@ class SignInView extends StatelessWidget {
   final Future<void> Function(String email, String password) onEmailCreate;
 
   /// Navigates back to the landing page.
-  final VoidCallback onBackToLanding;
+  final VoidCallback? onBackToLanding;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final narrow = MediaQuery.sizeOf(context).width < 760;
+    final nativeMobile = !kIsWeb && narrow;
+
     return Scaffold(
+      backgroundColor: nativeMobile ? const Color(0xFFF4F5FF) : null,
       body: SafeArea(
         child: Stack(
           children: [
-            Center(
+            Align(
+              alignment: nativeMobile ? Alignment.topCenter : Alignment.center,
               child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.xl,
-              vertical: narrow ? AppSpacing.lg : AppSpacing.xl,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 980),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final wide = constraints.maxWidth >= 760;
+                padding: EdgeInsets.symmetric(
+                  horizontal: nativeMobile ? 0 : AppSpacing.xl,
+                  vertical: nativeMobile ? 0 : AppSpacing.xl,
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 980),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final wide = constraints.maxWidth >= 760;
 
-                  return DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: scheme.surface,
-                      borderRadius: AppRadius.lgAll,
-                      border: Border.all(color: scheme.outlineVariant),
-                      boxShadow: AppShadows.overlay(
-                        Theme.of(context).brightness,
-                      ),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: AppRadius.lgAll,
-                      child: wide
-                          ? ConstrainedBox(
-                              constraints:
-                                  const BoxConstraints(minHeight: 560),
-                              child: IntrinsicHeight(
-                                child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    const Expanded(
-                                      flex: 6,
-                                      child: _BrandPanel(),
+                      if (!kIsWeb && !wide) {
+                        return _MobileLoginFrame(
+                          error: error,
+                          isLoading: isLoading,
+                          onGoogleSignIn: onGoogleSignIn,
+                          onEmailSignIn: onEmailSignIn,
+                          onEmailCreate: onEmailCreate,
+                        );
+                      }
+
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: scheme.surface,
+                          borderRadius: AppRadius.lgAll,
+                          border: Border.all(color: scheme.outlineVariant),
+                          boxShadow: AppShadows.overlay(
+                            Theme.of(context).brightness,
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: AppRadius.lgAll,
+                          child: wide
+                              ? ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(minHeight: 560),
+                                  child: IntrinsicHeight(
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        const Expanded(
+                                          flex: 6,
+                                          child: _BrandPanel(),
+                                        ),
+                                        Expanded(
+                                          flex: 4,
+                                          child: _LoginPanel(
+                                            error: error,
+                                            isLoading: isLoading,
+                                            onGoogleSignIn: onGoogleSignIn,
+                                            onEmailSignIn: onEmailSignIn,
+                                            onEmailCreate: onEmailCreate,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    Expanded(
-                                      flex: 4,
-                                      child: _LoginPanel(
-                                        error: error,
-                                        isLoading: isLoading,
-                                        onGoogleSignIn: onGoogleSignIn,
-                                        onEmailSignIn: onEmailSignIn,
-                                        onEmailCreate: onEmailCreate,
-                                      ),
+                                  ),
+                                )
+                              : Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const _BrandPanel(compact: true),
+                                    _LoginPanel(
+                                      error: error,
+                                      isLoading: isLoading,
+                                      compact: true,
+                                      onGoogleSignIn: onGoogleSignIn,
+                                      onEmailSignIn: onEmailSignIn,
+                                      onEmailCreate: onEmailCreate,
                                     ),
                                   ],
                                 ),
-                              ),
-                            )
-                          : Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const _BrandPanel(compact: true),
-                                _LoginPanel(
-                                  error: error,
-                                  isLoading: isLoading,
-                                  compact: true,
-                                  onGoogleSignIn: onGoogleSignIn,
-                                  onEmailSignIn: onEmailSignIn,
-                                  onEmailCreate: onEmailCreate,
-                                ),
-                              ],
-                            ),
-                    ),
-                  );
-                },
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
+            if (onBackToLanding != null)
+              Positioned(
+                top: AppSpacing.sm,
+                left: AppSpacing.sm,
+                child: TextButton.icon(
+                  onPressed: onBackToLanding,
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  label: const Text('Back to home'),
+                ),
               ),
-            ),
-            Positioned(
-              top: AppSpacing.sm,
-              left: AppSpacing.sm,
-              child: TextButton.icon(
-                onPressed: onBackToLanding,
-                icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                label: const Text('Back to home'),
-              ),
-            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MobileLoginFrame extends StatefulWidget {
+  const _MobileLoginFrame({
+    required this.error,
+    required this.isLoading,
+    required this.onGoogleSignIn,
+    required this.onEmailSignIn,
+    required this.onEmailCreate,
+  });
+
+  final String? error;
+  final bool isLoading;
+  final VoidCallback onGoogleSignIn;
+  final Future<void> Function(String email, String password) onEmailSignIn;
+  final Future<void> Function(String email, String password) onEmailCreate;
+
+  @override
+  State<_MobileLoginFrame> createState() => _MobileLoginFrameState();
+}
+
+class _MobileLoginFrameState extends State<_MobileLoginFrame>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _motion;
+
+  @override
+  void initState() {
+    super.initState();
+    _motion = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _motion.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: Color(0xFFF4F5FF)),
+      child: AnimatedBuilder(
+        animation: _motion,
+        builder: (context, child) {
+          final phase = _motion.value * math.pi * 2;
+          final drift = math.sin(phase) * 0.28;
+          final lift = math.cos(phase) * 0.18;
+          final headerGradient = LinearGradient(
+            colors: const [
+              Color(0xFF8F120B),
+              AppColors.primary,
+              AppColors.accentOrange,
+              Color(0xFFEF2F22),
+            ],
+            stops: const [0, 0.42, 0.72, 1],
+            begin: Alignment(-1 + drift, -1 + lift),
+            end: Alignment(1 - drift, 1 - lift),
+          );
+
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                height: 236,
+                decoration: BoxDecoration(
+                  gradient: headerGradient,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(30),
+                    bottomRight: Radius.circular(30),
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.white.withValues(alpha: 0.12),
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.06),
+                            ],
+                            stops: const [0, 0.48, 1],
+                            begin: Alignment(-0.8 + drift, -1),
+                            end: Alignment(0.8 - drift, 1),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: RadialGradient(
+                            center: Alignment(0.75 * math.sin(phase), -0.55),
+                            radius: 0.92 + (0.08 * math.cos(phase)),
+                            colors: [
+                              Colors.white.withValues(alpha: 0.24),
+                              Colors.white.withValues(alpha: 0.04),
+                              Colors.transparent,
+                            ],
+                            stops: const [0, 0.38, 1],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: AppSpacing.xl,
+                      right: AppSpacing.xl,
+                      top: AppSpacing.xl,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 58,
+                            height: 58,
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.94),
+                              borderRadius: AppRadius.lgAll,
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.54),
+                                width: 2,
+                              ),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: Image.asset(
+                              'assets/brand/erlang-ai-vision-icon.png',
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            'Erlang AI Vision',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            'Secure camera workspace',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  184,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                ),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: scheme.surface,
+                    borderRadius: BorderRadius.circular(26),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.72),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF8F120B).withValues(alpha: 0.16),
+                        blurRadius: 30,
+                        offset: const Offset(0, 18),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(26),
+                    child: _LoginPanel(
+                      error: widget.error,
+                      isLoading: widget.isLoading,
+                      compact: true,
+                      onGoogleSignIn: widget.onGoogleSignIn,
+                      onEmailSignIn: widget.onEmailSignIn,
+                      onEmailCreate: widget.onEmailCreate,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -380,7 +598,9 @@ class _BrandPanelState extends State<_BrandPanel>
                 ),
               ),
               Padding(
-                padding: EdgeInsets.all(compact ? AppSpacing.xl : AppSpacing.xxl),
+                padding: EdgeInsets.all(
+                  compact ? AppSpacing.xl : AppSpacing.xxl,
+                ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,24 +623,26 @@ class _BrandPanelState extends State<_BrandPanel>
                     SizedBox(height: compact ? AppSpacing.md : AppSpacing.xl),
                     Text(
                       'Erlang AI Vision',
-                      style: (compact
-                              ? theme.textTheme.headlineSmall
-                              : theme.textTheme.displaySmall)
-                          ?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style:
+                          (compact
+                                  ? theme.textTheme.headlineSmall
+                                  : theme.textTheme.displaySmall)
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
                     ),
                     SizedBox(height: compact ? AppSpacing.xs : AppSpacing.md),
                     Text(
                       'Camera intelligence for live monitoring, edge control, and verified security events.',
-                      style: (compact
-                              ? theme.textTheme.bodyMedium
-                              : theme.textTheme.titleMedium)
-                          ?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style:
+                          (compact
+                                  ? theme.textTheme.bodyMedium
+                                  : theme.textTheme.titleMedium)
+                              ?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                fontWeight: FontWeight.w500,
+                              ),
                     ),
                     if (!compact) ...[
                       const SizedBox(height: AppSpacing.xl),
@@ -433,7 +655,7 @@ class _BrandPanelState extends State<_BrandPanel>
                             label: 'Live cameras',
                           ),
                           _SignalPill(
-                            icon: Icons.radar_outlined,
+                            icon: Icons.smart_toy_outlined,
                             label: 'AI agents',
                           ),
                           _SignalPill(
@@ -508,21 +730,46 @@ class _LoginPanelState extends State<_LoginPanel> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final compact = widget.compact;
+    final mobileCompact = compact && !kIsWeb;
+    final fieldPadding = mobileCompact
+        ? const EdgeInsets.symmetric(horizontal: 12, vertical: 11)
+        : null;
     return Padding(
-      padding: EdgeInsets.all(compact ? AppSpacing.xl : AppSpacing.xxl),
+      padding: EdgeInsets.all(
+        mobileCompact
+            ? AppSpacing.lg
+            : (compact ? AppSpacing.xl : AppSpacing.xxl),
+      ),
       child: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Operator sign in', style: theme.textTheme.headlineSmall),
-            const SizedBox(height: AppSpacing.sm),
             Text(
-              'Access your camera workspace with Google or email/password.',
-              style: theme.textTheme.bodyMedium,
+              mobileCompact
+                  ? (_creatingAccount ? 'Create account' : 'Welcome back')
+                  : 'Operator sign in',
+              textAlign: mobileCompact ? TextAlign.center : TextAlign.start,
+              style:
+                  (mobileCompact
+                          ? theme.textTheme.titleLarge
+                          : theme.textTheme.headlineSmall)
+                      ?.copyWith(fontWeight: FontWeight.w800),
             ),
-            SizedBox(height: compact ? AppSpacing.lg : AppSpacing.xl),
+            SizedBox(height: mobileCompact ? 4 : AppSpacing.sm),
+            Text(
+              mobileCompact
+                  ? 'Sign in to monitor cameras and alerts.'
+                  : 'Access your camera workspace with Google or email/password.',
+              textAlign: mobileCompact ? TextAlign.center : TextAlign.start,
+              style:
+                  (mobileCompact
+                          ? theme.textTheme.bodySmall
+                          : theme.textTheme.bodyMedium)
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            SizedBox(height: compact ? AppSpacing.md : AppSpacing.xl),
             if (!DefaultFirebaseOptions.isConfigured) ...[
               const AppBanner(
                 tone: StatusTone.warning,
@@ -530,16 +777,18 @@ class _LoginPanelState extends State<_LoginPanel> {
                 text:
                     'Fill config/firebase.json and launch Flutter with --dart-define-from-file before signing in.',
               ),
-              const SizedBox(height: AppSpacing.md),
+              SizedBox(height: mobileCompact ? AppSpacing.sm : AppSpacing.md),
             ],
             TextFormField(
               controller: _emailController,
               enabled: !widget.isLoading,
               keyboardType: TextInputType.emailAddress,
               autofillHints: const [AutofillHints.email],
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
+                isDense: mobileCompact,
+                contentPadding: fieldPadding,
                 labelText: 'Email',
-                prefixIcon: Icon(Icons.email_outlined),
+                prefixIcon: const Icon(Icons.email_outlined),
               ),
               validator: (value) {
                 final email = value?.trim() ?? '';
@@ -548,13 +797,15 @@ class _LoginPanelState extends State<_LoginPanel> {
                 return null;
               },
             ),
-            const SizedBox(height: AppSpacing.md),
+            SizedBox(height: mobileCompact ? AppSpacing.sm : AppSpacing.md),
             TextFormField(
               controller: _passwordController,
               enabled: !widget.isLoading,
               obscureText: _obscurePassword,
               autofillHints: const [AutofillHints.password],
               decoration: InputDecoration(
+                isDense: mobileCompact,
+                contentPadding: fieldPadding,
                 labelText: 'Password',
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
@@ -567,8 +818,8 @@ class _LoginPanelState extends State<_LoginPanel> {
                   onPressed: widget.isLoading
                       ? null
                       : () => setState(
-                            () => _obscurePassword = !_obscurePassword,
-                          ),
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
                 ),
               ),
               validator: (value) {
@@ -581,16 +832,18 @@ class _LoginPanelState extends State<_LoginPanel> {
               },
               onFieldSubmitted: (_) => _submitEmailPassword(),
             ),
-            const SizedBox(height: AppSpacing.lg),
+            SizedBox(height: mobileCompact ? AppSpacing.md : AppSpacing.lg),
             AppButton(
               label: _creatingAccount ? 'Create account' : 'Sign in with email',
-              loadingLabel: _creatingAccount ? 'Creating account' : 'Signing in',
+              loadingLabel: _creatingAccount
+                  ? 'Creating account'
+                  : 'Signing in',
               icon: _creatingAccount ? Icons.person_add_alt : Icons.login,
               loading: widget.isLoading,
               onPressed: _submitEmailPassword,
               expand: true,
             ),
-            const SizedBox(height: AppSpacing.sm),
+            SizedBox(height: mobileCompact ? 2 : AppSpacing.sm),
             TextButton(
               onPressed: widget.isLoading
                   ? null
@@ -601,32 +854,40 @@ class _LoginPanelState extends State<_LoginPanel> {
                     : 'Need an account? Create one',
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
+            SizedBox(height: mobileCompact ? AppSpacing.xs : AppSpacing.md),
             Row(
               children: [
                 const Expanded(child: Divider()),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                  ),
                   child: Text('or', style: theme.textTheme.bodySmall),
                 ),
                 const Expanded(child: Divider()),
               ],
             ),
-            const SizedBox(height: AppSpacing.md),
-            AppButton(
-              label: 'Sign in with Google',
-              loadingLabel: 'Signing in',
-              icon: Icons.login,
-              variant: AppButtonVariant.secondary,
-              loading: widget.isLoading,
-              onPressed: widget.onGoogleSignIn,
-              expand: true,
+            SizedBox(height: mobileCompact ? AppSpacing.sm : AppSpacing.md),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: widget.isLoading ? null : widget.onGoogleSignIn,
+                icon: widget.isLoading
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const _GoogleMark(),
+                label: Text(
+                  widget.isLoading ? 'Signing in' : 'Sign in with Google',
+                ),
+              ),
             ),
             if (widget.error != null) ...[
-              const SizedBox(height: AppSpacing.md),
+              SizedBox(height: mobileCompact ? AppSpacing.sm : AppSpacing.md),
               AppBanner(text: widget.error!),
             ],
-            const SizedBox(height: AppSpacing.lg),
+            SizedBox(height: mobileCompact ? AppSpacing.sm : AppSpacing.lg),
             Text(
               'Backend: ${BackendAuthClient.baseUrl}',
               textAlign: TextAlign.center,
@@ -635,6 +896,20 @@ class _LoginPanelState extends State<_LoginPanel> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _GoogleMark extends StatelessWidget {
+  const _GoogleMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/brand/google-g.png',
+      width: 18,
+      height: 18,
+      fit: BoxFit.contain,
     );
   }
 }

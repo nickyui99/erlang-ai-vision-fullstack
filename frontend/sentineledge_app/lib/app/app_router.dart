@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -104,14 +105,21 @@ abstract final class AppRouter {
 
   static String? _redirect(SessionController session, GoRouterState state) {
     final status = session.status;
-    // Still checking for an existing session — let the current route render its
-    // loading state; this guard re-runs when the status resolves.
-    if (status == SessionStatus.restoring) return null;
-
     final location = state.matchedLocation;
     final atLogin = location == '/login';
     final atConsole = location == '/console' || location.startsWith('/console/');
+    final atLanding = location == '/' ||
+        location == '/architecture' ||
+        location == '/qwen';
     final signedIn = status == SessionStatus.signedIn;
+
+    if (!kIsWeb && atLanding) {
+      return signedIn ? '/console/cameras' : '/login';
+    }
+
+    // Still checking for an existing session — let the current route render its
+    // loading state; this guard re-runs when the status resolves.
+    if (status == SessionStatus.restoring) return null;
 
     if (!signedIn && atConsole) {
       final from = Uri.encodeComponent(state.uri.toString());
@@ -154,3 +162,4 @@ abstract final class AppRouter {
     );
   }
 }
+

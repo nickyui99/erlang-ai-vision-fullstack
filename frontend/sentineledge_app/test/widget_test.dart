@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sentineledge_app/app/app_router.dart';
 import 'package:sentineledge_app/app/session_controller.dart';
 import 'package:sentineledge_app/features/auth/login_page.dart';
 import 'package:sentineledge_app/features/dashboard/console_page.dart';
 import 'package:sentineledge_app/features/dashboard/device_control_view.dart';
 import 'package:sentineledge_app/features/dashboard/workspace_view.dart';
+import 'package:sentineledge_app/features/landing/landing_page.dart';
 import 'package:sentineledge_app/services/backend_auth_client.dart';
 
 /// Hosts [child] under a [SessionScope] and a minimal [GoRouter] that also
@@ -41,6 +43,23 @@ Future<void> _settle(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('native root route opens login instead of landing page', (
+    WidgetTester tester,
+  ) async {
+    final session = SessionController(apiClient: _SignedOutApiClient());
+
+    await tester.pumpWidget(
+      SessionScope(
+        controller: session,
+        child: MaterialApp.router(routerConfig: AppRouter.build(session)),
+      ),
+    );
+    await _settle(tester);
+
+    expect(find.byType(LandingPage), findsNothing);
+    expect(find.text('Operator sign in'), findsOneWidget);
+  });
+
   testWidgets('shows sign in action', (WidgetTester tester) async {
     final session = SessionController(apiClient: _FakeSentinelEdgeApiClient());
     await tester.pumpWidget(
@@ -53,6 +72,7 @@ void main() {
 
     expect(find.text('Erlang AI Vision'), findsOneWidget);
     expect(find.text('Sign in with Google'), findsOneWidget);
+    expect(find.text('Back to home'), findsNothing);
   });
 
   testWidgets('renders the camera-first dashboard and opens camera controls', (
@@ -221,5 +241,10 @@ class _FakeSentinelEdgeApiClient extends SentinelEdgeApiClient {
   }) async {}
 }
 
-
+class _SignedOutApiClient extends _FakeSentinelEdgeApiClient {
+  @override
+  Future<BackendUser> currentUser() async {
+    throw BackendAuthException('not_authenticated', 'No active session.');
+  }
+}
 

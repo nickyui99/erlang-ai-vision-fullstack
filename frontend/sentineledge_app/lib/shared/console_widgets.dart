@@ -170,18 +170,27 @@ class ConsolePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SectionHeader(
-            title: title,
-            icon: icon,
-            subtitle: subtitle,
-            trailing: action,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          child,
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stackHeader = action != null && constraints.maxWidth < 360;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SectionHeader(
+                title: title,
+                icon: icon,
+                subtitle: subtitle,
+                trailing: stackHeader ? null : action,
+              ),
+              if (stackHeader) ...[
+                const SizedBox(height: AppSpacing.md),
+                Align(alignment: Alignment.centerLeft, child: action!),
+              ],
+              const SizedBox(height: AppSpacing.lg),
+              child,
+            ],
+          );
+        },
       ),
     );
   }
@@ -227,11 +236,17 @@ class MetricTile extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            value,
-            style: AppTypography.tabular(
-              theme.textTheme.headlineMedium ?? const TextStyle(),
+          const SizedBox(height: AppSpacing.sm),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                style: AppTypography.tabular(
+                  theme.textTheme.headlineMedium ?? const TextStyle(),
+                ),
+              ),
             ),
           ),
           Text(
@@ -257,6 +272,7 @@ class StatusPill extends StatelessWidget {
     this.tone,
     this.color,
     this.dot = true,
+    this.icon,
     super.key,
   }) : assert(tone != null || color != null, 'Provide a tone or a color');
 
@@ -268,6 +284,10 @@ class StatusPill extends StatelessWidget {
   final StatusTone? tone;
   final Color? color;
   final bool dot;
+
+  /// Optional leading glyph. When set, it replaces the status [dot] — use for
+  /// states that deserve a distinct mark (e.g. a verified badge).
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -298,7 +318,10 @@ class StatusPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (dot) ...[
+          if (icon != null) ...[
+            Icon(icon, size: 13, color: fg),
+            const SizedBox(width: 5),
+          ] else if (dot) ...[
             Container(
               width: 7,
               height: 7,
@@ -465,6 +488,7 @@ class SelectableConsoleTile extends StatefulWidget {
     required this.onTap,
     this.leading,
     this.trailing,
+    this.stackedTrailing,
     super.key,
   });
 
@@ -473,7 +497,14 @@ class SelectableConsoleTile extends StatefulWidget {
   final String subtitle;
   final VoidCallback onTap;
   final Widget? leading;
+
+  /// Stays pinned to the right edge in every layout (e.g. an edit affordance).
   final Widget? trailing;
+
+  /// Secondary trailing content (e.g. a status pill). On narrow/mobile widths
+  /// it drops below the text so the title/subtitle keep the full width; on wide
+  /// layouts it sits inline to the right, before [trailing].
+  final Widget? stackedTrailing;
 
   @override
   State<SelectableConsoleTile> createState() => _SelectableConsoleTileState();
@@ -515,48 +546,69 @@ class _SelectableConsoleTileState extends State<SelectableConsoleTile> {
                       : scheme.outlineVariant,
                 ),
               ),
-              child: Row(
-                children: [
-                  // Left accent bar communicates selection without a heavy border.
-                  AnimatedContainer(
-                    duration: AppMotion.duration(context, AppMotion.fast),
-                    width: 3,
-                    height: 34,
-                    margin: const EdgeInsets.only(right: AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: selected ? scheme.primary : Colors.transparent,
-                      borderRadius: AppRadius.pillAll,
-                    ),
-                  ),
-                  if (widget.leading != null) ...[
-                    widget.leading!,
-                    AppSpacing.hMd,
-                  ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // On narrow (mobile) rows, drop the secondary trailing content
+                  // under the text so the title/subtitle keep the full width.
+                  final stack =
+                      widget.stackedTrailing != null &&
+                      constraints.maxWidth < 420;
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left accent bar communicates selection without a heavy border.
+                      AnimatedContainer(
+                        duration: AppMotion.duration(context, AppMotion.fast),
+                        width: 3,
+                        height: 34,
+                        margin: const EdgeInsets.only(right: AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: selected ? scheme.primary : Colors.transparent,
+                          borderRadius: AppRadius.pillAll,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          widget.subtitle,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall,
-                        ),
+                      ),
+                      if (widget.leading != null) ...[
+                        widget.leading!,
+                        AppSpacing.hMd,
                       ],
-                    ),
-                  ),
-                  if (widget.trailing != null) ...[
-                    AppSpacing.hMd,
-                    widget.trailing!,
-                  ],
-                ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              widget.subtitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                            if (stack) ...[
+                              const SizedBox(height: AppSpacing.sm),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: widget.stackedTrailing!,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (widget.stackedTrailing != null && !stack) ...[
+                        AppSpacing.hMd,
+                        widget.stackedTrailing!,
+                      ],
+                      if (widget.trailing != null) ...[
+                        AppSpacing.hMd,
+                        widget.trailing!,
+                      ],
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -842,3 +894,4 @@ class SkeletonList extends StatelessWidget {
     );
   }
 }
+
