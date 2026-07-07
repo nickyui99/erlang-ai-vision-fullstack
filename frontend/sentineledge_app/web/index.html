@@ -27,20 +27,74 @@
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" href="favicon.png?v=2"/>
 
   <title>Erlang AI Vision</title>
   <link rel="manifest" href="manifest.json">
+
+  <script>
+    // Match the splash to the app's persisted theme before first paint.
+    // shared_preferences stores strings JSON-encoded under a "flutter." prefix.
+    try {
+      if ((localStorage.getItem('flutter.theme_mode') || '').includes('dark')) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    } catch (_) {}
+  </script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      background-color: #F7F8FA;
+    }
+    html[data-theme="dark"], html[data-theme="dark"] body {
+      background-color: #090D12;
+    }
+    #splash {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background-color: inherit;
+      transition: opacity 0.3s ease-out;
+    }
+    #splash img {
+      width: 88px;
+      height: 88px;
+      border-radius: 20px;
+      animation: splash-pulse 1.6s ease-in-out infinite;
+    }
+    #splash .splash-label {
+      font: 500 14px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+      letter-spacing: 0.04em;
+      color: #667085;
+    }
+    html[data-theme="dark"] #splash .splash-label {
+      color: #98A2B3;
+    }
+    @keyframes splash-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.94); opacity: 0.75; }
+    }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <div id="splash">
+    <img src="icons/Icon-192.png" alt="">
+    <span class="splash-label">Erlang AI Vision</span>
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var splash = document.getElementById('splash');
+      if (!splash) return;
+      splash.style.opacity = '0';
+      splash.addEventListener('transitionend', function () { splash.remove(); });
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

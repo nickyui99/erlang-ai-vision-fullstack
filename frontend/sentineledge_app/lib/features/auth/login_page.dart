@@ -227,23 +227,30 @@ class SignInView extends StatelessWidget {
                     child: ClipRRect(
                       borderRadius: AppRadius.lgAll,
                       child: wide
-                          ? SizedBox(
-                              height: 560,
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  const Expanded(flex: 6, child: _BrandPanel()),
-                                  Expanded(
-                                    flex: 4,
-                                    child: _LoginPanel(
-                                      error: error,
-                                      isLoading: isLoading,
-                                      onGoogleSignIn: onGoogleSignIn,
-                                      onEmailSignIn: onEmailSignIn,
-                                      onEmailCreate: onEmailCreate,
+                          ? ConstrainedBox(
+                              constraints:
+                                  const BoxConstraints(minHeight: 560),
+                              child: IntrinsicHeight(
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    const Expanded(
+                                      flex: 6,
+                                      child: _BrandPanel(),
                                     ),
-                                  ),
-                                ],
+                                    Expanded(
+                                      flex: 4,
+                                      child: _LoginPanel(
+                                        error: error,
+                                        isLoading: isLoading,
+                                        onGoogleSignIn: onGoogleSignIn,
+                                        onEmailSignIn: onEmailSignIn,
+                                        onEmailCreate: onEmailCreate,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             )
                           : Column(
