@@ -977,6 +977,40 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
   }
 
+  // Camera dashboard sort order.
+  static const Map<String, String> _deviceSortLabels = {
+    'favorites': 'Favorites first',
+    'name': 'Name (A–Z)',
+    'status': 'Status (online first)',
+    'recent': 'Recently active',
+  };
+  String _deviceSort = 'favorites';
+
+  int _deviceComparator(EdgeDevice a, EdgeDevice b) {
+    switch (_deviceSort) {
+      case 'name':
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      case 'status':
+        final ra = a.healthStatus == 'online' ? 0 : 1;
+        final rb = b.healthStatus == 'online' ? 0 : 1;
+        final byStatus = ra.compareTo(rb);
+        return byStatus != 0
+            ? byStatus
+            : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      case 'recent':
+        final at = a.lastSeen?.millisecondsSinceEpoch ?? 0;
+        final bt = b.lastSeen?.millisecondsSinceEpoch ?? 0;
+        final byRecent = bt.compareTo(at); // most recent first
+        return byRecent != 0
+            ? byRecent
+            : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      case 'favorites':
+      default:
+        if (a.isFavorite != b.isFavorite) return a.isFavorite ? -1 : 1;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    }
+  }
+
   Widget _devicePanel(bool compact) {
     final query = _deviceSearchController.text.trim().toLowerCase();
     final visibleDevices = _devices.where((device) {
@@ -985,13 +1019,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           (device.location ?? '').toLowerCase().contains(query) ||
           device.healthStatus.toLowerCase().contains(query);
     }).toList()
-      // Favorited cameras (heart) float to the top; stable by name otherwise.
-      ..sort((a, b) {
-        if (a.isFavorite != b.isFavorite) {
-          return a.isFavorite ? -1 : 1;
-        }
-        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-      });
+      ..sort(_deviceComparator);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1010,13 +1038,36 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           ),
           child: Column(
             children: [
-              TextField(
-                controller: _deviceSearchController,
-                onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Search cameras',
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _deviceSearchController,
+                      onChanged: (_) => setState(() {}),
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        hintText: 'Search cameras',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  DropdownButton<String>(
+                    value: _deviceSort,
+                    underline: const SizedBox.shrink(),
+                    icon: const Icon(Icons.sort),
+                    borderRadius: AppRadius.mdAll,
+                    items: [
+                      for (final entry in _deviceSortLabels.entries)
+                        DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                    ],
+                    onChanged: (value) => setState(
+                      () => _deviceSort = value ?? 'favorites',
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: AppSpacing.md),
               if (_isRefreshing && _devices.isEmpty)
@@ -1473,10 +1524,9 @@ class _CameraDeviceCard extends StatelessWidget {
             scheme.onSurface.withValues(alpha: 0.045),
             scheme.surface,
           );
-    // Signature: a cool "AI/tech" gradient for live cameras (contrasts the
-    // app's red brand); a quiet slate gradient when the camera is offline.
+    // Warm sunset gradient for live cameras; a quiet slate gradient when offline.
     final headerColors = online
-        ? const [Color(0xFF312E81), Color(0xFF7C3AED), Color(0xFF06B6D4)]
+        ? const [Color(0xFFFF4E50), Color(0xFFF9D423)]
         : const [Color(0xFF334155), Color(0xFF475569), Color(0xFF64748B)];
 
     return AppCard(

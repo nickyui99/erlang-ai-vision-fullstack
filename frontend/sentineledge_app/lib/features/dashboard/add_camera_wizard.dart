@@ -32,6 +32,27 @@ class _AddCameraWizardState extends State<AddCameraWizard> {
   // port 8765 ??? not the backend's 8000.
   final _portController = TextEditingController(text: '8765');
 
+  // Common places offered as presets, plus a "Custom" option that reveals a
+  // free-text field.
+  static const List<String> _locationPresets = [
+    'Front Door',
+    'Backyard',
+    'Living Room',
+    'Kitchen',
+    'Bedroom',
+    'Garage',
+    'Driveway',
+    'Office',
+    'Nursery',
+    'Hallway',
+    'Street',
+  ];
+  static const String _customLocation = 'Custom location…';
+  String _locationChoice = _locationPresets.first;
+  bool get _isCustomLocation => _locationChoice == _customLocation;
+  String _locationValue() =>
+      _isCustomLocation ? _locationController.text.trim() : _locationChoice;
+
   int _step = 0; // 0 details, 1 wifi, 2 pair
   bool _busy = false;
   bool _passwordObscured = true;
@@ -69,7 +90,7 @@ class _AddCameraWizardState extends State<AddCameraWizard> {
     try {
       final registration = await widget.apiClient.registerDevice(
         name: name,
-        location: _locationController.text.trim(),
+        location: _locationValue(),
       );
       // Pre-fill the laptop IP the camera should dial. The receiver/bridge
       // normally runs on the same machine as the backend, so the backend's LAN
@@ -215,13 +236,36 @@ class _AddCameraWizardState extends State<AddCameraWizard> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          TextField(
-            controller: _locationController,
+          DropdownButtonFormField<String>(
+            initialValue: _locationChoice,
             decoration: const InputDecoration(
-              labelText: 'Location (optional)',
+              labelText: 'Location',
               prefixIcon: Icon(Icons.place_outlined),
             ),
+            items: [
+              for (final place in _locationPresets)
+                DropdownMenuItem(value: place, child: Text(place)),
+              const DropdownMenuItem(
+                value: _customLocation,
+                child: Text('Custom location…'),
+              ),
+            ],
+            onChanged: (value) => setState(
+              () => _locationChoice = value ?? _locationPresets.first,
+            ),
           ),
+          if (_isCustomLocation) ...[
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _locationController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Custom location',
+                hintText: 'e.g. Rooftop, Warehouse Bay 3, Reception',
+                prefixIcon: Icon(Icons.edit_location_alt_outlined),
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           FilledButton(
             onPressed: _busy ? null : _createDeviceAndContinue,
