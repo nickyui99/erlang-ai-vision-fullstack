@@ -2,10 +2,12 @@
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
 
+// Firebase Web client config. These values are public (they already ship in the
+// web bundle), so it is safe to hard-code them in this static service worker.
 const firebaseConfig = {
-  apiKey: 'FIREBASE_WEB_API_KEY',
-  appId: 'FIREBASE_WEB_APP_ID',
-  messagingSenderId: 'FIREBASE_WEB_MESSAGING_SENDER_ID',
+  apiKey: 'AIzaSyBrsT04CGk8w3fc3v6QoPwdUxfIicRKH98',
+  appId: '1:214249593640:web:732744ed546e8258cb0e1d',
+  messagingSenderId: '214249593640',
   projectId: 'sentineledge-e069b',
   authDomain: 'sentineledge-e069b.firebaseapp.com',
 };

@@ -10,6 +10,7 @@ import '../../app/theme_mode_controller.dart';
 import '../../design/app_typography.dart';
 import '../../services/backend_auth_client.dart';
 import '../../services/realtime/realtime_client.dart';
+import '../../shared/event_alert.dart';
 import '../../shared/console_widgets.dart';
 import 'add_camera_wizard.dart';
 import 'agent_templates.dart';
@@ -498,6 +499,18 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     switch (message.type) {
       case 'event.created':
         _loadEvents(showSuccess: false);
+        // Only the visible screen alerts (avoids double alerts when a camera
+        // detail view is on top with its own realtime feed).
+        if (ModalRoute.of(context)?.isCurrent ?? true) {
+          final severity = message.data['severity']?.toString();
+          showEventAlert(
+            ScaffoldMessenger.maybeOf(context),
+            title: 'New ${(severity ?? 'event').toLowerCase()} detection',
+            body: message.data['summary']?.toString() ??
+                'A camera event needs review.',
+            tone: toneForSeverity(severity),
+          );
+        }
         break;
       case 'event.verified':
         // Verification finished: refresh so the verdict + agent trail update.

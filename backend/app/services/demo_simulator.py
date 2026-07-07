@@ -92,6 +92,7 @@ class _CameraSim:
     last_activity: float
     task: asyncio.Task | None = None
     last_event_monotonic: float = field(default=0.0)
+    triage_in_flight: bool = False
 
 
 class DemoSimulator:
@@ -163,7 +164,14 @@ class DemoSimulator:
                 idx += 1
                 if frame_bytes:
                     await video_stream_broker.publish(sim.device_id, frame_bytes)
-                    if now - last_triage >= settings.demo_sim_triage_interval_seconds:
+                    # Until the first event lands, retry quickly so opening a
+                    # camera surfaces a detection fast; then use the slow cadence.
+                    interval = (
+                        settings.demo_sim_first_triage_interval_seconds
+                        if sim.last_event_monotonic == 0.0
+                        else settings.demo_sim_triage_interval_seconds
+                    )
+                    if now - last_triage >= interval:
                         last_triage = now
                         # Fire-and-forget so a slow LLM call never stalls playback.
                         asyncio.create_task(self._maybe_triage(sim, frame_bytes))
@@ -184,6 +192,11 @@ class DemoSimulator:
         # Cooldown: don't spend API calls or spawn events back-to-back.
         if time.monotonic() - sim.last_event_monotonic < settings.demo_sim_event_cooldown_seconds:
             return
+        # Single-flight: with the fast first-detection cadence, calls could
+        # otherwise overlap and create duplicate events on open.
+        if sim.triage_in_flight:
+            return
+        sim.triage_in_flight = True
         try:
             async with async_session_factory() as session:
                 agent = await self._armed_agent(session, sim.device_id, sim.user_id)
@@ -196,6 +209,8 @@ class DemoSimulator:
                     await self._create_event(session, sim, agent, device, verdict)
         except Exception:  # noqa: BLE001 - triage is best-effort
             _logger.exception("demo_sim: triage failed for %s", sim.device_id)
+        finally:
+            sim.triage_in_flight = False
 
     async def _armed_agent(self, session: AsyncSession, device_id: str, user_id: str) -> Agent | None:
         result = await session.execute(

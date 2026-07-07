@@ -7,7 +7,9 @@ import '../../design/app_spacing.dart';
 import '../../design/app_typography.dart';
 import '../../services/backend_auth_client.dart';
 import '../../services/playback/playback_url_launcher.dart';
+import '../../services/realtime/realtime_client.dart';
 import '../../shared/console_widgets.dart';
+import '../../shared/event_alert.dart';
 import 'live_stream_view.dart';
 import 'playback/playback_video_view.dart';
 
@@ -66,6 +68,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
   String? _assigningAgentId;
   String? _playingClipId;
   String? _playingRecordingId;
+  RealtimeConnection? _realtime;
 
   @override
   void initState() {
@@ -77,6 +80,45 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     _loadEvents();
     _loadPlaybackClips();
     _resolveStreamUrl();
+    // Live updates while a camera is open: new detections refresh the activity
+    // panel and raise an in-app alert (web SSE; no-op on mobile).
+    _realtime = connectRealtime(
+      onMessage: _handleRealtimeMessage,
+      onStatus: (_) {},
+    );
+  }
+
+  void _handleRealtimeMessage(RealtimeMessage message) {
+    if (!mounted) return;
+    final deviceId = message.data['device_id']?.toString();
+    if (deviceId != _device.deviceId) return; // only this camera
+    switch (message.type) {
+      case 'event.created':
+        _loadEvents();
+        if (ModalRoute.of(context)?.isCurrent ?? true) {
+          final severity = message.data['severity']?.toString();
+          showEventAlert(
+            ScaffoldMessenger.maybeOf(context),
+            title: 'New ${(severity ?? 'event').toLowerCase()} detection',
+            body: message.data['summary']?.toString() ??
+                'A camera event needs review.',
+            tone: toneForSeverity(severity),
+          );
+        }
+        break;
+      case 'event.verified':
+        _loadEvents();
+        break;
+      case 'clip.available':
+        _loadPlaybackClips();
+        break;
+    }
+  }
+
+  @override
+  void dispose() {
+    _realtime?.dispose();
+    super.dispose();
   }
 
   List<SurveillanceAgent> get _definitions =>

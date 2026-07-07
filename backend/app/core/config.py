@@ -87,6 +87,9 @@ class Settings(BaseSettings):
     demo_frames_dir: str = Field(default="", validation_alias="DEMO_FRAMES_DIR")
     demo_sim_fps: float = Field(default=10.0, validation_alias="DEMO_SIM_FPS")
     demo_sim_triage_interval_seconds: float = Field(default=15.0, validation_alias="DEMO_SIM_TRIAGE_INTERVAL_SECONDS")
+    # Faster cadence until the first detection lands, so opening a camera surfaces
+    # an event quickly; then it settles to the slower steady-state interval above.
+    demo_sim_first_triage_interval_seconds: float = Field(default=3.0, validation_alias="DEMO_SIM_FIRST_TRIAGE_INTERVAL_SECONDS")
     demo_sim_event_cooldown_seconds: float = Field(default=45.0, validation_alias="DEMO_SIM_EVENT_COOLDOWN_SECONDS")
     demo_sim_idle_timeout_seconds: float = Field(default=30.0, validation_alias="DEMO_SIM_IDLE_TIMEOUT_SECONDS")
 

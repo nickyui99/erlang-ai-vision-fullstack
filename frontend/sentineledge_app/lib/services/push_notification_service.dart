@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../firebase_options.dart';
+import '../shared/event_alert.dart';
 import 'backend_auth_client.dart';
 
 class PushNotificationService {
@@ -98,22 +99,12 @@ class PushNotificationService {
         message.data['summary']?.toString() ??
         message.data['event_type']?.toString() ??
         'A camera event needs review.';
-
-    messenger.showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        showCloseIcon: true,
-        duration: const Duration(seconds: 7),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 2),
-            Text(body, maxLines: 2, overflow: TextOverflow.ellipsis),
-          ],
-        ),
-      ),
+    // Shared banner + sound/haptic (covers mobile, where realtime SSE is absent).
+    showEventAlert(
+      messenger,
+      title: title,
+      body: body,
+      tone: toneForSeverity(message.data['severity']?.toString()),
     );
   }
 
