@@ -1,19 +1,23 @@
 ﻿# Alibaba Cloud Architecture
 
-SentinelEdge deploys the FastAPI backend on Alibaba Cloud ECI, serves Flutter Web WASM as static assets from OSS, and supports Flutter Mobile Android/iOS clients through the same public backend API. LaptopEdge keeps outbound connections to the backend for camera health, events, live frames, and command relay.
+SentinelEdge deploys the FastAPI backend on Alibaba Cloud ECI (region `ap-southeast-3`, Kuala Lumpur), stores the Flutter Web WASM build in OSS, and supports Flutter Mobile Android/iOS clients through the same public backend API. A Caddy sidecar in the same ECI container group serves the app and API on one origin behind a standing EIP; browsers never load the OSS bucket directly (see below). LaptopEdge keeps outbound connections to the backend for camera health, events, live frames, and command relay.
 
 ```mermaid
 flowchart LR
-    WebUser[Web User Browser] --> WebOSS[OSS Static Website: Flutter Web WASM]
-    WebOSS -->|HTTPS API + WSS/SSE| ALB[Alibaba ALB HTTPS/WSS]
-
+    WebUser[Web User Browser] -->|HTTPS| EIP[Static EIP 47.250.155.149]
     MobileUser[Mobile User] --> MobileApp[Flutter Mobile Android / iOS]
-    MobileApp -->|HTTPS API + WSS/SSE| ALB
+    MobileApp -->|HTTPS API + WSS/SSE| EIP
 
-    LaptopEdge[SentinelEdge LaptopEdge] -->|HTTPS REST + WSS| ALB
+    LaptopEdge[SentinelEdge LaptopEdge] -->|HTTPS REST + WSS| EIP
     ESP32[ESP32-S3 Camera] -->|LAN Wi-Fi WS or USB| LaptopEdge
 
-    ALB --> ECI[Alibaba ECI: FastAPI Backend]
+    subgraph Group[ECI Container Group: erlang-backend]
+        Caddy[Caddy Sidecar :80]
+        ECI[FastAPI Backend :8000]
+    end
+    EIP --> Caddy
+    Caddy -->|/api + /healthz| ECI
+    Caddy -->|static app, region-internal endpoint| WebOSS[(OSS bucket erlang-vision: Flutter Web WASM)]
     ACR[Alibaba Container Registry] -->|container image| ECI
 
     ECI --> DB[(ApsaraDB PostgreSQL)]
@@ -27,11 +31,12 @@ flowchart LR
 
 ## Deployment Notes
 
-- Flutter Web WASM is static output from `frontend/sentineledge_app/build/web/` and can be hosted on OSS.
-- OSS must serve `.wasm` files with `application/wasm`.
+- Flutter Web WASM is static output from `frontend/sentineledge_app/build/web/`, uploaded to the OSS bucket `erlang-vision` by `scripts/deployment/frontend.ps1`.
+- OSS must serve `.wasm` files with `application/wasm` (the upload script sets this per file).
+- OSS force-downloads HTML on the `*.aliyuncs.com` endpoint (`x-oss-force-download`), so browsers reach the app only through the Caddy sidecar, which reverse-proxies the bucket over the region-internal endpoint and strips the forced-download headers. Never place an ALB in front of OSS.
 - Flutter Mobile Android/iOS is distributed separately and uses the same backend API base URL.
-- FastAPI runs from the existing `backend/Dockerfile` image on ECI.
-- ALB must support HTTPS, WebSocket, and long-lived SSE responses.
+- FastAPI runs from the existing `backend/Dockerfile` image on ECI, pushed via ACR Personal Edition (`crpi-9kvwsegbpo7ict75.ap-southeast-3.personal.cr.aliyuncs.com`) and deployed by `scripts/deployment/backend.ps1 -Deploy` into the `erlang-backend` container group on the RDS vSwitch. Public entry is the standing EIP `erlang-eic-static-ip` (47.250.155.149).
+- The Caddy sidecar routes `/api` and `/healthz` to FastAPI and reverse-proxies everything else to the OSS web bucket; it must pass WebSocket upgrades and long-lived SSE responses (the Caddyfile sets `flush_interval -1`).
 - ApsaraDB PostgreSQL replaces local SQLite in production.
 - `data/sentineledge_demo.db` is local-only and must not be deployed.
 

@@ -6,7 +6,7 @@ The SentinelEdge frontend is a Flutter app at `frontend/sentineledge_app`.
 
 The app currently covers the authenticated smart-camera console flow:
 
-- Firebase Google sign-in in Flutter.
+- Firebase Google sign-in and email/password sign-in in Flutter (email/password accounts must verify their email before the backend accepts the session).
 - Firebase ID token retrieval from the signed-in user.
 - Backend login through `POST /api/v1/auth/firebase/login`.
 - Display of the backend user profile returned by SentinelEdge.
@@ -36,18 +36,28 @@ cd frontend\sentineledge_app
 Copy-Item config\firebase.example.json config\firebase.json
 ```
 
-Fill `config/firebase.json` with the Firebase Web app config from Firebase Console:
+Fill `config/firebase.json` with the values from Firebase Console. This mirrors the full `config/firebase.example.json` template, which carries web, Android, and iOS keys:
 
 ```json
 {
   "FIREBASE_WEB_API_KEY": "your-web-api-key",
   "FIREBASE_WEB_APP_ID": "your-web-app-id",
   "FIREBASE_WEB_MESSAGING_SENDER_ID": "your-sender-id",
+  "FIREBASE_GOOGLE_WEB_CLIENT_ID": "your-web-oauth-client-id.apps.googleusercontent.com",
+  "FIREBASE_ANDROID_API_KEY": "your-android-api-key",
+  "FIREBASE_ANDROID_APP_ID": "your-android-app-id",
+  "FIREBASE_ANDROID_MESSAGING_SENDER_ID": "your-sender-id",
+  "FIREBASE_IOS_API_KEY": "your-ios-api-key",
+  "FIREBASE_IOS_APP_ID": "your-ios-app-id",
+  "FIREBASE_IOS_MESSAGING_SENDER_ID": "your-sender-id",
+  "FIREBASE_IOS_BUNDLE_ID": "com.example.sentineledgeApp",
   "FIREBASE_PROJECT_ID": "sentineledge-e069b",
   "FIREBASE_AUTH_DOMAIN": "sentineledge-e069b.firebaseapp.com",
   "FIREBASE_MESSAGING_VAPID_KEY": "your-web-push-vapid-key"
 }
 ```
+
+For a web-only build you can fill just the `FIREBASE_WEB_*`, `FIREBASE_PROJECT_ID`, `FIREBASE_AUTH_DOMAIN`, and `FIREBASE_MESSAGING_VAPID_KEY` values; the Android/iOS keys are needed only for mobile builds. Web Google sign-in uses `signInWithPopup` and does not require `FIREBASE_GOOGLE_WEB_CLIENT_ID`.
 
 These Firebase client values are not backend secrets, but keeping the local file ignored avoids committing environment-specific config.
 
@@ -99,9 +109,11 @@ Default backend URLs in the Flutter app:
 
 | Platform | URL |
 |---|---|
-| Web | `http://localhost:8000` |
+| Web (dev/debug) | `http://localhost:8000` |
 | Android emulator | `http://10.0.2.2:8000` |
 | iOS simulator | `http://localhost:8000` |
+
+Web release builds default to the page origin (same host as the served app) instead of `localhost:8000`. An explicit `--dart-define=SENTINELEDGE_API_BASE_URL` always overrides these defaults.
 
 ## Auth Request
 

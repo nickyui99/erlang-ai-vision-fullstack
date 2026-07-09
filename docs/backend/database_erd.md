@@ -12,6 +12,7 @@ erDiagram
     USERS ||--o{ ALERTS : receives
     USERS ||--o{ PUSH_TOKENS : registers
     USERS ||--o{ TOOL_AUDIT : performs
+    USERS ||--o{ CHAT_SESSIONS : starts
 
     DEVICES ||--o{ AGENTS : assigned_to
     DEVICES ||--o{ EVENTS : captures
@@ -20,10 +21,13 @@ erDiagram
     DEVICES ||--o{ TOOL_AUDIT : targeted_by
 
     AGENTS ||--o{ EVENTS : triggers
+    AGENTS ||--o{ AGENTS : parent_of
 
     EVENTS ||--o{ CLIPS : stores
     EVENTS ||--o{ ALERTS : sends
     EVENTS ||--o{ TOOL_AUDIT : records
+
+    CHAT_SESSIONS ||--o{ CHAT_MESSAGES : contains
 
     USERS {
         string user_id PK
@@ -49,6 +53,10 @@ erDiagram
         float fps
         int current_pan
         int current_tilt
+        boolean is_favorite
+        json presets
+        int ptz_correction_pan
+        int ptz_correction_tilt
         datetime last_seen
         datetime created_at
         datetime updated_at
@@ -58,6 +66,7 @@ erDiagram
         string agent_id PK
         string user_id FK
         string device_id FK
+        string parent_agent_id FK
         string name
         string location
         text nl_rule
@@ -172,6 +181,22 @@ erDiagram
         string called_by
         datetime timestamp
     }
+
+    CHAT_SESSIONS {
+        string session_id PK
+        string user_id FK
+        string title
+        datetime created_at
+        datetime updated_at
+    }
+
+    CHAT_MESSAGES {
+        string message_id PK
+        string session_id FK
+        string role
+        text content
+        datetime created_at
+    }
 ```
 
 ## Notes
@@ -212,7 +237,11 @@ erDiagram
 | `rssi` | Latest signal strength reported by the device or edge service, if available. |
 | `fps` | Latest measured frames per second from the camera stream. |
 | `current_pan` | Current pan servo angle of the SG90 gimbal (horizontal axis), clamped 0..180, centered at 90. |
-| `current_tilt` | Current tilt servo angle of the SG90 gimbal (vertical axis), clamped 60..140, centered at 90. |
+| `current_tilt` | Current tilt servo angle of the SG90 gimbal (vertical axis), clamped 0..180 at the DB/heartbeat layer, centered at 90. User-facing tilt commands and camera presets are additionally constrained to the mechanical safe range 60..140. |
+| `is_favorite` | Whether the user pinned this camera as a favorite. Defaults to false. |
+| `presets` | JSON array of saved pan/tilt presets (`{label, pan, tilt}`, up to 6). Defaults to an empty list. |
+| `ptz_correction_pan` | Per-device pan calibration offset (degrees), range -45..45, default 0. |
+| `ptz_correction_tilt` | Per-device tilt calibration offset (degrees), range -45..45, default 0. |
 | `last_seen` | Last heartbeat or successful contact time from the device/edge service. |
 | `created_at` | Time the device was registered. |
 | `updated_at` | Time the device row was last updated. |
@@ -223,7 +252,8 @@ erDiagram
 |---|---|
 | `agent_id` | Internal primary key for a surveillance agent. |
 | `user_id` | Owner of the agent. |
-| `device_id` | Device this agent watches or controls. |
+| `device_id` | Device this agent watches or controls. Nullable: main agent definitions are device-independent until assigned/armed. |
+| `parent_agent_id` | Nullable self-reference. Main agents (definitions) have this `NULL`; assigning a definition to a camera creates a sub-agent whose `parent_agent_id` points back to the definition. |
 | `name` | User-defined agent name. |
 | `location` | Optional agent-specific location label. |
 | `nl_rule` | Natural-language rule written by the user. |
@@ -252,7 +282,7 @@ erDiagram
 | `confidence` | Confidence score for the event or final verdict. |
 | `summary` | Human-readable event summary. |
 | `degraded` | Whether the event was processed with reduced confidence due to failures or missing data. |
-| `status` | Lifecycle state, such as `candidate`, `cloud_pending`, `verified`, `alerted`, `dismissed`, or `false_positive`. |
+| `status` | Lifecycle state, one of `candidate` (default), `verified`, `dismissed`, or `false_positive`. |
 | `created_at` | Time the backend stored the event. |
 | `updated_at` | Time the event row was last updated. |
 
@@ -353,3 +383,27 @@ from the camera `DEVICES` table.
 | `result` | JSON result returned by the tool or relay. |
 | `called_by` | Actor that initiated the call, such as `user`, `qwen_agent`, or `system`. |
 | `timestamp` | Time the tool call was attempted or recorded. |
+
+### CHAT_SESSIONS
+
+One conversation thread between a user and the Erlang AI assistant. Distinct
+from the `AGENTS` table (camera-monitoring rules): a chat session is a persisted
+assistant conversation owning an ordered list of `CHAT_MESSAGES`.
+
+| Field | Description |
+|---|---|
+| `session_id` | Internal primary key for the chat session. |
+| `user_id` | Owner of the session. |
+| `title` | Auto-generated from the first user message; blank until then. |
+| `created_at` | Time the session was created. |
+| `updated_at` | Time the session was last updated. |
+
+### CHAT_MESSAGES
+
+| Field | Description |
+|---|---|
+| `message_id` | Internal primary key for the message. |
+| `session_id` | Chat session this message belongs to. |
+| `role` | Turn author: `user`, `assistant`, or `system`. |
+| `content` | Message text. Ordered by `created_at` ascending within a session. |
+| `created_at` | Time the message was recorded. |

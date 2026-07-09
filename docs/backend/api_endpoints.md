@@ -238,6 +238,25 @@ The edge bridge connects to `WS /api/v1/edge/stream` and sends one JPEG frame pe
 | `POST` | `/api/v1/clips/{clip_id}/download-url` | User session | Generate temporary clip download URL. |
 | `POST` | `/api/v1/recordings/{recording_id}/signed-url` | User session | Generate temporary recording playback URL. |
 
+### Local media serving (development only)
+
+When `APP_ENV=development` and OSS is not configured, the signed-url/download-url
+endpoints above return URLs that point back at the backend instead of at OSS, and
+these `GET` routes serve the bytes of a local sample video. They are authenticated
+by the same signed **query token** as `/stream` (not the session cookie), and
+return `404 media_not_found` outside development or when the sample video is
+absent. They exist only so the full playback/download flow is demoable without a
+storage bucket.
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/clips/{clip_id}/media` | Signed query token | Serve local clip playback bytes (dev fallback). |
+| `GET` | `/api/v1/clips/{clip_id}/download` | Signed query token | Serve local clip download bytes (dev fallback). |
+| `GET` | `/api/v1/recordings/{recording_id}/media` | Signed query token | Serve local recording playback bytes (dev fallback). |
+
+In production (OSS configured), the signed-url/download-url endpoints return OSS
+URLs directly and these routes are not used.
+
 ## Notifications and Realtime
 
 | Method | Endpoint | Auth | Description |

@@ -52,7 +52,7 @@ Example request:
 }
 ```
 
-`current_pan` reports the horizontal servo angle. `current_tilt` reports the vertical servo angle. Pan accepts `0..180`; tilt accepts `60..140`, matching the current mechanical safe range. Edges that do not yet report tilt default to `90` for backward compatibility.
+`current_pan` reports the horizontal servo angle. `current_tilt` reports the vertical servo angle. The heartbeat accepts `0..180` for both pan and tilt. Edges that do not yet report tilt default to `90` for backward compatibility. (Note: user-facing tilt *commands* — `command.tilt_camera` and camera presets — are constrained more tightly to the mechanical safe range `60..140`; the heartbeat itself does not enforce that narrower range.)
 
 The backend updates device health, `last_seen`, RSSI, FPS, pan, and tilt. It emits `device.health_changed` over SSE when visible state changes.
 
@@ -81,8 +81,7 @@ Example response:
         "schedule": {"start": "22:00", "end": "06:00"}
       }
     }
-  ],
-  "request_id": "req_123"
+  ]
 }
 ```
 
@@ -246,6 +245,7 @@ Supported command types:
 - `command.pan_camera`
 - `command.tilt_camera`
 - `command.get_live_snapshot`
+- `command.recording`, `command.audio_mute`, `command.talk`, `command.alarm`, `command.fill_light`, `command.resolution` — device control actions relayed by `POST /api/v1/devices/{device_id}/control`. Their payloads carry `action` plus `enabled` and/or `resolution`.
 
 Pan command example:
 

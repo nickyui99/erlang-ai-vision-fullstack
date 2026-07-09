@@ -5,7 +5,7 @@ import '../../design/app_spacing.dart';
 import '../../design/app_typography.dart';
 import '../../shared/external_link.dart';
 
-const _logoAsset = 'assets/brand/erlang-ai-vision-logo-light.png';
+const _logoAsset = 'assets/brand/erlang-ai-vision-logo-long-transparent.png';
 const _cameraIconAsset = 'assets/brand/erlang-ai-camera-tile-icon.png';
 const _agentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
 const _scenarioAsset = 'assets/landing/edge-ai-scenario.png';

@@ -58,3 +58,6 @@ Thumbs.db
 
 # logs
 *.log
+
+# Android signing report (keystore path/alias/fingerprints - not for public repo)
+signing-report.txt

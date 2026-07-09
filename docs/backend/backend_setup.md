@@ -144,7 +144,7 @@ alembic -c backend\alembic.ini current
 Expected current revision:
 
 ```text
-20260620_0001
+20260707_0008
 ```
 
 Avoid running migration experiments against `data/sentineledge_demo.db`; keep that file as the seeded demo database.
