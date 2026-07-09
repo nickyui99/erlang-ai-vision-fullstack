@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/banner.png" alt="Erlang AI Vision — Qwen-powered agent cameras you configure in plain language" width="100%"/>
+![Erlang AI Vision — Qwen-powered agent cameras you configure in plain language](docs/assets/banner.png)
 
 ### Qwen-powered agent cameras you configure in plain language.
 
@@ -125,7 +125,7 @@ Full setup → [Backend setup](docs/backend/backend_setup.md) · [Frontend setup
 ---
 <div align="center">
 
-Licensed under the [MIT License](LICENSE) · Built for the Erlang AI Vision hackathon.
+Licensed under the [MIT License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md) · Built for the Erlang AI Vision hackathon.
 
 </div>
 

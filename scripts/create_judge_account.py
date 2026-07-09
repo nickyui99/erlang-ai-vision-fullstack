@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
@@ -110,7 +111,6 @@ CAMERAS = [
         "name": "Home — Front Door",
         "location": "House · Front Entrance",
         "use_case": "Home security: suspicious person at the front door",
-        "edge_token": "se_edge_judge_house_frontdoor",
         "agent_name": "Front Door Watch",
         "nl_rule": "Alert me if a suspicious person is loitering at the front door.",
         "prompt": "Verify whether a suspicious person (for example someone in a dark hoodie lingering or acting furtively) is at the front door.",
@@ -130,7 +130,6 @@ CAMERAS = [
         "name": "Home — Backyard",
         "location": "House · Backyard",
         "use_case": "Yard monitoring: activity / people in the backyard",
-        "edge_token": "se_edge_judge_house_backyard",
         "agent_name": "Backyard Activity Watch",
         "nl_rule": "Let me know about any people or activity in the backyard.",
         "prompt": "Describe any person or activity in the backyard, such as someone doing yard work or mowing the lawn.",
@@ -151,7 +150,6 @@ CAMERAS = [
         "name": "Office",
         "location": "Office · Main Floor",
         "use_case": "Office monitoring: meetings and room occupancy",
-        "edge_token": "se_edge_judge_office",
         "agent_name": "Office Activity Watch",
         "nl_rule": "Notify me when people are meeting in the office.",
         "prompt": "Verify whether people are present and having a meeting or discussion in the office.",
@@ -172,7 +170,6 @@ CAMERAS = [
         "name": "Street",
         "location": "Street · Curbside",
         "use_case": "Storefront monitoring: deliveries and street activity",
-        "edge_token": "se_edge_judge_street",
         "agent_name": "Storefront Delivery Watch",
         "nl_rule": "Notify me when someone is moving goods or deliveries into the store.",
         "prompt": "Verify whether a person is moving stock, boxes, or deliveries into the store on the street.",
@@ -193,7 +190,6 @@ CAMERAS = [
         "name": "Baby Room",
         "location": "House · Nursery",
         "use_case": "Baby monitor: crying, or the baby climbing out of the crib",
-        "edge_token": "se_edge_judge_baby",
         "agent_name": "Baby Monitor",
         "nl_rule": "Alert me if the baby is crying or climbs out of the crib.",
         "prompt": "Verify whether the baby is crying or out of the crib (person moving in the crib area).",
@@ -216,7 +212,6 @@ CAMERAS = [
         "name": "Pet Cam",
         "location": "House · Back Door",
         "use_case": "Pet monitoring: cat waiting / meowing at the door",
-        "edge_token": "se_edge_judge_pets",
         "agent_name": "Pet Watch",
         "nl_rule": "Tell me when the cat is at the door wanting to be let in or fed.",
         "prompt": "Verify whether a cat is at the door, e.g. waiting, meowing, or looking to be fed.",
@@ -297,8 +292,13 @@ async def seed_database(uid: str, email: str, display_name: str, reset: bool = F
 
         # --- Cameras (one per use case), each with an armed agent + sample -----
         # history. All rows are owned by owner_id (the judge account only).
+        # Edge tokens are generated randomly per run (never hard-coded in source)
+        # and printed below for you to paste into the edge bridge.
+        edge_tokens: dict[str, str] = {}
         for index, cam in enumerate(CAMERAS):
             key = cam["key"]
+            edge_token = f"se_edge_judge_{key}_{secrets.token_urlsafe(18)}"
+            edge_tokens[key] = edge_token
             dev_id = f"dev_judge_{key}"
             # Arming model: a device-independent definition + an armed sub-agent
             # bound to the camera (exactly what the app's "assign" flow creates).
@@ -316,7 +316,7 @@ async def seed_database(uid: str, email: str, display_name: str, reset: bool = F
                 Device(
                     device_id=dev_id,
                     user_id=owner_id,
-                    edge_token_hash=hash_edge_token(cam["edge_token"]),
+                    edge_token_hash=hash_edge_token(edge_token),
                     name=cam["name"],
                     location=cam["location"],
                     # Shown "online" for a populated dashboard; the real health
@@ -484,7 +484,7 @@ async def seed_database(uid: str, email: str, display_name: str, reset: bool = F
                 print(f"[reset] removed {clips_del.rowcount or 0} seeded clip(s) + {recs_del.rowcount or 0} recording(s)")
 
         await session.commit()
-        return owner_id
+        return owner_id, edge_tokens
 
 
 async def _run(
@@ -502,7 +502,7 @@ async def _run(
     else:
         uid = create_firebase_user(email, password, name)
 
-    owner_id = await seed_database(uid, email, name, reset=reset)
+    owner_id, edge_tokens = await seed_database(uid, email, name, reset=reset)
 
     print("\n=== judge demo account ready ===")
     print(f"  database    : {settings.database_url}")
@@ -517,14 +517,14 @@ async def _run(
         print(f"    • {cam['name']} [{cam['location']}]")
         print(f"        use case  : {cam['use_case']}")
         print(f"        device_id : dev_judge_{cam['key']}")
-        print(f"        edge_token: {cam['edge_token']}")
+        print(f"        edge_token: {edge_tokens[cam['key']]}")
 
     print("\n  --- Place YOUR video into a camera later (run in SentinelEdge_LaptopEdge/src) ---")
     print("  Two terminals per camera — the bridge forwards frames to the cloud so the app's")
     print("  live view shows your footage, and the pipeline runs its agent on it:")
     example = CAMERAS[0]
     print(f"\n    # Terminal A — bridge for '{example['name']}':")
-    print(f"    python transport/edge_bridge.py --edge-token {example['edge_token']} \\")
+    print(f"    python transport/edge_bridge.py --edge-token {edge_tokens[example['key']]} \\")
     print(f"        --api-base-url {api_base} --log-level INFO")
     print("    # Terminal B — feed your video in as the device:")
     print("    python transport/simulate_device.py --video <YOUR_VIDEO.mp4> --loop-video --tone")
