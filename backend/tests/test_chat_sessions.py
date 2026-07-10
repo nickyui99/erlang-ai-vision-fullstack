@@ -105,6 +105,22 @@ def test_create_with_first_message_runs_opening_turn() -> None:
     assert [m["role"] for m in messages] == ["user", "assistant"]
 
 
+def test_mock_reply_is_conversational_not_verdict() -> None:
+    # Offline/keyless chat must read as conversation, not an event-verification
+    # JSON verdict (the mock's other mode).
+    client = _client()
+    session_id = client.post("/api/v1/chat/sessions", json={}).json()["data"]["session_id"]
+
+    reply = client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        json={"content": "Hello there"},
+    ).json()["data"]["content"]
+
+    assert "Erlang AI Agent" in reply
+    assert '"verified"' not in reply
+    assert "Hello there" in reply
+
+
 def test_ownership_isolation() -> None:
     owner = _client("usr_a")
     intruder = _client("usr_b")
