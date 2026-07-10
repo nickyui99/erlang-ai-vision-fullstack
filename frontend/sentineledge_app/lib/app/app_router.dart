@@ -46,6 +46,11 @@ abstract final class AppRouter {
               _landing(context, LandingSection.qwen),
         ),
         GoRoute(
+          path: '/github',
+          pageBuilder: (context, state) =>
+              _landing(context, LandingSection.github),
+        ),
+        GoRoute(
           path: '/login',
           builder: (context, state) => const LoginPage(),
         ),
@@ -110,7 +115,8 @@ abstract final class AppRouter {
     final atConsole = location == '/console' || location.startsWith('/console/');
     final atLanding = location == '/' ||
         location == '/architecture' ||
-        location == '/qwen';
+        location == '/qwen' ||
+        location == '/github';
     final signedIn = status == SessionStatus.signedIn;
 
     if (!kIsWeb && atLanding) {
@@ -145,6 +151,7 @@ abstract final class AppRouter {
         onLogin: () => context.go('/login'),
         onViewArchitecture: () => context.go('/architecture'),
         onViewQwen: () => context.go('/qwen'),
+        onViewGithub: () => context.go('/github'),
       ),
     );
   }

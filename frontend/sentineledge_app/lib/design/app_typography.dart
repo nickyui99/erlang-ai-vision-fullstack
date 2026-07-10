@@ -53,6 +53,20 @@ class AppTypography {
     );
   }
 
+  /// Large marketing display text (landing hero, footer CTA) — same Inter as
+  /// the rest of the app so brand type stays coherent at poster sizes.
+  static TextStyle display(
+    double size, {
+    double height = 1.05,
+    Color color = Colors.white,
+  }) => GoogleFonts.inter(
+    fontSize: size,
+    fontWeight: FontWeight.w700,
+    height: height,
+    letterSpacing: -0.02 * size,
+    color: color,
+  );
+
   /// Monospace style for tokens, code blocks, and tabular data.
   static TextStyle mono({double size = 12.5, Color? color}) =>
       GoogleFonts.jetBrainsMono(
