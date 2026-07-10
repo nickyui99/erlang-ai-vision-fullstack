@@ -256,6 +256,48 @@ class SentinelEdgeApiClient {
     return AgentBuilderReply.fromJson(body['data'] as Map<String, dynamic>);
   }
 
+  // --- Erlang AI Agent chat sessions ---
+
+  /// The signed-in user's chat sessions, newest activity first.
+  Future<List<ChatSession>> listChatSessions() async {
+    final body = await _getObject('/api/v1/chat/sessions');
+    final items = body['data'] as List<dynamic>;
+    return items
+        .map((item) => ChatSession.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Create a chat session. When [firstMessage] is given the backend also runs
+  /// the opening turn; call [getChatMessages] afterwards to load both turns.
+  Future<ChatSession> createChatSession({String? firstMessage}) async {
+    final body = await _postObject('/api/v1/chat/sessions', {
+      'first_message': _emptyToNull(firstMessage),
+    });
+    return ChatSession.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  /// Ordered message history (oldest first) for a session.
+  Future<List<ChatMessage>> getChatMessages(String sessionId) async {
+    final body = await _getObject('/api/v1/chat/sessions/$sessionId/messages');
+    final items = body['data'] as List<dynamic>;
+    return items
+        .map((item) => ChatMessage.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Send a user message and get the assistant's reply back.
+  Future<ChatMessage> sendChatMessage(String sessionId, String content) async {
+    final body = await _postObject(
+      '/api/v1/chat/sessions/$sessionId/messages',
+      {'content': content},
+    );
+    return ChatMessage.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteChatSession(String sessionId) async {
+    await _delete('/api/v1/chat/sessions/$sessionId');
+  }
+
   Future<SurveillanceAgent> updateAgent({
     required String agentId,
     required String name,
@@ -735,6 +777,58 @@ class AgentBuilderReply {
       compiledEdgeConfig: json['compiled_edge_config'] is Map
           ? Map<String, dynamic>.from(json['compiled_edge_config'] as Map)
           : null,
+    );
+  }
+}
+
+/// A conversation with the Erlang AI Agent.
+class ChatSession {
+  const ChatSession({
+    required this.sessionId,
+    required this.title,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String sessionId;
+
+  /// Auto-derived from the first user message; empty until the first turn.
+  final String title;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  factory ChatSession.fromJson(Map<String, dynamic> json) {
+    return ChatSession(
+      sessionId: json['session_id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
+      updatedAt: DateTime.tryParse(json['updated_at']?.toString() ?? ''),
+    );
+  }
+}
+
+/// A single turn within a [ChatSession].
+class ChatMessage {
+  const ChatMessage({
+    required this.messageId,
+    required this.role,
+    required this.content,
+    this.createdAt,
+  });
+
+  final String messageId;
+
+  /// 'user' | 'assistant' | 'system'.
+  final String role;
+  final String content;
+  final DateTime? createdAt;
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      messageId: json['message_id']?.toString() ?? '',
+      role: json['role']?.toString() ?? '',
+      content: json['content']?.toString() ?? '',
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
     );
   }
 }

@@ -154,13 +154,37 @@ class MockQwenClient(BaseQwenClient):
         return self._verdict_for(request.severity, request.summary, request.event_type)
 
     async def chat(self, messages: list[dict], *, tools: list[dict] | None = None) -> QwenResponse:
-        # The mock inspects the seeded user prompt to keep its verdict consistent
-        # with the event severity, but never requests tools.
+        # The mock inspects the seeded prompt to stay consistent with its caller,
+        # but never requests tools.
         text = "\n".join(
             m.get("content", "") for m in messages if isinstance(m.get("content"), str)
         )
+        # Conversational chat (the Erlang AI Agent) rather than event verification:
+        # return a friendly reply so keyless/offline dev and tests behave sensibly.
+        if "Erlang AI Agent" in text:
+            return QwenResponse(content=self._chat_reply(messages), tool_calls=[])
         severity = "high" if ("Edge severity: high" in text or "Edge severity: critical" in text) else "low"
         return QwenResponse(content=self._verdict_for(severity, None, "event"), tool_calls=[])
+
+    @staticmethod
+    def _chat_reply(messages: list[dict]) -> str:
+        """A deterministic, conversational stand-in for a real assistant turn."""
+
+        last_user = ""
+        for message in reversed(messages):
+            if message.get("role") == "user" and isinstance(message.get("content"), str):
+                last_user = message["content"].strip()
+                break
+        if last_user:
+            return (
+                "[mock] Hi, I'm Erlang AI Agent. I can't reach a live model in this "
+                "offline mode, but here is a placeholder reply to: "
+                f'"{last_user}"'
+            )
+        return (
+            "[mock] Hi, I'm Erlang AI Agent. I'm running in offline mode, so this is "
+            "a placeholder reply. Ask me anything and I'll echo it back here."
+        )
 
 
 def get_qwen_client() -> BaseQwenClient:
