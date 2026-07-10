@@ -1785,9 +1785,9 @@ class _ArchitectureSection extends StatelessWidget {
             eyebrow: 'Architecture',
             title: 'From camera frame to verified alert.',
             body:
-                'Cameras never touch the internet. The edge bridge keeps a '
-                'single outbound link open — commands in, events out — and '
-                'Qwen verifies in the cloud before anyone is interrupted.',
+                'Cameras stay on your local network. The edge bridge is the '
+                'only thing that talks to the cloud, and Qwen verifies every '
+                'event before it becomes an alert.',
           ),
           const SizedBox(height: AppSpacing.xxl),
           const _Eyebrow(label: 'End-to-end flow'),
