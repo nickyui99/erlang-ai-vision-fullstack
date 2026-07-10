@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -11,10 +9,10 @@ import '../../design/app_typography.dart';
 import '../../services/backend_auth_client.dart';
 import '../../services/realtime/realtime_client.dart';
 import '../../shared/console_widgets.dart';
+import '../chat/ai_agent_chat_screen.dart';
+import '../chat/ai_agent_icon.dart';
 import 'add_camera_wizard.dart';
 import 'agent_templates.dart';
-
-const _aiAgentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
 
 /// The console tabs, in sidebar/nav-bar order, each with the URL path segment
 /// it maps to (`/console/<path>`). The ordinal is the tab index used by the
@@ -405,7 +403,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   Future<void> _openAiAgentChat() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => _AiAgentChatScreen(user: widget.user),
+        builder: (_) => AiAgentChatScreen(
+          apiClient: widget.apiClient,
+          user: widget.user,
+        ),
       ),
     );
   }
@@ -2965,7 +2966,7 @@ class _AiAgentChatFab extends StatelessWidget {
         highlightElevation: 0,
         focusElevation: 0,
         hoverElevation: 0,
-        child: const _AnimatedAiAgentIcon(size: 56),
+        child: const AnimatedAiAgentIcon(size: 56),
       );
     }
 
@@ -2974,385 +2975,8 @@ class _AiAgentChatFab extends StatelessWidget {
       onPressed: onPressed,
       backgroundColor: AppColors.darkSurface,
       foregroundColor: Colors.white,
-      icon: const _AnimatedAiAgentIcon(size: 34),
+      icon: const AnimatedAiAgentIcon(size: 34),
       label: const Text('AI Agent'),
-    );
-  }
-}
-
-class _AiAgentChatScreen extends StatelessWidget {
-  const _AiAgentChatScreen({required this.user});
-
-  final BackendUser user;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final compact = MediaQuery.sizeOf(context).width < AppBreakpoints.compact;
-    final firstName = (user.displayName?.trim().isNotEmpty == true)
-        ? user.displayName!.trim().split(' ').first
-        : user.email.split('@').first;
-    final prompts = const [
-      'Which cameras need attention right now?',
-      'Summarize today\'s security events.',
-      'Help me create a smarter agent rule.',
-      'What should I review before leaving?',
-    ];
-
-    return Scaffold(
-      backgroundColor: theme.brightness == Brightness.dark
-          ? AppColors.darkBackground
-          : scheme.surface,
-      appBar: AppBar(
-        title: const Text('Erlang AI Agent'),
-        actions: [
-          IconButton(
-            tooltip: 'Agent menu',
-            onPressed: null,
-            icon: const Icon(Icons.menu_rounded),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-        ],
-      ),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                compact ? AppSpacing.lg : AppSpacing.xxl,
-                compact ? AppSpacing.md : AppSpacing.xl,
-                compact ? AppSpacing.lg : AppSpacing.xxl,
-                AppSpacing.lg,
-              ),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: ListView(
-                      children: [
-                        const SizedBox(height: AppSpacing.lg),
-                        const Center(child: _AnimatedAiAgentIcon(size: 86)),
-                        const SizedBox(height: AppSpacing.xl),
-                        Text(
-                          'Hi, I\'m Erlang AI Agent.',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          'Ready when the agent backend is connected, $firstName.',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.xxl),
-                        ...prompts.map(
-                          (prompt) => _AgentSuggestionRow(label: prompt),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  const _AgentComposerDock(),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AnimatedAiAgentIcon extends StatefulWidget {
-  const _AnimatedAiAgentIcon({this.size = 88});
-
-  final double size;
-
-  @override
-  State<_AnimatedAiAgentIcon> createState() => _AnimatedAiAgentIconState();
-}
-
-class _AnimatedAiAgentIconState extends State<_AnimatedAiAgentIcon>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 6),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final reducedMotion = AppMotion.reduced(context);
-
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final t = reducedMotion ? 0.0 : _controller.value;
-        // 0..1 breathing curve that drives the soft pulsing outer glow.
-        final breath = 0.5 + 0.5 * math.sin(t * math.pi * 2);
-        return SizedBox.square(
-          dimension: widget.size,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              // Twin coloured glows offset to opposite sides make the whole
-              // orb read as a single soft light source, not a flat disc.
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.16 + breath * 0.16),
-                  blurRadius: widget.size * (0.24 + breath * 0.14),
-                  spreadRadius: widget.size * 0.01,
-                  offset: Offset(-widget.size * 0.04, widget.size * 0.06),
-                ),
-                BoxShadow(
-                  color: AppColors.info.withValues(alpha: 0.18 + breath * 0.16),
-                  blurRadius: widget.size * (0.28 + breath * 0.16),
-                  spreadRadius: widget.size * 0.01,
-                  offset: Offset(widget.size * 0.04, widget.size * 0.10),
-                ),
-              ],
-            ),
-            child: ClipOval(
-              child: CustomPaint(
-                painter: _AgentAuroraPainter(progress: t),
-                child: Center(
-                  // The mascot floats directly on the aurora — its own
-                  // transparent bubble shape lets the glow show through.
-                  child: _AiAgentIconMark(size: widget.size * 0.74),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// A calm "liquid aurora" background: a dark glass disc lit from within by two
-/// drifting pools of light — one red, one blue — blended additively so where
-/// they overlap the light brightens toward magenta/white instead of muddying.
-class _AgentAuroraPainter extends CustomPainter {
-  const _AgentAuroraPainter({required this.progress});
-
-  final double progress;
-
-  static const _red = Color(0xFFF03A24);
-  static const _blue = Color(0xFF2E6BF0);
-  static const _spark = Color(0xFFFF4D7D);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final center = rect.center;
-    final radius = size.shortestSide / 2;
-    final phase = progress * math.pi * 2;
-    final breath = 0.5 + 0.5 * math.sin(phase);
-    final drift = math.sin(phase);
-
-    // 1. Dark glass base so the coloured light reads as a glow.
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..shader = const RadialGradient(
-          colors: [Color(0xFF17213B), Color(0xFF080B14)],
-          stops: [0.0, 1.0],
-        ).createShader(rect),
-    );
-
-    // Keep every glow contained within the disc.
-    canvas.save();
-    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: center, radius: radius)));
-
-    void glow(double angle, double dist, double blobRadius, Color color, double alpha) {
-      final c = center + Offset(math.cos(angle) * dist, math.sin(angle) * dist);
-      final r = Rect.fromCircle(center: c, radius: blobRadius);
-      canvas.drawCircle(
-        c,
-        blobRadius,
-        Paint()
-          ..blendMode = BlendMode.plus // additive: overlaps brighten, never mud
-          ..shader = RadialGradient(
-            colors: [color.withValues(alpha: alpha), color.withValues(alpha: 0)],
-            stops: const [0.0, 1.0],
-          ).createShader(r),
-      );
-    }
-
-    // 2. Red and blue pools drifting on opposite sides, breathing in size.
-    glow(phase * 0.9, radius * (0.34 + 0.08 * drift),
-        radius * (0.82 + 0.10 * breath), _red, 0.80);
-    glow(phase * 0.9 + math.pi + 0.5, radius * (0.36 - 0.08 * drift),
-        radius * (0.84 + 0.10 * (1 - breath)), _blue, 0.82);
-    // A small mingling spark keeps the centre alive without clutter.
-    glow(-phase * 0.6, radius * 0.16 * drift,
-        radius * (0.42 + 0.08 * breath), _spark, 0.28);
-
-    // 3. Glassy specular highlight, upper-left.
-    final hl = center + Offset(-radius * 0.30, -radius * 0.34);
-    canvas.drawCircle(
-      hl,
-      radius * 0.60,
-      Paint()
-        ..blendMode = BlendMode.plus
-        ..shader = RadialGradient(
-          colors: [Colors.white.withValues(alpha: 0.20), Colors.white.withValues(alpha: 0)],
-          stops: const [0.0, 1.0],
-        ).createShader(Rect.fromCircle(center: hl, radius: radius * 0.60)),
-    );
-
-    // 4. Gentle light lift behind the mascot so its dark outline stays legible.
-    canvas.drawCircle(
-      center,
-      radius * 0.52,
-      Paint()
-        ..blendMode = BlendMode.plus
-        ..shader = RadialGradient(
-          colors: [Colors.white.withValues(alpha: 0.10), Colors.white.withValues(alpha: 0)],
-          stops: const [0.0, 1.0],
-        ).createShader(Rect.fromCircle(center: center, radius: radius * 0.52)),
-    );
-
-    // 5. A soft highlight arc sweeping the rim — definition without a hard ring.
-    canvas.drawCircle(
-      center,
-      radius - 1,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.4
-        ..shader = SweepGradient(
-          colors: [
-            Colors.white.withValues(alpha: 0.0),
-            Colors.white.withValues(alpha: 0.26),
-            Colors.white.withValues(alpha: 0.0),
-            Colors.white.withValues(alpha: 0.0),
-          ],
-          stops: const [0.0, 0.12, 0.36, 1.0],
-          transform: GradientRotation(phase),
-        ).createShader(Rect.fromCircle(center: center, radius: radius)),
-    );
-
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _AgentAuroraPainter oldDelegate) =>
-      oldDelegate.progress != progress;
-}
-
-class _AgentSuggestionRow extends StatelessWidget {
-  const _AgentSuggestionRow({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              Icons.subdirectory_arrow_right_rounded,
-              size: 20,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Text(
-                label,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AgentComposerDock extends StatelessWidget {
-  const _AgentComposerDock();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: AppRadius.lgAll,
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            enabled: false,
-            decoration: InputDecoration(
-              hintText: 'Ask anything',
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              disabledBorder: InputBorder.none,
-              prefixIcon: const Icon(Icons.chat_bubble_outline),
-              suffixIcon: IconButton(
-                tooltip: 'Voice input',
-                onPressed: null,
-                icon: const Icon(Icons.mic_none_rounded),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: null,
-              icon: const Icon(Icons.auto_awesome_outlined, size: 18),
-              label: const Text('Reason'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AiAgentIconMark extends StatelessWidget {
-  const _AiAgentIconMark({this.size = 36});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: size,
-      child: Image.asset(
-        _aiAgentIconAsset,
-        fit: BoxFit.contain,
-        semanticLabel: 'Erlang AI Agent',
-      ),
     );
   }
 }
