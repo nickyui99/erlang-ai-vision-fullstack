@@ -29,6 +29,19 @@ if (-not (Get-Command "flutter" -ErrorAction SilentlyContinue)) {
     Write-Error "Flutter was not found on PATH. Open a shell where flutter is available, then rerun this script."
 }
 
+# Dart native-assets hooks invoke tools with unquoted paths and break when the
+# SDK, pub cache, or project sits under a directory with spaces
+# (e.g. C:\Users\Kenneth Chua). 8.3 short paths dodge that; ShortPath is a
+# no-op where paths have no spaces or 8.3 names are disabled.
+$fso = New-Object -ComObject Scripting.FileSystemObject
+$FlutterBinDir = $fso.GetFolder((Split-Path (Get-Command "flutter").Source)).ShortPath
+$FrontendDir = $fso.GetFolder($FrontendDir).ShortPath
+$DefaultPubCache = Join-Path $env:LOCALAPPDATA "Pub/Cache"
+$PubCacheLine = ""
+if (-not $env:PUB_CACHE -and (Test-Path $DefaultPubCache)) {
+    $PubCacheLine = "`$env:PUB_CACHE = '" + $fso.GetFolder($DefaultPubCache).ShortPath + "'"
+}
+
 $BackendCommand = @"
 `$ErrorActionPreference = 'Stop'
 Set-Location '$RepoRoot'
@@ -45,6 +58,8 @@ else {
 
 $FrontendCommand = @"
 `$ErrorActionPreference = 'Stop'
+`$env:Path = '$FlutterBinDir' + [IO.Path]::PathSeparator + `$env:Path
+$PubCacheLine
 Set-Location '$FrontendDir'
 $FlutterCommand
 "@

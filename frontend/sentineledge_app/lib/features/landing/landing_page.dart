@@ -5,7 +5,7 @@ import '../../design/app_spacing.dart';
 import '../../design/app_typography.dart';
 import '../../shared/external_link.dart';
 
-const _logoAsset = 'assets/brand/erlang-ai-vision-logo-long-transparent.png';
+const _logoAsset = 'assets/brand/erlang-ai-vision-logo-long-white.png';
 const _cameraIconAsset = 'assets/brand/erlang-ai-camera-tile-icon.png';
 const _agentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
 const _scenarioAsset = 'assets/landing/edge-ai-scenario.png';
@@ -13,9 +13,10 @@ const _architectureFlowAsset =
     'assets/landing/erlang-ai-vision-architecture-flow.png';
 const _githubUrl = 'https://github.com/nickyui99/erlang-ai-vision-fullstack';
 const _iotRepoUrl = 'https://github.com/KennethChua1998/SentinelEdge_IOT';
-const _laptopEdgeRepoUrl = 'https://github.com/KennethChua1998/SentinelEdge_LaptopEdge';
+const _laptopEdgeRepoUrl =
+    'https://github.com/KennethChua1998/SentinelEdge_LaptopEdge';
 
-enum LandingSection { hero, architecture, qwen }
+enum LandingSection { hero, architecture, qwen, github }
 
 class LandingPage extends StatefulWidget {
   const LandingPage({
@@ -23,6 +24,7 @@ class LandingPage extends StatefulWidget {
     required this.onLogin,
     required this.onViewArchitecture,
     required this.onViewQwen,
+    required this.onViewGithub,
     this.initialSection = LandingSection.hero,
     super.key,
   });
@@ -31,6 +33,7 @@ class LandingPage extends StatefulWidget {
   final VoidCallback onLogin;
   final VoidCallback onViewArchitecture;
   final VoidCallback onViewQwen;
+  final VoidCallback onViewGithub;
   final LandingSection initialSection;
 
   @override
@@ -40,18 +43,23 @@ class LandingPage extends StatefulWidget {
 class _LandingPageState extends State<LandingPage> {
   final _architectureKey = GlobalKey();
   final _qwenKey = GlobalKey();
+  final _githubKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToInitialSection());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _scrollToInitialSection(),
+    );
   }
 
   @override
   void didUpdateWidget(covariant LandingPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialSection != widget.initialSection) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToInitialSection());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _scrollToInitialSection(),
+      );
     }
   }
 
@@ -75,16 +83,47 @@ class _LandingPageState extends State<LandingPage> {
                     onLogin: widget.onLogin,
                     onViewArchitecture: widget.onViewArchitecture,
                     onViewQwen: widget.onViewQwen,
+                    onViewGithub: widget.onViewGithub,
                   ),
-                  _TraditionalVsAgenticSection(compact: compact),
-                  _ProofSection(compact: compact),
-                  _WorkflowSection(key: _architectureKey, compact: compact),
-                  _AgenticInvestigationSection(key: _qwenKey, compact: compact),
-                  _IoTIntroductionSection(compact: compact),
-                  _UseCaseImpactSection(compact: compact),
-                  _CloudArchitectureSection(compact: compact),
-                  _ProjectResourcesSection(compact: compact),
-                  _FooterCta(onLogin: widget.onLogin),
+                  _Reveal(
+                    style: _RevealStyle.slideLeft,
+                    child: _ProofSection(compact: compact),
+                  ),
+                  _Reveal(
+                    style: _RevealStyle.slideRight,
+                    child: _TraditionalVsAgenticSection(compact: compact),
+                  ),
+                  _Reveal(
+                    style: _RevealStyle.slideLeft,
+                    child: _ArchitectureSection(
+                      key: _architectureKey,
+                      compact: compact,
+                    ),
+                  ),
+                  _Reveal(
+                    style: _RevealStyle.slideRight,
+                    child: _UseCaseImpactSection(compact: compact),
+                  ),
+                  _Reveal(
+                    style: _RevealStyle.slideLeft,
+                    child: _AgenticInvestigationSection(
+                      key: _qwenKey,
+                      compact: compact,
+                    ),
+                  ),
+                  _Reveal(
+                    style: _RevealStyle.zoom,
+                    child: _ProjectResourcesSection(
+                      key: _githubKey,
+                      compact: compact,
+                    ),
+                  ),
+                  _Reveal(
+                    child: _FooterCta(
+                      onLaunchDemo: widget.onLaunchDemo,
+                      onLogin: widget.onLogin,
+                    ),
+                  ),
                 ],
               ),
             );
@@ -98,6 +137,7 @@ class _LandingPageState extends State<LandingPage> {
     final targetContext = switch (widget.initialSection) {
       LandingSection.architecture => _architectureKey.currentContext,
       LandingSection.qwen => _qwenKey.currentContext,
+      LandingSection.github => _githubKey.currentContext,
       LandingSection.hero => null,
     };
     if (targetContext == null) return;
@@ -117,6 +157,7 @@ class _HeroSection extends StatelessWidget {
     required this.onLogin,
     required this.onViewArchitecture,
     required this.onViewQwen,
+    required this.onViewGithub,
   });
 
   final bool compact;
@@ -125,12 +166,13 @@ class _HeroSection extends StatelessWidget {
   final VoidCallback onLogin;
   final VoidCallback onViewArchitecture;
   final VoidCallback onViewQwen;
+  final VoidCallback onViewGithub;
 
   @override
   Widget build(BuildContext context) {
     final stacked = maxWidth < 1050;
     return Container(
-      constraints: const BoxConstraints(minHeight: 720),
+      constraints: BoxConstraints(minHeight: stacked ? 0 : 720),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -170,16 +212,21 @@ class _HeroSection extends StatelessWidget {
                       onLogin: onLogin,
                       onViewArchitecture: onViewArchitecture,
                       onViewQwen: onViewQwen,
+                      onViewGithub: onViewGithub,
                     ),
                     SizedBox(height: compact ? AppSpacing.xxxl : 76),
                     if (stacked) ...[
                       _HeroCopy(
                         compact: compact,
+                        stacked: true,
                         onLaunchDemo: onLaunchDemo,
                         onViewArchitecture: onViewArchitecture,
                       ),
                       const SizedBox(height: AppSpacing.xxxl),
-                      const _ConsolePreview(),
+                      const _Reveal(
+                        delay: Duration(milliseconds: 250),
+                        child: _ConsolePreview(),
+                      ),
                     ] else
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
@@ -188,12 +235,19 @@ class _HeroSection extends StatelessWidget {
                             flex: 9,
                             child: _HeroCopy(
                               compact: compact,
+                              stacked: false,
                               onLaunchDemo: onLaunchDemo,
                               onViewArchitecture: onViewArchitecture,
                             ),
                           ),
                           const SizedBox(width: AppSpacing.xxxl),
-                          const Expanded(flex: 11, child: _ConsolePreview()),
+                          const Expanded(
+                            flex: 11,
+                            child: _Reveal(
+                              delay: Duration(milliseconds: 250),
+                              child: _ConsolePreview(),
+                            ),
+                          ),
                         ],
                       ),
                   ],
@@ -212,11 +266,13 @@ class _LandingNav extends StatelessWidget {
     required this.onLogin,
     required this.onViewArchitecture,
     required this.onViewQwen,
+    required this.onViewGithub,
   });
 
   final VoidCallback onLogin;
   final VoidCallback onViewArchitecture;
   final VoidCallback onViewQwen;
+  final VoidCallback onViewGithub;
 
   @override
   Widget build(BuildContext context) {
@@ -228,20 +284,12 @@ class _LandingNav extends StatelessWidget {
           runSpacing: AppSpacing.sm,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            const _NavChip(label: 'Edge AI camera platform'),
             TextButton(
               onPressed: onViewArchitecture,
               child: const Text('Architecture'),
             ),
-            TextButton(
-              onPressed: onViewQwen,
-              child: const Text('Qwen'),
-            ),
-            TextButton.icon(
-              onPressed: () => openExternalUrl(_githubUrl),
-              icon: const Icon(Icons.code_outlined, size: 18),
-              label: const Text('GitHub'),
-            ),
+            TextButton(onPressed: onViewQwen, child: const Text('Qwen')),
+            TextButton(onPressed: onViewGithub, child: const Text('Resources')),
             OutlinedButton.icon(
               onPressed: onLogin,
               icon: const Icon(Icons.login_outlined, size: 18),
@@ -286,87 +334,117 @@ class _LandingNav extends StatelessWidget {
 class _HeroCopy extends StatelessWidget {
   const _HeroCopy({
     required this.compact,
+    required this.stacked,
     required this.onLaunchDemo,
     required this.onViewArchitecture,
   });
 
   final bool compact;
+  final bool stacked;
   final VoidCallback onLaunchDemo;
   final VoidCallback onViewArchitecture;
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = GoogleFallback.display(
-      compact ? 42 : 64,
-      FontWeight.w800,
-      height: 1.02,
+    final titleStyle = AppTypography.display(
+      compact ? 38 : (stacked ? 44 : 56),
+    );
+    final bodyStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(
+      color: AppColors.neutral300,
+      fontSize: 17,
+      height: 1.55,
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _Eyebrow(label: 'Erlang AI Vision'),
+        const _Reveal(child: _Eyebrow(label: 'Erlang AI Vision')),
         const SizedBox(height: AppSpacing.lg),
-        Text(
-          'Camera intelligence that can verify what it sees.',
-          style: titleStyle,
+        _Reveal(
+          delay: const Duration(milliseconds: 100),
+          child: Text(
+            'Camera intelligence that\nsees, thinks, and verifies.',
+            style: titleStyle,
+          ),
         ),
         const SizedBox(height: AppSpacing.xl),
-        Text(
-          'Erlang AI Vision connects ESP32 cameras, an edge detection bridge, '
-          'and Qwen Cloud verification so teams can review meaningful events '
-          'instead of scrubbing through silent CCTV footage.',
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: AppColors.neutral300,
-            fontSize: 17,
-            height: 1.55,
+        _Reveal(
+          delay: const Duration(milliseconds: 200),
+          child: Text.rich(
+            TextSpan(
+              style: bodyStyle,
+              children: [
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.baseline,
+                  baseline: TextBaseline.alphabetic,
+                  child: _BrushUnderline(
+                    text: 'ESP32 cameras',
+                    style: bodyStyle,
+                  ),
+                ),
+                const TextSpan(text: ' see, the '),
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.baseline,
+                  baseline: TextBaseline.alphabetic,
+                  child: _BrushUnderline(text: 'edge bridge', style: bodyStyle),
+                ),
+                const TextSpan(text: ' thinks, and '),
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.baseline,
+                  baseline: TextBaseline.alphabetic,
+                  child: _BrushUnderline(text: 'Qwen Cloud', style: bodyStyle),
+                ),
+                const TextSpan(
+                  text:
+                      ' verifies — only real events reach your team, with no '
+                      'more scrubbing through CCTV footage.',
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.xxl),
-        Wrap(
-          spacing: AppSpacing.md,
-          runSpacing: AppSpacing.md,
-          children: [
-            FilledButton.icon(
-              onPressed: onLaunchDemo,
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Launch demo'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(160, 52),
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: onViewArchitecture,
-              icon: const Icon(Icons.account_tree_outlined, size: 20),
-              label: const Text('View architecture'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                minimumSize: const Size(180, 52),
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.28)),
-              ),
-            ),
-          ],
+        _Reveal(
+          delay: const Duration(milliseconds: 300),
+          child: Builder(
+            builder: (context) {
+              final demoButton = FilledButton.icon(
+                onPressed: onLaunchDemo,
+                icon: const Icon(Icons.play_arrow_rounded),
+                label: const Text('Demo Video'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(160, 52),
+                ),
+              );
+              final archButton = OutlinedButton.icon(
+                onPressed: onViewArchitecture,
+                icon: const Icon(Icons.account_tree_outlined, size: 20),
+                label: const Text('Architecture'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(180, 52),
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.28)),
+                ),
+              );
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    demoButton,
+                    const SizedBox(height: AppSpacing.md),
+                    archButton,
+                  ],
+                );
+              }
+              return Wrap(
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.md,
+                children: [demoButton, archButton],
+              );
+            },
+          ),
         ),
-        const SizedBox(height: AppSpacing.xxl),
-        const _HeroStats(),
-      ],
-    );
-  }
-}
-
-class _HeroStats extends StatelessWidget {
-  const _HeroStats();
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.md,
-      runSpacing: AppSpacing.md,
-      children: const [
-        _StatPill(value: 'Qwen', label: 'Cloud verification'),
-        _StatPill(value: 'SSE', label: 'Realtime console'),
-        _StatPill(value: 'ESP32', label: 'Camera pairing'),
       ],
     );
   }
@@ -396,7 +474,7 @@ class _ConsolePreview extends StatelessWidget {
           final compact = constraints.maxWidth < 680;
           if (compact) {
             return SizedBox(
-              height: 700,
+              height: 840,
               child: Container(
                 color: AppColors.lightBackground,
                 padding: const EdgeInsets.all(AppSpacing.md),
@@ -407,9 +485,9 @@ class _ConsolePreview extends StatelessWidget {
                     SizedBox(height: AppSpacing.md),
                     _MetricStrip(),
                     SizedBox(height: AppSpacing.md),
-                    Expanded(flex: 5, child: _CameraPreviewCard()),
+                    Expanded(child: _CameraPreviewCard()),
                     SizedBox(height: AppSpacing.md),
-                    Expanded(flex: 3, child: _AgentPreviewCard()),
+                    _AgentPreviewCard(),
                   ],
                 ),
               ),
@@ -440,7 +518,10 @@ class _ConsolePreview extends StatelessWidget {
                         Expanded(
                           child: Row(
                             children: [
-                              const Expanded(flex: 7, child: _CameraPreviewCard()),
+                              const Expanded(
+                                flex: 7,
+                                child: _CameraPreviewCard(),
+                              ),
                               const SizedBox(width: AppSpacing.md),
                               Expanded(
                                 flex: 5,
@@ -467,6 +548,7 @@ class _ConsolePreview extends StatelessWidget {
     );
   }
 }
+
 class _PreviewRail extends StatelessWidget {
   const _PreviewRail();
 
@@ -521,9 +603,9 @@ class _PreviewHeader extends StatelessWidget {
             children: [
               Text(
                 'Cameras',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppColors.neutral900,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(color: AppColors.neutral900),
               ),
               Text(
                 'Live camera fleet, agents, events, and Qwen verification',
@@ -532,11 +614,198 @@ class _PreviewHeader extends StatelessWidget {
             ],
           ),
         ),
-        const _LightStatusPill(label: 'live', tone: AppColors.success),
       ],
     );
   }
 }
+
+/// Detection callout with a pulsing red border-and-glow, so the box reads as
+/// an active alert rather than a static label.
+class _DetectionHighlight extends StatefulWidget {
+  const _DetectionHighlight({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_DetectionHighlight> createState() => _DetectionHighlightState();
+}
+
+class _DetectionHighlightState extends State<_DetectionHighlight>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..repeat(reverse: true);
+  late final CurvedAnimation _t = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeInOut,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _t,
+      builder: (context, child) => Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.42),
+          borderRadius: AppRadius.lgAll,
+          border: Border.all(
+            width: 1.5,
+            color: Color.lerp(
+              Colors.white.withValues(alpha: 0.18),
+              AppColors.danger,
+              _t.value,
+            )!,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.danger.withValues(alpha: 0.35 * _t.value),
+              blurRadius: 20,
+            ),
+          ],
+        ),
+        child: child,
+      ),
+      child: widget.child,
+    );
+  }
+}
+
+class _Blink extends StatefulWidget {
+  const _Blink({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_Blink> createState() => _BlinkState();
+}
+
+class _BlinkState extends State<_Blink> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween(
+        begin: 0.35,
+        end: 1.0,
+      ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut)),
+      child: widget.child,
+    );
+  }
+}
+
+enum _RevealStyle { rise, slideLeft, slideRight, zoom }
+
+/// One-shot entrance that plays when the child first scrolls into the lower
+/// ~88% of the viewport (or immediately if it starts there).
+class _Reveal extends StatefulWidget {
+  const _Reveal({
+    required this.child,
+    this.delay = Duration.zero,
+    this.style = _RevealStyle.rise,
+  });
+
+  final Widget child;
+  final Duration delay;
+  final _RevealStyle style;
+
+  @override
+  State<_Reveal> createState() => _RevealState();
+}
+
+class _RevealState extends State<_Reveal> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 650),
+  );
+  late final CurvedAnimation _t = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+  ScrollPosition? _position;
+  bool _revealed = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final position = Scrollable.maybeOf(context)?.position;
+    if (!identical(position, _position)) {
+      _position?.removeListener(_maybeReveal);
+      _position = position;
+      _position?.addListener(_maybeReveal);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeReveal());
+  }
+
+  @override
+  void dispose() {
+    _position?.removeListener(_maybeReveal);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _maybeReveal() {
+    if (!mounted || _revealed) return;
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) return;
+    final top = box.localToGlobal(Offset.zero).dy;
+    if (top < MediaQuery.sizeOf(context).height * 0.88) {
+      _revealed = true;
+      _position?.removeListener(_maybeReveal);
+      Future.delayed(widget.delay, () {
+        if (mounted) _controller.forward();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _t,
+      builder: (context, child) {
+        final remaining = 1 - _t.value;
+        final content = switch (widget.style) {
+          _RevealStyle.rise => Transform.translate(
+            offset: Offset(0, 26 * remaining),
+            child: child,
+          ),
+          _RevealStyle.slideLeft => Transform.translate(
+            offset: Offset(-48 * remaining, 0),
+            child: child,
+          ),
+          _RevealStyle.slideRight => Transform.translate(
+            offset: Offset(48 * remaining, 0),
+            child: child,
+          ),
+          _RevealStyle.zoom => Transform.scale(
+            scale: 0.94 + 0.06 * _t.value,
+            child: child,
+          ),
+        };
+        return Opacity(opacity: _t.value, child: content);
+      },
+      child: widget.child,
+    );
+  }
+}
+
 class _MetricStrip extends StatelessWidget {
   const _MetricStrip();
 
@@ -575,6 +844,7 @@ class _MetricStrip extends StatelessWidget {
     );
   }
 }
+
 class _CameraPreviewCard extends StatelessWidget {
   const _CameraPreviewCard();
 
@@ -592,16 +862,16 @@ class _CameraPreviewCard extends StatelessWidget {
             children: [
               Text(
                 'Front Door',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.neutral900,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(color: AppColors.neutral900),
               ),
-              const _LightStatusPill(label: '15 FPS', tone: AppColors.info),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
           Expanded(
             child: Container(
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 borderRadius: AppRadius.lgAll,
                 gradient: const LinearGradient(
@@ -612,6 +882,14 @@ class _CameraPreviewCard extends StatelessWidget {
               ),
               child: Stack(
                 children: [
+                  Positioned.fill(
+                    child: Image.asset(
+                      'assets/landing/frontdoor-cctv.gif',
+                      fit: BoxFit.cover,
+                      alignment: const Alignment(0.25, -0.2),
+                      gaplessPlayback: true,
+                    ),
+                  ),
                   const Positioned.fill(child: _CameraGridOverlay()),
                   Positioned(
                     left: 20,
@@ -619,48 +897,29 @@ class _CameraPreviewCard extends StatelessWidget {
                     child: _DarkPill(
                       icon: Icons.circle,
                       label: 'Live MJPEG stream',
-                      color: AppColors.success,
+                      color: AppColors.danger,
                     ),
                   ),
                   Positioned(
                     right: 24,
                     bottom: 24,
-                    child: Container(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.42),
-                        borderRadius: AppRadius.lgAll,
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.18),
-                        ),
-                      ),
+                    child: _DetectionHighlight(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             'Person detected',
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelLarge
+                            style: Theme.of(context).textTheme.labelLarge
                                 ?.copyWith(color: Colors.white),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             'Qwen verification pending',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
+                            style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(color: AppColors.neutral300),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                  const Center(
-                    child: Icon(
-                      Icons.photo_camera_front_outlined,
-                      size: 88,
-                      color: Colors.white54,
                     ),
                   ),
                 ],
@@ -672,7 +931,10 @@ class _CameraPreviewCard extends StatelessWidget {
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
             children: const [
-              _ControlButton(icon: Icons.camera_alt_outlined, label: 'Snapshot'),
+              _ControlButton(
+                icon: Icons.camera_alt_outlined,
+                label: 'Snapshot',
+              ),
               _ControlButton(icon: Icons.keyboard_arrow_left, label: 'Pan'),
               _ControlButton(icon: Icons.keyboard_arrow_up, label: 'Tilt'),
             ],
@@ -699,9 +961,9 @@ class _AgentPreviewCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Protection agent',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: AppColors.neutral900,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(color: AppColors.neutral900),
                 ),
               ),
               const _LightStatusPill(label: 'armed', tone: AppColors.success),
@@ -740,9 +1002,9 @@ class _AuditPreviewCard extends StatelessWidget {
         children: [
           Text(
             'Qwen audit trail',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: AppColors.neutral900,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(color: AppColors.neutral900),
           ),
           const SizedBox(height: AppSpacing.sm),
           for (final row in rows)
@@ -768,7 +1030,10 @@ class _AuditPreviewCard extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
-                    child: Text(row.$2, style: Theme.of(context).textTheme.bodySmall),
+                    child: Text(
+                      row.$2,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ),
                 ],
               ),
@@ -788,18 +1053,18 @@ class _ProofSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = [
       _ProofItem(
-        icon: Icons.psychology_alt_outlined,
-        title: 'Qwen Cloud verification',
-        body:
-            'Qualifying events are reviewed by Qwen Cloud, which reasons about '
-            'the scene and confirms a real match before anyone is alerted.',
-      ),
-      _ProofItem(
         icon: Icons.router_outlined,
         title: 'Real edge architecture',
         body:
             'ESP32 cameras stream through a laptop edge bridge that detects '
             'events close to the source, before anything reaches the cloud.',
+      ),
+      _ProofItem(
+        icon: Icons.psychology_alt_outlined,
+        title: 'Qwen Cloud verification',
+        body:
+            'Qualifying events are reviewed by Qwen Cloud, which reasons about '
+            'the scene and confirms a real match before anyone is alerted.',
       ),
       _ProofItem(
         icon: Icons.monitor_heart_outlined,
@@ -1178,9 +1443,9 @@ class _ComparisonCell extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   text,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: textColor,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: textColor),
                 ),
               ],
             ),
@@ -1200,7 +1465,7 @@ class _AgenticInvestigationSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final heading = const _SectionHeading(
       dark: true,
-      eyebrow: 'Agentic verification',
+      eyebrow: 'How it works',
       title: 'The agent investigates before it interrupts you.',
       body:
           'When an edge detector flags a candidate, the event runs a three-stage pipeline. Qwen Cloud decides whether it truly matches your rule — gathering more evidence first when it helps — then returns an auditable verdict.',
@@ -1234,9 +1499,9 @@ class _AgenticInvestigationSection extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         Text(
           'Tools the agent can call',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            color: Colors.white,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(color: Colors.white),
         ),
         const SizedBox(height: AppSpacing.sm),
         const Wrap(
@@ -1258,9 +1523,9 @@ class _AgenticInvestigationSection extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         Text(
           'Every tool call is logged to the event’s audit trail.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.neutral400,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AppColors.neutral400),
         ),
       ],
     );
@@ -1354,16 +1619,16 @@ class _StageCard extends StatelessWidget {
               children: [
                 Text(
                   item.title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleMedium?.copyWith(color: Colors.white),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   item.body,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.neutral300,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: AppColors.neutral300),
                 ),
               ],
             ),
@@ -1399,9 +1664,9 @@ class _ToolChip extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: Colors.white,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(color: Colors.white),
           ),
         ],
       ),
@@ -1440,9 +1705,9 @@ class _VerdictCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Text(
                 'Qwen verdict',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: Colors.white,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(color: Colors.white),
               ),
             ],
           ),
@@ -1478,10 +1743,7 @@ class _VerdictCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           Text(
             'summary: Person lingering at the front door after hours.',
-            style: AppTypography.mono(
-              size: 12.5,
-              color: AppColors.neutral300,
-            ),
+            style: AppTypography.mono(size: 12.5, color: AppColors.neutral300),
           ),
         ],
       ),
@@ -1502,10 +1764,12 @@ class _ImagePlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor =
-        dark ? Colors.white.withValues(alpha: 0.20) : AppColors.neutral300;
-    final backgroundColor =
-        dark ? Colors.white.withValues(alpha: 0.04) : AppColors.neutral100;
+    final borderColor = dark
+        ? Colors.white.withValues(alpha: 0.20)
+        : AppColors.neutral300;
+    final backgroundColor = dark
+        ? Colors.white.withValues(alpha: 0.04)
+        : AppColors.neutral100;
     final foreground = dark ? AppColors.neutral300 : AppColors.neutral500;
     return ClipRRect(
       borderRadius: AppRadius.lgAll,
@@ -1532,9 +1796,9 @@ class _ImagePlaceholder extends StatelessWidget {
                   Text(
                     label,
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: foreground,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: foreground),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -1554,8 +1818,8 @@ class _ImagePlaceholder extends StatelessWidget {
   }
 }
 
-class _WorkflowSection extends StatelessWidget {
-  const _WorkflowSection({required this.compact, super.key});
+class _ArchitectureSection extends StatelessWidget {
+  const _ArchitectureSection({required this.compact, super.key});
 
   final bool compact;
 
@@ -1567,15 +1831,21 @@ class _WorkflowSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const _SectionHeading(
-            eyebrow: 'Live camera flow',
-            title: 'From camera frame to explainable review.',
+            eyebrow: 'Architecture',
+            title: 'From camera frame to verified alert.',
             body:
-                'The backend never talks directly to a LAN camera. The edge '
-                'bridge keeps outbound connections open, relays commands, and '
-                'posts detected events for verification.',
+                'Cameras stay on your local network. The edge bridge is the '
+                'only thing that talks to the cloud, and Qwen verifies every '
+                'event before it becomes an alert.',
           ),
           const SizedBox(height: AppSpacing.xxl),
+          const _Eyebrow(label: 'End-to-end flow'),
+          const SizedBox(height: AppSpacing.md),
           _ArchitectureFlowImage(compact: compact),
+          const SizedBox(height: AppSpacing.xl),
+          const _Eyebrow(label: 'Cloud architecture'),
+          const SizedBox(height: AppSpacing.md),
+          _CloudArchitecturePlaceholder(compact: compact),
         ],
       ),
     );
@@ -1613,60 +1883,6 @@ class _ArchitectureFlowImage extends StatelessWidget {
           padding: EdgeInsets.all(compact ? AppSpacing.md : AppSpacing.lg),
           child: _WorkflowDiagram(compact: compact),
         ),
-      ),
-    );
-  }
-}
-
-class _IoTIntroductionSection extends StatelessWidget {
-  const _IoTIntroductionSection({required this.compact});
-
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      _ProofItem(
-        icon: Icons.sensors_outlined,
-        title: 'Edge sensors perceive first',
-        body:
-            'ESP32 cameras and the laptop edge bridge capture frames, health, '
-            'RSSI, FPS, pan, tilt, and candidate events before cloud review.',
-      ),
-      _ProofItem(
-        icon: Icons.cloud_sync_outlined,
-        title: 'Qwen reasons in the cloud',
-        body:
-            'Qwen Cloud verifies qualifying events with multimodal context '
-            'instead of treating every detector hit as final.',
-      ),
-      _ProofItem(
-        icon: Icons.offline_bolt_outlined,
-        title: 'Graceful weak-network behavior',
-        body:
-            'Detection keeps running close to the camera, while cloud '
-            'verification and clips catch up as connectivity returns.',
-      ),
-    ];
-
-    return _LightSection(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _SectionHeading(
-            eyebrow: 'IoT edge introduction',
-            title: 'Small cameras become accountable AI agents.',
-            body:
-                'ESP32 cameras stream into an edge bridge that detects events '
-                'near the source, keeps device telemetry visible, and lets the '
-                'cloud verify only the moments that matter.',
-          ),
-          const SizedBox(height: AppSpacing.xxl),
-          _ResponsiveGrid(
-            compact: compact,
-            children: items.map((item) => _LightProofCard(item: item)).toList(),
-          ),
-        ],
       ),
     );
   }
@@ -1713,17 +1929,20 @@ class _UseCaseImpactSection extends StatelessWidget {
         _CapabilityRow(
           icon: Icons.timer_outlined,
           title: 'Less manual review',
-          body: 'Operators spend their time on confirmed incidents instead of watching uneventful feeds.',
+          body:
+              'Operators spend their time on confirmed incidents instead of watching uneventful feeds.',
         ),
         _CapabilityRow(
           icon: Icons.privacy_tip_outlined,
           title: 'Privacy-aware edge filtering',
-          body: 'Local detection reduces unnecessary cloud calls and keeps routine frames close to the camera path.',
+          body:
+              'Local detection reduces unnecessary cloud calls and keeps routine frames close to the camera path.',
         ),
         _CapabilityRow(
           icon: Icons.crisis_alert_outlined,
           title: 'Faster response loops',
-          body: 'Operators can inspect, pan, tilt, and confirm events from the web console when something needs attention.',
+          body:
+              'Operators can inspect, pan, tilt, and confirm events from the web console when something needs attention.',
         ),
       ],
     );
@@ -1749,31 +1968,6 @@ class _UseCaseImpactSection extends StatelessWidget {
     );
   }
 }
-class _CloudArchitectureSection extends StatelessWidget {
-  const _CloudArchitectureSection({required this.compact});
-
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return _DarkSection(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _SectionHeading(
-            dark: true,
-            eyebrow: 'Cloud architecture',
-            title: 'A web console backed by edge and cloud services.',
-            body:
-                'The architecture keeps camera traffic practical for local networks while using Alibaba Cloud and Qwen for deployment, identity, storage, verification, and review.',
-          ),
-          const SizedBox(height: AppSpacing.xxl),
-          _CloudArchitecturePlaceholder(compact: compact),
-        ],
-      ),
-    );
-  }
-}
 
 class _CloudArchitecturePlaceholder extends StatelessWidget {
   const _CloudArchitecturePlaceholder({required this.compact});
@@ -1786,9 +1980,9 @@ class _CloudArchitecturePlaceholder extends StatelessWidget {
       width: double.infinity,
       constraints: BoxConstraints(minHeight: compact ? 220 : 360),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
+        color: Colors.white,
         borderRadius: AppRadius.lgAll,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+        border: Border.all(color: AppColors.lightBorder),
       ),
       child: Center(
         child: Column(
@@ -1797,23 +1991,23 @@ class _CloudArchitecturePlaceholder extends StatelessWidget {
             Icon(
               Icons.image_outlined,
               size: compact ? 36 : 48,
-              color: AppColors.neutral300,
+              color: AppColors.neutral400,
             ),
             const SizedBox(height: AppSpacing.md),
             Text(
               'Cloud architecture image placeholder',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: AppColors.neutral700),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
               'Replace this with the final architecture visual.',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.neutral300,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.neutral500),
             ),
           ],
         ),
@@ -1821,8 +2015,9 @@ class _CloudArchitecturePlaceholder extends StatelessWidget {
     );
   }
 }
+
 class _ProjectResourcesSection extends StatelessWidget {
-  const _ProjectResourcesSection({required this.compact});
+  const _ProjectResourcesSection({required this.compact, super.key});
 
   final bool compact;
 
@@ -1873,34 +2068,6 @@ class _ProjectResourcesSection extends StatelessWidget {
                     ),
                   ],
                 ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LightProofCard extends StatelessWidget {
-  const _LightProofCard({required this.item});
-
-  final _ProofItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: AppRadius.lgAll,
-        border: Border.all(color: AppColors.lightBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(item.icon, color: AppColors.primary, size: 28),
-          const SizedBox(height: AppSpacing.lg),
-          Text(item.title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          Text(item.body, style: Theme.of(context).textTheme.bodyMedium),
         ],
       ),
     );
@@ -1994,6 +2161,55 @@ class _SubmissionBadgePanel extends StatelessWidget {
   }
 }
 
+class _BrushUnderline extends StatelessWidget {
+  const _BrushUnderline({required this.text, this.style});
+
+  final String text;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    // A tight line box (height 1.0) keeps the inline baseline flush with the
+    // surrounding TextSpan; the paragraph's line height would otherwise shift
+    // this word a few pixels off the shared baseline.
+    return CustomPaint(
+      painter: _BrushStrokePainter(color: AppColors.primary),
+      child: Text(text, style: style?.copyWith(height: 1.0)),
+    );
+  }
+}
+
+/// Hand-drawn-looking underline: two slightly offset bezier passes read as a
+/// single freestyle marker stroke under the word.
+class _BrushStrokePainter extends CustomPainter {
+  const _BrushStrokePainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final stroke = (h * 0.045).clamp(2.0, 6.0);
+    final y = h * 0.99;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+
+    final path = Path()
+      ..moveTo(w * 0.01, y)
+      ..quadraticBezierTo(w * 0.3, y + h * 0.035, w * 0.58, y - h * 0.002)
+      ..quadraticBezierTo(w * 0.82, y - h * 0.03, w * 0.99, y - h * 0.01);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BrushStrokePainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
 class _RepoButton extends StatelessWidget {
   const _RepoButton({required this.label, required this.url});
 
@@ -2013,57 +2229,85 @@ class _RepoButton extends StatelessWidget {
     );
   }
 }
-class _FooterCta extends StatelessWidget {
-  const _FooterCta({required this.onLogin});
 
+class _FooterCta extends StatelessWidget {
+  const _FooterCta({required this.onLaunchDemo, required this.onLogin});
+
+  final VoidCallback onLaunchDemo;
   final VoidCallback onLogin;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      color: AppColors.neutral50,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF080B10), Color(0xFF10161E), Color(0xFF170E0B)],
+        ),
+      ),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.xl,
-        vertical: AppSpacing.xxxl,
+        vertical: 96,
       ),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: AppBreakpoints.contentMaxWidth,
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxWidth < 680;
-              final title = Text(
-                'Open the product console or inspect the source.',
-                style: Theme.of(context).textTheme.headlineMedium,
-              );
-              final button = FilledButton.icon(
-                onPressed: onLogin,
-                icon: const Icon(Icons.login_outlined),
-                label: const Text('Continue to login'),
-              );
-
-              if (compact) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    title,
-                    const SizedBox(height: AppSpacing.lg),
-                    button,
-                  ],
-                );
-              }
-
-              return Row(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Column(
+            children: [
+              Text(
+                'See it in action.',
+                textAlign: TextAlign.center,
+                style: AppTypography.display(40, height: 1.1),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Launch the demo console, or sign in to your own cameras.',
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: AppColors.neutral300),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.md,
                 children: [
-                  Expanded(child: title),
-                  const SizedBox(width: AppSpacing.xl),
-                  button,
+                  FilledButton.icon(
+                    onPressed: onLaunchDemo,
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Demo Video'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: const StadiumBorder(),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.xl,
+                        vertical: 16,
+                      ),
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onLogin,
+                    icon: const Icon(Icons.login_outlined, size: 18),
+                    label: const Text('Login'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      shape: const StadiumBorder(),
+                      side: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.28),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.xl,
+                        vertical: 16,
+                      ),
+                    ),
+                  ),
                 ],
-              );
-            },
+              ),
+            ],
           ),
         ),
       ),
@@ -2087,7 +2331,11 @@ class _WorkflowDiagram extends StatelessWidget {
     ];
     final children = <Widget>[];
     for (var i = 0; i < steps.length; i += 1) {
-      children.add(Expanded(child: _WorkflowStep(label: steps[i].$1, icon: steps[i].$2)));
+      children.add(
+        Expanded(
+          child: _WorkflowStep(label: steps[i].$1, icon: steps[i].$2),
+        ),
+      );
       if (i != steps.length - 1) {
         children.add(
           Icon(
@@ -2098,10 +2346,16 @@ class _WorkflowDiagram extends StatelessWidget {
       }
     }
     return compact
-        ? Column(children: children.map((child) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
-              child: child is Expanded ? child.child : child,
-            )).toList())
+        ? Column(
+            children: children
+                .map(
+                  (child) => Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                    child: child is Expanded ? child.child : child,
+                  ),
+                )
+                .toList(),
+          )
         : Row(children: children);
   }
 }
@@ -2198,6 +2452,7 @@ class _ResponsiveGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     if (compact) {
       return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: children
             .map(
               (child) => Padding(
@@ -2208,14 +2463,16 @@ class _ResponsiveGrid extends StatelessWidget {
             .toList(),
       );
     }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (var i = 0; i < children.length; i += 1) ...[
-          Expanded(child: children[i]),
-          if (i != children.length - 1) const SizedBox(width: AppSpacing.lg),
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < children.length; i += 1) ...[
+            Expanded(child: children[i]),
+            if (i != children.length - 1) const SizedBox(width: AppSpacing.lg),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -2279,16 +2536,16 @@ class _ProofCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
           Text(
             item.title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(color: Colors.white),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             item.body,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.neutral300,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.neutral300),
           ),
         ],
       ),
@@ -2322,16 +2579,16 @@ class _CapabilityRow extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Colors.white,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(color: Colors.white),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   body,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.neutral300,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: AppColors.neutral300),
                 ),
               ],
             ),
@@ -2452,6 +2709,7 @@ class _ControlButton extends StatelessWidget {
     );
   }
 }
+
 class _AgentChip extends StatelessWidget {
   const _AgentChip({required this.label});
 
@@ -2471,9 +2729,9 @@ class _AgentChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: AppColors.onPrimaryContainer,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(color: AppColors.onPrimaryContainer),
       ),
     );
   }
@@ -2528,42 +2786,15 @@ class _DarkPill extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 10),
+          _Blink(child: Icon(icon, color: color, size: 10)),
           const SizedBox(width: AppSpacing.sm),
           Text(
             label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: Colors.white),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _NavChip extends StatelessWidget {
-  const _NavChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: AppRadius.pillAll,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: AppColors.neutral200,
-        ),
       ),
     );
   }
@@ -2581,43 +2812,6 @@ class _Eyebrow extends StatelessWidget {
       style: Theme.of(context).textTheme.labelMedium?.copyWith(
         color: AppColors.accentOrange,
         letterSpacing: 1.2,
-      ),
-    );
-  }
-}
-
-class _StatPill extends StatelessWidget {
-  const _StatPill({required this.value, required this.label});
-
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: AppRadius.mdAll,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.neutral300,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -2641,21 +2835,51 @@ class _LandingGrid extends StatelessWidget {
   }
 }
 
-class _SignalGlow extends StatelessWidget {
+class _SignalGlow extends StatefulWidget {
   const _SignalGlow({required this.size, required this.color});
 
   final double size;
   final Color color;
 
   @override
+  State<_SignalGlow> createState() => _SignalGlowState();
+}
+
+class _SignalGlowState extends State<_SignalGlow>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 4),
+  )..repeat(reverse: true);
+  late final CurvedAnimation _t = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeInOut,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(
-          colors: [color.withValues(alpha: 0.20), Colors.transparent],
+    return AnimatedBuilder(
+      animation: _t,
+      builder: (context, _) => Transform.scale(
+        scale: 1 + 0.08 * _t.value,
+        child: Container(
+          width: widget.size,
+          height: widget.size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [
+                widget.color.withValues(alpha: 0.14 + 0.08 * _t.value),
+                Colors.transparent,
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -2696,18 +2920,4 @@ class _BackgroundGridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class GoogleFallback {
-  GoogleFallback._();
-
-  static TextStyle display(double size, FontWeight weight, {double height = 1}) {
-    return TextStyle(
-      fontSize: size,
-      fontWeight: weight,
-      height: height,
-      letterSpacing: 0,
-      color: Colors.white,
-    );
-  }
 }

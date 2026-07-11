@@ -79,10 +79,12 @@ flutter:
     - assets/brand/erlang-ai-vision-logo-dark.png
     - assets/brand/erlang-ai-vision-logo.png
     - assets/brand/erlang-ai-vision-logo-long-transparent.png
+    - assets/brand/erlang-ai-vision-logo-long-white.png
     - assets/brand/google-g.png
     - assets/brand/erlang-ai-camera-tile-icon.png
     - assets/brand/erlang-ai-agent-icon.png
     - assets/landing/edge-ai-scenario.png
+    - assets/landing/frontdoor-cctv.gif
     - assets/landing/erlang-ai-vision-architecture-flow.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
