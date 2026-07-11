@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sentineledge_app/features/chat/chat_controller.dart';
-import 'package:sentineledge_app/services/backend_auth_client.dart';
+import 'package:erlang_ai_vision_app/features/chat/chat_controller.dart';
+import 'package:erlang_ai_vision_app/services/backend_auth_client.dart';
 
 /// In-memory stand-in for the backend chat API. Overrides only the chat methods
 /// the controller uses; the inherited (unused) http client is harmless in tests.
-class _FakeApi extends SentinelEdgeApiClient {
+class _FakeApi extends ErlangVisionApiClient {
   final List<ChatSession> _sessions = [];
   final Map<String, List<ChatMessage>> _messages = {};
   int _seq = 0;

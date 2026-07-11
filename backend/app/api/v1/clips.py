@@ -225,6 +225,6 @@ async def download_dev_clip_media(
     return FileResponse(
         path=Path(_DEV_SAMPLE_VIDEO),
         media_type=clip.mime_type or "video/mp4",
-        filename=f"sentineledge-{clip.clip_id}.mp4",
+        filename=f"erlang-{clip.clip_id}.mp4",
         headers={"Cache-Control": "no-store"},
     )

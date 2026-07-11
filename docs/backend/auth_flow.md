@@ -1,6 +1,6 @@
 # Authentication Flow
 
-SentinelEdge uses two separate authentication paths:
+Erlang AI Vision uses two separate authentication paths:
 
 | Actor | Auth method |
 |---|---|
@@ -29,7 +29,7 @@ The local `users` table stores the app profile. Firebase Auth is the identity br
 | `email_verified` | Firebase email verification claim. |
 | `display_name` | Firebase token `name` claim. |
 | `avatar_url` | Firebase token `picture` claim. |
-| `role` | SentinelEdge app role. |
+| `role` | Erlang AI Vision app role. |
 
 Use `google_sub` as the stable identity key for now, even though it stores the Firebase `uid`. Do not use email as the primary identity key because email can change.
 

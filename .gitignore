@@ -8,8 +8,8 @@ venv/
 *.db-journal
 *.db-wal
 *.db-shm
-sentineledge_migration_autogen.db
-sentineledge_migration_autogen.db-journal
+erlang_migration_autogen.db
+erlang_migration_autogen.db-journal
 
 # local backend run logs / ad-hoc probes
 backend_run.log

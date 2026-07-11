@@ -20,7 +20,7 @@ class PushNotificationService {
   FirebaseMessaging get _instance => _messaging ?? FirebaseMessaging.instance;
 
   Future<void> registerForCurrentUser(
-    SentinelEdgeApiClient apiClient, {
+    ErlangVisionApiClient apiClient, {
     ScaffoldMessengerState? messenger,
   }) async {
     if (!DefaultFirebaseOptions.isConfigured) return;
@@ -47,7 +47,7 @@ class PushNotificationService {
     }
   }
 
-  Future<void> deregisterForCurrentUser(SentinelEdgeApiClient apiClient) async {
+  Future<void> deregisterForCurrentUser(ErlangVisionApiClient apiClient) async {
     await _tokenRefreshSubscription?.cancel();
     await _foregroundSubscription?.cancel();
     _tokenRefreshSubscription = null;
@@ -69,7 +69,7 @@ class PushNotificationService {
     await _foregroundSubscription?.cancel();
   }
 
-  Future<void> _registerCurrentToken(SentinelEdgeApiClient apiClient) async {
+  Future<void> _registerCurrentToken(ErlangVisionApiClient apiClient) async {
     try {
       final token = await _instance.getToken(
         vapidKey: kIsWeb ? _webVapidKey : null,
@@ -83,7 +83,7 @@ class PushNotificationService {
   }
 
   Future<void> _registerToken(
-    SentinelEdgeApiClient apiClient,
+    ErlangVisionApiClient apiClient,
     String token,
   ) async {
     await apiClient.registerPushToken(token: token, platform: _platformName());

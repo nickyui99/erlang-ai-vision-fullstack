@@ -5,21 +5,21 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.core.alicloud_secrets import load_alicloud_kms_secret
+from app.core.google_secrets import load_google_secret_manager_secrets
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_SQLITE_URL = f"sqlite+aiosqlite:///{(REPO_ROOT / 'data' / 'sentineledge_demo.db').as_posix()}"
+DEFAULT_SQLITE_URL = f"sqlite+aiosqlite:///{(REPO_ROOT / 'data' / 'erlang_demo.db').as_posix()}"
 ENV_FILE = REPO_ROOT / ".env"
 
 
 if os.environ.get("APP_ENV") != "test":
-    load_alicloud_kms_secret(ENV_FILE)
+    load_google_secret_manager_secrets(ENV_FILE)
 
 
 class Settings(BaseSettings):
     app_env: str = Field(default="development", validation_alias="APP_ENV")
-    app_name: str = Field(default="SentinelEdge Backend", validation_alias="APP_NAME")
+    app_name: str = Field(default="Erlang AI Vision Backend", validation_alias="APP_NAME")
     app_version: str = Field(default="0.1.0", validation_alias="APP_VERSION")
     api_prefix: str = Field(default="/api/v1", validation_alias="API_PREFIX")
     cors_allowed_origins: str = Field(
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     google_application_credentials: str = Field(default="", validation_alias="GOOGLE_APPLICATION_CREDENTIALS")
 
     session_secret_key: str = Field(default="change-me", validation_alias="SESSION_SECRET_KEY")
-    session_cookie_name: str = Field(default="sentineledge_session", validation_alias="SESSION_COOKIE_NAME")
+    session_cookie_name: str = Field(default="erlang_session", validation_alias="SESSION_COOKIE_NAME")
     session_expire_minutes: int = Field(default=1440, validation_alias="SESSION_EXPIRE_MINUTES")
 
     alerts_enabled: bool = Field(default=True, validation_alias="ALERTS_ENABLED")

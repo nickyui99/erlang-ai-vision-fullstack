@@ -1,6 +1,6 @@
 # Media Storage Flow
 
-SentinelEdge stores media metadata in the database and stores video bytes outside the database.
+Erlang AI Vision stores media metadata in the database and stores video bytes outside the database.
 
 ## Storage Types
 

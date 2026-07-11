@@ -49,7 +49,7 @@ class WorkspaceView extends StatefulWidget {
   });
 
   final BackendUser user;
-  final SentinelEdgeApiClient apiClient;
+  final ErlangVisionApiClient apiClient;
   final Future<void> Function() onSignOut;
 
   /// The active tab, driven by the URL (`/console/<section>`).
@@ -1944,7 +1944,7 @@ class _QuickArmSheet extends StatefulWidget {
   });
 
   final EdgeDevice device;
-  final SentinelEdgeApiClient apiClient;
+  final ErlangVisionApiClient apiClient;
   final List<SurveillanceAgent> agents;
   final Future<void> Function() onChanged;
 
@@ -3875,7 +3875,7 @@ class _AgentFormDialogState extends State<_AgentFormDialog> {
 class _AgentBuilderDialog extends StatefulWidget {
   const _AgentBuilderDialog({required this.apiClient, this.initialAgent});
 
-  final SentinelEdgeApiClient apiClient;
+  final ErlangVisionApiClient apiClient;
 
   /// When set, the builder edits this agent: the chat is seeded with its current
   /// rule and the proposal starts populated so it can be saved after tweaking.

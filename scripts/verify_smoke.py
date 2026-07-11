@@ -1,7 +1,7 @@
 """Milestone 9A smoke test: run the configured Qwen client on one sample event
 and print the raw reply + the parsed verdict. No backend / DB / edge needed.
 
-    cd SentinelEdge-Fullstack
+    cd erlang-ai-vision-fullstack
     $env:PYTHONPATH = 'backend'
     python scripts/verify_smoke.py
 

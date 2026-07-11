@@ -34,6 +34,6 @@ Future<void> main() async {
   // reacts (via refreshListenable) once the session resolves.
   unawaited(session.restore());
 
-  runApp(SentinelEdgeApp(session: session));
+  runApp(ErlangVisionApp(session: session));
 }
 

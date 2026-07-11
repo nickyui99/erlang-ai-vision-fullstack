@@ -1,4 +1,4 @@
-"""Local push-stream simulator for SentinelEdge live video.
+"""Local push-stream simulator for Erlang AI Vision live video.
 
 Pretends to be an ESP32-CAM edge device: sends heartbeats (so the camera shows
 "online" in the app) and pushes generated JPEG frames over the edge stream
@@ -39,7 +39,7 @@ import websockets
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="SentinelEdge push-stream simulator")
+    parser = argparse.ArgumentParser(description="Erlang AI Vision push-stream simulator")
     parser.add_argument("--edge-token", required=True, help="Raw edge token from device registration")
     parser.add_argument("--backend", default="ws://localhost:8000", help="Backend WebSocket base URL")
     parser.add_argument("--fps", type=float, default=10.0, help="Frames per second to push")
@@ -61,7 +61,7 @@ def render_frame(width: int, height: int, frame_index: int, label: str) -> bytes
     draw.rectangle([cx - 30, cy - 30, cx + 30, cy + 30], outline=(0, 220, 160), width=4)
 
     stamp = time.strftime("%Y-%m-%d %H:%M:%S")
-    draw.text((12, 10), f"SentinelEdge SIM  {label}", fill=(230, 230, 230))
+    draw.text((12, 10), f"Erlang AI Vision SIM  {label}", fill=(230, 230, 230))
     draw.text((12, 28), f"{stamp}  frame {frame_index}", fill=(0, 220, 160))
 
     buffer = io.BytesIO()

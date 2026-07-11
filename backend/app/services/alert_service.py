@@ -84,7 +84,7 @@ async def maybe_alert_for_event(session: AsyncSession, event: Event) -> Alert | 
         await _publish(alert)
         return alert
 
-    title = f"SentinelEdge · {(event.severity or 'alert').title()} alert"
+    title = f"Erlang AI Vision · {(event.severity or 'alert').title()} alert"
     body = event.summary or f"{event.event_type} detected"
     push = notification_service.send_push(
         tokens=[t.token for t in tokens],

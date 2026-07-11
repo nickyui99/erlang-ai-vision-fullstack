@@ -16,7 +16,7 @@ class AiAgentChatScreen extends StatefulWidget {
     super.key,
   });
 
-  final SentinelEdgeApiClient apiClient;
+  final ErlangVisionApiClient apiClient;
   final BackendUser user;
 
   @override

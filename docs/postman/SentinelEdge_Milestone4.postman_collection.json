@@ -1,7 +1,7 @@
 {
     "info":  {
-                 "name":  "SentinelEdge Milestone 4 API",
-                 "description":  "Postman collection for testing SentinelEdge Milestone 4: device registration, edge heartbeat, agent create/assign/unassign, and active config pull. Set sessionToken in the environment before running authenticated user requests.",
+                 "name":  "Erlang AI Vision Milestone 4 API",
+                 "description":  "Postman collection for testing Erlang AI Vision Milestone 4: device registration, edge heartbeat, agent create/assign/unassign, and active config pull. Set sessionToken in the environment before running authenticated user requests.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "item":  [

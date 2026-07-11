@@ -20,7 +20,7 @@ class _PlaybackVideoViewState extends State<PlaybackVideoView> {
   void initState() {
     super.initState();
     _viewType =
-        'sentineledge-playback-${widget.url.hashCode}-${DateTime.now().microsecondsSinceEpoch}';
+        'erlang-playback-${widget.url.hashCode}-${DateTime.now().microsecondsSinceEpoch}';
     _video = web.HTMLVideoElement()
       ..src = widget.url
       ..controls = true

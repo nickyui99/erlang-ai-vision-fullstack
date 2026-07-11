@@ -86,7 +86,7 @@ try {
     # separately so the same firebase.json works across environments.
     $BuildArgs = @("build", "web", "--wasm", "--dart-define-from-file=$FirebaseConfig")
     if ($ApiBaseUrl) {
-        $BuildArgs += "--dart-define=SENTINELEDGE_API_BASE_URL=$ApiBaseUrl"
+        $BuildArgs += "--dart-define=ERLANG_API_BASE_URL=$ApiBaseUrl"
         Write-Host "Building web (WASM) against $ApiBaseUrl..." -ForegroundColor Cyan
     }
     else {
@@ -111,10 +111,10 @@ if ($SkipUpload) {
 # --- Upload to OSS ----------------------------------------------------------
 # oss2 handles request signing; PowerShell hands it the bucket/region/paths.
 
-$env:SENTINELEDGE_OSS_BUCKET = $Bucket
-$env:SENTINELEDGE_OSS_REGION = $Region
-$env:SENTINELEDGE_WEB_BUILD_DIR = $Output
-$env:SENTINELEDGE_REPO_ROOT = $RepoRoot
+$env:ERLANG_OSS_BUCKET = $Bucket
+$env:ERLANG_OSS_REGION = $Region
+$env:ERLANG_WEB_BUILD_DIR = $Output
+$env:ERLANG_REPO_ROOT = $RepoRoot
 
 Write-Host "Uploading to OSS bucket $Bucket ($Region)..." -ForegroundColor Cyan
 @'
@@ -122,10 +122,10 @@ import mimetypes, os, sys
 from pathlib import Path
 import oss2
 
-repo_root = Path(os.environ["SENTINELEDGE_REPO_ROOT"])
-build_dir = Path(os.environ["SENTINELEDGE_WEB_BUILD_DIR"])
-bucket_name = os.environ["SENTINELEDGE_OSS_BUCKET"]
-region = os.environ["SENTINELEDGE_OSS_REGION"]
+repo_root = Path(os.environ["ERLANG_REPO_ROOT"])
+build_dir = Path(os.environ["ERLANG_WEB_BUILD_DIR"])
+bucket_name = os.environ["ERLANG_OSS_BUCKET"]
+region = os.environ["ERLANG_OSS_REGION"]
 
 env_file = repo_root / ".env"
 if env_file.exists():

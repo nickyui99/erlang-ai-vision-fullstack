@@ -79,7 +79,7 @@ class MediaUrlService:
         bucket = settings.alicloud_oss_bucket
         response_params: dict[str, str] = {}
         if download:
-            filename = object_key.rsplit("/", 1)[-1] or "sentineledge-media.mp4"
+            filename = object_key.rsplit("/", 1)[-1] or "erlang-media.mp4"
             response_params["response-content-disposition"] = f"attachment; filename=\"{filename}\""
 
         resource = f"/{bucket}/{object_key}"

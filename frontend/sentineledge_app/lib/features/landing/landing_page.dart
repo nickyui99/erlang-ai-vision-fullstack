@@ -11,7 +11,7 @@ const _agentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
 const _scenarioAsset = 'assets/landing/edge-ai-scenario.png';
 const _architectureFlowAsset =
     'assets/landing/erlang-ai-vision-architecture-flow.png';
-const _githubUrl = 'https://github.com/nickyui99/SentinelEdge-Fullstack';
+const _githubUrl = 'https://github.com/nickyui99/erlang-ai-vision-fullstack';
 const _iotRepoUrl = 'https://github.com/KennethChua1998/SentinelEdge_IOT';
 const _laptopEdgeRepoUrl =
     'https://github.com/KennethChua1998/SentinelEdge_LaptopEdge';
@@ -2023,47 +2023,87 @@ class _ProjectResourcesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const checklist = [
+      ('Fullstack repository', 'Flutter web, FastAPI backend, cloud deployment scripts, and product documentation.'),
+      ('IoT firmware repository', 'ESP32 camera firmware, device behavior, and physical camera control live in SentinelEdge_IOT.'),
+      ('Laptop edge repository', 'The bridge that connects camera streams, local detection, and command relay lives in SentinelEdge_LaptopEdge.'),
+      ('Cloud deployment', 'Frontend OSS publishing and backend ECI deployment scripts are included in the repository.'),
+      ('Architecture diagram', 'Clear edge bridge, backend, database, Qwen Cloud, and Flutter console flow.'),
+      ('Product walkthrough', 'Camera pairing, live stream, agent rule, event, clip, Qwen verdict, and audit trail are the core flow.'),
+    ];
+
     return _LightSection(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            children: [
-              const _Eyebrow(label: 'Resources'),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Explore the project.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: AppColors.neutral900,
-                ),
-              ),
-            ],
+          const _SectionHeading(
+            eyebrow: 'Project resources',
+            title: 'Everything points back to the working product.',
+            body:
+                'The landing page gives reviewers and teammates one place to understand the IoT setup, cloud architecture, source code, and login-backed console.',
           ),
           const SizedBox(height: AppSpacing.xxl),
-          _ResponsiveGrid(
-            compact: compact,
-            children: const [
-              _RepoCard(
-                icon: Icons.hub_outlined,
-                title: 'Erlang Fullstack',
-                subtitle: 'Web console, FastAPI backend, cloud deployment.',
-                url: _githubUrl,
-                featured: true,
-              ),
-              _RepoCard(
-                icon: Icons.camera_alt_outlined,
-                title: 'Erlang IoT Firmware',
-                subtitle: 'ESP32 camera firmware.',
-                url: _iotRepoUrl,
-              ),
-              _RepoCard(
-                icon: Icons.memory_outlined,
-                title: 'Erlang Laptop Edge',
-                subtitle: 'On-site detection and camera bridge.',
-                url: _laptopEdgeRepoUrl,
-              ),
-            ],
+          compact
+              ? Column(
+                  children: [
+                    _SubmissionBadgePanel(onLogin: null),
+                    const SizedBox(height: AppSpacing.lg),
+                    for (final item in checklist) _ChecklistRow(title: item.$1, body: item.$2),
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _SubmissionBadgePanel(onLogin: null),
+                    ),
+                    const SizedBox(width: AppSpacing.xl),
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        children: [
+                          for (final item in checklist) _ChecklistRow(title: item.$1, body: item.$2),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChecklistRow extends StatelessWidget {
+  const _ChecklistRow({required this.title, required this.body});
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: AppRadius.lgAll,
+        border: Border.all(color: AppColors.lightBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.check_circle_outline, color: AppColors.success),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: AppSpacing.xs),
+                Text(body, style: Theme.of(context).textTheme.bodyMedium),
+              ],
+            ),
           ),
         ],
       ),
@@ -2071,82 +2111,50 @@ class _ProjectResourcesSection extends StatelessWidget {
   }
 }
 
-class _RepoCard extends StatelessWidget {
-  const _RepoCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.url,
-    this.featured = false,
-  });
+class _SubmissionBadgePanel extends StatelessWidget {
+  const _SubmissionBadgePanel({required this.onLogin});
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String url;
-  final bool featured;
+  final VoidCallback? onLogin;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.xl,
-        vertical: AppSpacing.xl,
-      ),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
+        color: AppColors.neutral900,
+        borderRadius: AppRadius.lgAll,
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: AppColors.primary, size: 34),
+          const _Eyebrow(label: 'Source code'),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            title,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.neutral900,
-              fontWeight: FontWeight.w700,
-            ),
+            'nickyui99/erlang-ai-vision-fullstack',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white),
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: AppSpacing.md),
           Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.neutral600),
+            'Open the working repositories for the web app, backend, IoT camera firmware, laptop edge bridge, deployment scripts, and project documentation.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.neutral300),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          const _DarkPill(
+            icon: Icons.sensors_outlined,
+            label: 'Edge sensors plus cloud reasoning',
+            color: AppColors.accentOrange,
           ),
           const SizedBox(height: AppSpacing.lg),
-          if (featured)
-            FilledButton(
-              onPressed: () => openExternalUrl(url),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: const StadiumBorder(),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xl,
-                  vertical: 14,
-                ),
-              ),
-              child: const Text('View on GitHub'),
-            )
-          else
-            TextButton(
-              onPressed: () => openExternalUrl(url),
-              style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('View on GitHub'),
-                  SizedBox(width: 2),
-                  Icon(Icons.chevron_right, size: 18),
-                ],
-              ),
-            ),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _RepoButton(label: 'Fullstack', url: _githubUrl),
+              _RepoButton(label: 'IoT firmware', url: _iotRepoUrl),
+              _RepoButton(label: 'Laptop edge', url: _laptopEdgeRepoUrl),
+            ],
+          ),
         ],
       ),
     );
@@ -2200,6 +2208,26 @@ class _BrushStrokePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _BrushStrokePainter oldDelegate) =>
       oldDelegate.color != color;
+}
+
+class _RepoButton extends StatelessWidget {
+  const _RepoButton({required this.label, required this.url});
+
+  final String label;
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () => openExternalUrl(url),
+      icon: const Icon(Icons.open_in_new_outlined, size: 18),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.white,
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.24)),
+      ),
+    );
+  }
 }
 
 class _FooterCta extends StatelessWidget {

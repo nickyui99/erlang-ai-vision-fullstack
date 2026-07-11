@@ -3,9 +3,8 @@ alembic==1.13.3
 asyncpg==0.31.0
 fastapi==0.115.6
 firebase-admin==6.6.0
+google-cloud-secret-manager==2.24.0
 httpx==0.28.1
 pydantic-settings==2.7.1
 sqlalchemy==2.0.36
 uvicorn[standard]==0.34.0
-alibabacloud_kms20160120
-alibabacloud_tea_openapi

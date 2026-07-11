@@ -8,7 +8,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 os.environ["APP_ENV"] = "test"
-os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{(Path(tempfile.gettempdir()) / 'sentineledge_m6_pytest.db').as_posix()}"
+os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{(Path(tempfile.gettempdir()) / 'erlang_m6_pytest.db').as_posix()}"
 
 from fastapi.testclient import TestClient  # noqa: E402
 

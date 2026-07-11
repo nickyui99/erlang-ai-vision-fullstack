@@ -6,9 +6,9 @@ import '../../services/backend_auth_client.dart';
 /// its messages, and the in-flight send. Mirrors the app's ChangeNotifier
 /// pattern ([SessionController]/[ThemeModeController]).
 class ChatController extends ChangeNotifier {
-  ChatController({required SentinelEdgeApiClient apiClient}) : _api = apiClient;
+  ChatController({required ErlangVisionApiClient apiClient}) : _api = apiClient;
 
-  final SentinelEdgeApiClient _api;
+  final ErlangVisionApiClient _api;
 
   List<ChatSession> _sessions = const [];
   List<ChatSession> get sessions => _sessions;

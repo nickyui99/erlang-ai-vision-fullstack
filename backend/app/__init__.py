@@ -1,1 +1,1 @@
-"""SentinelEdge backend application package."""
+"""Erlang AI Vision backend application package."""

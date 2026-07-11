@@ -73,7 +73,7 @@ def _parse_secret_data(secret_data: str) -> dict[str, Any]:
         except json.JSONDecodeError:
             parsed = json.loads(_escape_control_chars_in_json_strings(stripped))
         if not isinstance(parsed, dict):
-            raise ValueError("Alibaba KMS secret JSON must be an object")
+            raise ValueError("Secret payload JSON must be an object")
         return parsed
 
     values: dict[str, Any] = {}
@@ -95,7 +95,7 @@ def _write_firebase_credentials(firebase_credentials: Any) -> str:
     if not isinstance(firebase_credentials, dict):
         raise ValueError("GOOGLE_APPLICATION_CREDENTIALS_JSON must be a JSON object")
 
-    path = Path(tempfile.gettempdir()) / "sentineledge-firebase-service-account.json"
+    path = Path(tempfile.gettempdir()) / "erlang-firebase-service-account.json"
     path.write_text(json.dumps(firebase_credentials), encoding="utf-8")
     return str(path)
 
@@ -115,7 +115,7 @@ def _database_url_from_rds_parts(secret_values: dict[str, Any]) -> str | None:
     user = quote_plus(str(secret_values.get("RDS_USER", "")))
     password = quote_plus(str(secret_values.get("RDS_PASSWORD", "")))
     port = str(secret_values.get("RDS_PORT", "5432"))
-    database = secret_values.get("RDS_DB", "sentineledge")
+    database = secret_values.get("RDS_DB", "erlang")
     auth = f"{user}:{password}@" if user else ""
     return f"postgresql+asyncpg://{auth}{host}:{port}/{database}"
 
@@ -151,45 +151,3 @@ def _apply_secret_values(secret_values: dict[str, Any]) -> None:
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _write_firebase_credentials(firebase_credentials_raw)
     else:
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = firebase_credentials_raw
-
-
-def load_alicloud_kms_secret(env_file: Path) -> None:
-    # BaseSettings reads .env after this loader runs, but _apply_secret_values
-    # only treats process env vars as explicit overrides. Promote a local
-    # DATABASE_URL from .env first so KMS cannot redirect local dev to RDS.
-    dotenv_database_url = _read_dotenv_key(env_file, "DATABASE_URL")
-    if dotenv_database_url and "DATABASE_URL" not in os.environ:
-        os.environ["DATABASE_URL"] = dotenv_database_url
-    primary_secret_name = _read_dotenv_key(env_file, "ALICLOUD_KMS_SECRET_NAME")
-    db_secret_name = _read_dotenv_key(env_file, "ALICLOUD_KMS_DB_SECRET_NAME")
-    secret_names = _secret_names(primary_secret_name, db_secret_name)
-    if not secret_names:
-        return
-
-    region_id = _read_dotenv_key(env_file, "ALICLOUD_REGION_ID") or "ap-southeast-1"
-    endpoint = _read_dotenv_key(env_file, "ALICLOUD_KMS_ENDPOINT") or f"kms.{region_id}.aliyuncs.com"
-
-    access_key_id = _read_dotenv_key(env_file, "ALIBABA_CLOUD_ACCESS_KEY_ID")
-    access_key_secret = _read_dotenv_key(env_file, "ALIBABA_CLOUD_ACCESS_KEY_SECRET")
-
-    try:
-        from alibabacloud_kms20160120 import models as kms_models
-        from alibabacloud_kms20160120.client import Client as KmsClient
-        from alibabacloud_tea_openapi import models as open_api_models
-    except ImportError as exc:
-        raise RuntimeError(
-            "Alibaba KMS secret loading is enabled, but Alibaba Cloud SDK packages are not installed. "
-            "Install backend requirements before starting the app."
-        ) from exc
-
-    config = open_api_models.Config(
-        access_key_id=access_key_id,
-        access_key_secret=access_key_secret,
-        endpoint=endpoint,
-    )
-    client = KmsClient(config)
-    merged: dict[str, Any] = {}
-    for name in secret_names:
-        response = client.get_secret_value(kms_models.GetSecretValueRequest(secret_name=name))
-        merged.update(_parse_secret_data(response.body.secret_data))
-    _apply_secret_values(merged)

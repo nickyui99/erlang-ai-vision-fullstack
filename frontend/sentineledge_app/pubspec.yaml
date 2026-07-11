@@ -1,4 +1,4 @@
-name: sentineledge_app
+name: erlang_ai_vision_app
 description: "Flutter web and mobile console for Erlang AI Vision."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
