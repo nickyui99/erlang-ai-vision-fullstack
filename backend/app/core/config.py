@@ -5,7 +5,6 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.core.alicloud_secrets import load_alicloud_kms_secret
 from app.core.google_secrets import load_google_secret_manager_secrets
 
 
@@ -15,8 +14,7 @@ ENV_FILE = REPO_ROOT / ".env"
 
 
 if os.environ.get("APP_ENV") != "test":
-    if not load_google_secret_manager_secrets(ENV_FILE):
-        load_alicloud_kms_secret(ENV_FILE)
+    load_google_secret_manager_secrets(ENV_FILE)
 
 
 class Settings(BaseSettings):

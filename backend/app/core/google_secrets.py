@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
-from app.core.alicloud_secrets import (
+from app.core.secret_loading import (
     _apply_secret_values,
     _parse_secret_data,
     _read_dotenv_key,
