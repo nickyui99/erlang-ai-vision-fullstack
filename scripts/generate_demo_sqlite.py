@@ -10,8 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 DATA = ROOT / "data"
-DB_PATH = DATA / "sentineledge_demo.db"
-BUILD_DB_PATH = Path("C:/tmp/sentineledge_demo.db")
+DB_PATH = DATA / "erlang_demo.db"
+BUILD_DB_PATH = Path("C:/tmp/erlang_demo.db")
 SCHEMA_PATH = SCRIPTS / "demo_sqlite_schema.sql"
 sys.path.insert(0, str(ROOT / "backend"))
 from app.core.security import hash_edge_token  # noqa: E402
@@ -79,7 +79,7 @@ def seed_demo_data(conn: sqlite3.Connection) -> None:
         (
             "usr_demo_001",
             "google-sub-demo-001",
-            "demo@sentineledge.local",
+            "demo@erlang.local",
             1,
             "Demo User",
             "https://example.com/demo-avatar.png",

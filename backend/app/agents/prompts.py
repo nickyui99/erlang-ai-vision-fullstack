@@ -8,7 +8,7 @@ from app.schemas.verification import VerificationRequest
 
 
 VERIFICATION_SYSTEM_PROMPT = """\
-You are SentinelEdge's security verification agent. A lightweight edge detector \
+You are Erlang AI Vision's security verification agent. A lightweight edge detector \
 has flagged a candidate event. Your job is to decide whether the event is a real \
 match for the user's surveillance rule, then return a single JSON verdict.
 

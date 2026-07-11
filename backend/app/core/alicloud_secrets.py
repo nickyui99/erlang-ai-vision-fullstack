@@ -73,7 +73,7 @@ def _parse_secret_data(secret_data: str) -> dict[str, Any]:
         except json.JSONDecodeError:
             parsed = json.loads(_escape_control_chars_in_json_strings(stripped))
         if not isinstance(parsed, dict):
-            raise ValueError("Alibaba KMS secret JSON must be an object")
+            raise ValueError("Secret payload JSON must be an object")
         return parsed
 
     values: dict[str, Any] = {}
@@ -95,7 +95,7 @@ def _write_firebase_credentials(firebase_credentials: Any) -> str:
     if not isinstance(firebase_credentials, dict):
         raise ValueError("GOOGLE_APPLICATION_CREDENTIALS_JSON must be a JSON object")
 
-    path = Path(tempfile.gettempdir()) / "sentineledge-firebase-service-account.json"
+    path = Path(tempfile.gettempdir()) / "erlang-firebase-service-account.json"
     path.write_text(json.dumps(firebase_credentials), encoding="utf-8")
     return str(path)
 
@@ -115,7 +115,7 @@ def _database_url_from_rds_parts(secret_values: dict[str, Any]) -> str | None:
     user = quote_plus(str(secret_values.get("RDS_USER", "")))
     password = quote_plus(str(secret_values.get("RDS_PASSWORD", "")))
     port = str(secret_values.get("RDS_PORT", "5432"))
-    database = secret_values.get("RDS_DB", "sentineledge")
+    database = secret_values.get("RDS_DB", "erlang")
     auth = f"{user}:{password}@" if user else ""
     return f"postgresql+asyncpg://{auth}{host}:{port}/{database}"
 

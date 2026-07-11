@@ -1,6 +1,6 @@
 # Edge Device Integration Guide
 
-This document describes how the LaptopEdge bridge connects the ESP32 camera to the SentinelEdge Fullstack backend.
+This document describes how the LaptopEdge bridge connects the ESP32 camera to the Erlang AI Vision Fullstack backend.
 
 The backend does not connect directly to a LAN camera. The edge bridge keeps outbound connections open to the backend, receives frames from the ESP32, runs local AI, and relays commands back to the camera.
 
@@ -8,7 +8,7 @@ The backend does not connect directly to a LAN camera. The edge bridge keeps out
 
 | Repo | Responsibility |
 |---|---|
-| `SentinelEdge-Fullstack` | FastAPI backend, Flutter app, auth, devices, agents, live stream fan-out, command relay, events, media metadata, push alerts, Qwen Cloud verification. |
+| `erlang-ai-vision-fullstack` | FastAPI backend, Flutter app, auth, devices, agents, live stream fan-out, command relay, events, media metadata, push alerts, Qwen Cloud verification. |
 | `SentinelEdge_LaptopEdge` | Bridge process, ESP32 USB/Wi-Fi intake, YOLO video detection, optional YAMNet audio detection, Ollama `qwen3.5:0.8b` local triage, event posting. |
 | `SentinelEdge_IOT` | ESP32-S3 camera firmware, QR provisioning, Wi-Fi/USB transport, JPEG capture, pan/tilt servo control. |
 

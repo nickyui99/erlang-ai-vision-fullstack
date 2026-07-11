@@ -8,10 +8,7 @@ import 'backend_http_client.dart';
 String? _backendSessionCookie;
 
 Map<String, String> _withSessionCookie([Map<String, String>? headers]) {
-  return <String, String>{
-    ...?headers,
-    if (_backendSessionCookie != null) 'Cookie': _backendSessionCookie!,
-  };
+  return <String, String>{...?headers, 'Cookie': ?_backendSessionCookie};
 }
 
 void _captureSessionCookie(http.Response response) {
@@ -33,7 +30,7 @@ class BackendAuthClient {
   Uri get _firebaseLoginUri => Uri.parse('$baseUrl/api/v1/auth/firebase/login');
 
   static String get baseUrl {
-    const configured = String.fromEnvironment('SENTINELEDGE_API_BASE_URL');
+    const configured = String.fromEnvironment('ERLANG_API_BASE_URL');
     if (configured.isNotEmpty) {
       return configured;
     }
@@ -79,8 +76,8 @@ class BackendAuthClient {
   }
 }
 
-class SentinelEdgeApiClient {
-  SentinelEdgeApiClient({http.Client? httpClient})
+class ErlangVisionApiClient {
+  ErlangVisionApiClient({http.Client? httpClient})
     : _httpClient = httpClient ?? createBackendHttpClient();
 
   final http.Client _httpClient;
@@ -149,6 +146,7 @@ class SentinelEdgeApiClient {
     });
     return EdgeDevice.fromJson(body['data'] as Map<String, dynamic>);
   }
+
   Future<EdgeDevice> getDevice(String deviceId) async {
     final body = await _getObject('/api/v1/devices/$deviceId');
     return EdgeDevice.fromJson(body['data'] as Map<String, dynamic>);
@@ -176,7 +174,6 @@ class SentinelEdgeApiClient {
     return DeviceCommandResult.fromJson(body['data'] as Map<String, dynamic>);
   }
 
-
   Future<DeviceCommandResult> controlDevice(
     String deviceId, {
     required String action,
@@ -192,6 +189,7 @@ class SentinelEdgeApiClient {
     );
     return DeviceCommandResult.fromJson(body['data'] as Map<String, dynamic>);
   }
+
   /// Requests a live snapshot from the edge device.
   Future<DeviceCommandResult> snapshotDevice(String deviceId) async {
     final body = await _postObject('/api/v1/devices/$deviceId/snapshot', null);
@@ -370,6 +368,7 @@ class SentinelEdgeApiClient {
         .map((item) => MediaRecording.fromJson(item as Map<String, dynamic>))
         .toList();
   }
+
   /// The tool-call trail for an event ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the AI agent's snapshot/pan/read actions
   /// during verification, oldest-first.
   Future<List<ToolAuditEntry>> listEventAudit(String eventId) async {
@@ -389,6 +388,7 @@ class SentinelEdgeApiClient {
     );
     return RecordingPlaybackUrl.fromJson(body['data'] as Map<String, dynamic>);
   }
+
   Future<ClipPlaybackUrl> signedClipPlaybackUrl(String clipId) async {
     final body = await _postObject('/api/v1/clips/$clipId/signed-url', null);
     return ClipPlaybackUrl.fromJson(body['data'] as Map<String, dynamic>);
@@ -583,23 +583,26 @@ class EdgeDevice {
           .whereType<Map>()
           .map((item) => CameraPreset.fromJson(Map<String, dynamic>.from(item)))
           .toList(),
-      ptzCorrectionPan: int.tryParse(json['ptz_correction_pan'].toString()) ?? 0,
-      ptzCorrectionTilt: int.tryParse(json['ptz_correction_tilt'].toString()) ?? 0,
+      ptzCorrectionPan:
+          int.tryParse(json['ptz_correction_pan'].toString()) ?? 0,
+      ptzCorrectionTilt:
+          int.tryParse(json['ptz_correction_tilt'].toString()) ?? 0,
     );
   }
 }
+
 class CameraPreset {
-  const CameraPreset({required this.label, required this.pan, required this.tilt});
+  const CameraPreset({
+    required this.label,
+    required this.pan,
+    required this.tilt,
+  });
 
   final String label;
   final int pan;
   final int tilt;
 
-  Map<String, dynamic> toJson() => {
-    'label': label,
-    'pan': pan,
-    'tilt': tilt,
-  };
+  Map<String, dynamic> toJson() => {'label': label, 'pan': pan, 'tilt': tilt};
 
   factory CameraPreset.fromJson(Map<String, dynamic> json) {
     return CameraPreset(
@@ -609,6 +612,7 @@ class CameraPreset {
     );
   }
 }
+
 class DeviceRegistration {
   const DeviceRegistration({required this.device, required this.edgeToken});
 
@@ -719,7 +723,9 @@ class AgentBuilderReply {
   /// A short "HH:MM–HH:MM" window if the rule is time-scoped, else null.
   String? get scheduleLabel {
     final schedule = compiledEdgeConfig?['schedule'];
-    if (schedule is Map && schedule['start'] != null && schedule['end'] != null) {
+    if (schedule is Map &&
+        schedule['start'] != null &&
+        schedule['end'] != null) {
       return '${schedule['start']}–${schedule['end']}';
     }
     return null;
@@ -956,6 +962,7 @@ class MediaRecording {
     );
   }
 }
+
 class RecordingPlaybackUrl {
   const RecordingPlaybackUrl({
     required this.recordingId,
@@ -977,6 +984,7 @@ class RecordingPlaybackUrl {
     );
   }
 }
+
 class ClipPlaybackUrl {
   const ClipPlaybackUrl({
     required this.clipId,
@@ -1020,6 +1028,7 @@ class ClipDownloadUrl {
     );
   }
 }
+
 class BackendNetworkInfo {
   const BackendNetworkInfo({this.lanIp, required this.port});
 
@@ -1063,4 +1072,3 @@ Map<String, dynamic>? _tryMap(Object? value) {
   }
   return null;
 }
-

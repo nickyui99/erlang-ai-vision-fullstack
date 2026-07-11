@@ -9,7 +9,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 os.environ["APP_ENV"] = "test"
-os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{(Path(tempfile.gettempdir()) / 'sentineledge_m5_pytest.db').as_posix()}"
+os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{(Path(tempfile.gettempdir()) / 'erlang_m5_pytest.db').as_posix()}"
 
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
@@ -105,7 +105,7 @@ def _event_payload(idempotency_key: str = "dev_m5-evt-1") -> dict:
 
 def _client() -> TestClient:
     client = TestClient(app)
-    client.cookies.set("sentineledge_session", create_session_token("usr_m5"))
+    client.cookies.set("erlang_session", create_session_token("usr_m5"))
     return client
 
 
@@ -254,7 +254,7 @@ def test_clip_upload_completion_signed_url_and_recording_registration() -> None:
 
 def test_media_url_service_generates_oss_signed_urls(monkeypatch) -> None:
     monkeypatch.setattr(settings, "alicloud_oss_endpoint", "oss-ap-southeast-1.aliyuncs.com")
-    monkeypatch.setattr(settings, "alicloud_oss_bucket", "sentineledge-media")
+    monkeypatch.setattr(settings, "alicloud_oss_bucket", "erlang-media")
     monkeypatch.setattr(settings, "alibaba_cloud_access_key_id", "test-access-key")
     monkeypatch.setattr(settings, "alibaba_cloud_access_key_secret", "test-secret")
     monkeypatch.setattr(settings, "alicloud_oss_secure", True)
@@ -263,10 +263,10 @@ def test_media_url_service_generates_oss_signed_urls(monkeypatch) -> None:
     download_url, download_expires_at = media_url_service.download_url("recordings/dev_m5/test.mp4")
     upload_url, upload_expires_at = media_url_service.upload_url("events/dev_m5/test.mp4")
 
-    assert playback_url.startswith("https://sentineledge-media.oss-ap-southeast-1.aliyuncs.com/recordings/dev_m5/test.mp4?")
+    assert playback_url.startswith("https://erlang-media.oss-ap-southeast-1.aliyuncs.com/recordings/dev_m5/test.mp4?")
     assert "OSSAccessKeyId=test-access-key" in playback_url
     assert "Expires=" in playback_url
     assert "Signature=" in playback_url
     assert "response-content-disposition=" in download_url
-    assert upload_url.startswith("https://sentineledge-media.oss-ap-southeast-1.aliyuncs.com/events/dev_m5/test.mp4?")
+    assert upload_url.startswith("https://erlang-media.oss-ap-southeast-1.aliyuncs.com/events/dev_m5/test.mp4?")
     assert playback_expires_at <= download_expires_at <= upload_expires_at

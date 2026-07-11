@@ -17,7 +17,7 @@ from pathlib import Path
 import sqlite3
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DB = ROOT / "data" / "sentineledge_demo.db"
+DEFAULT_DB = ROOT / "data" / "erlang_demo.db"
 
 
 def utc_text(value: datetime) -> str:
@@ -55,7 +55,7 @@ def pick_user(conn: sqlite3.Connection, email: str | None) -> sqlite3.Row:
             (
                 "usr_playback_demo",
                 "gsub_playback_demo",
-                "playback-demo@sentineledge.local",
+                "playback-demo@erlang.local",
                 1,
                 "Playback Demo",
                 "user",

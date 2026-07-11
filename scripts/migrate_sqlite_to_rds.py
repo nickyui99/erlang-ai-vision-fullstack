@@ -2,7 +2,7 @@
 
 Runbook (PowerShell; DATABASE_URL may come from the KMS secret via .env):
 
-    cd SentinelEdge-Fullstack
+    cd erlang-ai-vision-fullstack
     alembic -c backend\\alembic.ini upgrade head
     python scripts\\migrate_sqlite_to_rds.py --dry-run
     python scripts\\migrate_sqlite_to_rds.py
@@ -226,7 +226,7 @@ async def run(source_path: Path, truncate: bool, dry_run: bool) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--source", type=Path, default=ROOT / "data" / "sentineledge_demo.db")
+    parser.add_argument("--source", type=Path, default=ROOT / "data" / "erlang_demo.db")
     parser.add_argument("--truncate", action="store_true", help="wipe non-empty target tables before copying")
     parser.add_argument("--dry-run", action="store_true", help="read, convert and precheck only; no writes")
     args = parser.parse_args()

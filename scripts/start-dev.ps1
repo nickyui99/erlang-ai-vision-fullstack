@@ -37,10 +37,10 @@ python -m uvicorn app.main:app --reload --host $BackendHost --port $BackendPort
 "@
 
 if ($FlutterDevice -eq "web-server") {
-    $FlutterCommand = "flutter run -d web-server --web-hostname $FlutterHost --web-port $FlutterPort --dart-define-from-file=$FirebaseConfig --dart-define=SENTINELEDGE_API_BASE_URL=$BackendUrl"
+    $FlutterCommand = "flutter run -d web-server --web-hostname $FlutterHost --web-port $FlutterPort --dart-define-from-file=$FirebaseConfig --dart-define=ERLANG_API_BASE_URL=$BackendUrl"
 }
 else {
-    $FlutterCommand = "flutter run -d $FlutterDevice --dart-define-from-file=$FirebaseConfig --dart-define=SENTINELEDGE_API_BASE_URL=$BackendUrl"
+    $FlutterCommand = "flutter run -d $FlutterDevice --dart-define-from-file=$FirebaseConfig --dart-define=ERLANG_API_BASE_URL=$BackendUrl"
 }
 
 $FrontendCommand = @"
@@ -49,7 +49,7 @@ Set-Location '$FrontendDir'
 $FlutterCommand
 "@
 
-Write-Host "Starting SentinelEdge backend at $BackendUrl"
+Write-Host "Starting Erlang AI Vision backend at $BackendUrl"
 Start-Process powershell.exe -ArgumentList @(
     "-NoExit",
     "-ExecutionPolicy",
@@ -60,7 +60,7 @@ Start-Process powershell.exe -ArgumentList @(
 
 Start-Sleep -Seconds 2
 
-Write-Host "Starting SentinelEdge Flutter frontend on $FlutterDevice"
+Write-Host "Starting Erlang AI Vision Flutter frontend on $FlutterDevice"
 Start-Process powershell.exe -ArgumentList @(
     "-NoExit",
     "-ExecutionPolicy",

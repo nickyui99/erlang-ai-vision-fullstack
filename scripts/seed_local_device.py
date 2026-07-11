@@ -6,7 +6,7 @@ device must belong to *your* user row for it to appear in the app. Flow:
     1. Start backend + frontend (scripts/start-dev.ps1) and LOG IN once with Google
        -- that creates your User row.
     2. Run this with your login email:
-         cd SentinelEdge-Fullstack
+         cd erlang-ai-vision-fullstack
          $env:PYTHONPATH = 'backend'
          python scripts/seed_local_device.py --email you@example.com
     3. Refresh the app -> "Local Test Cam" appears. Run the bridge with the printed

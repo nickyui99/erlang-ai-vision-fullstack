@@ -1,6 +1,6 @@
 ﻿# Alibaba Cloud Architecture
 
-SentinelEdge deploys the FastAPI backend on Alibaba Cloud ECI (region `ap-southeast-3`, Kuala Lumpur), stores the Flutter Web WASM build in OSS, and supports Flutter Mobile Android/iOS clients through the same public backend API. A Caddy sidecar in the same ECI container group serves the app and API on one origin behind a standing EIP; browsers never load the OSS bucket directly (see below). LaptopEdge keeps outbound connections to the backend for camera health, events, live frames, and command relay.
+Erlang AI Vision deploys the FastAPI backend on Alibaba Cloud ECI (region `ap-southeast-3`, Kuala Lumpur), stores the Flutter Web WASM build in OSS, and supports Flutter Mobile Android/iOS clients through the same public backend API. A Caddy sidecar in the same ECI container group serves the app and API on one origin behind a standing EIP; browsers never load the OSS bucket directly (see below). LaptopEdge keeps outbound connections to the backend for camera health, events, live frames, and command relay.
 
 ```mermaid
 flowchart LR
@@ -8,7 +8,7 @@ flowchart LR
     MobileUser[Mobile User] --> MobileApp[Flutter Mobile Android / iOS]
     MobileApp -->|HTTPS API + WSS/SSE| EIP
 
-    LaptopEdge[SentinelEdge LaptopEdge] -->|HTTPS REST + WSS| EIP
+    LaptopEdge[Erlang AI Vision LaptopEdge] -->|HTTPS REST + WSS| EIP
     ESP32[ESP32-S3 Camera] -->|LAN Wi-Fi WS or USB| LaptopEdge
 
     subgraph Group[ECI Container Group: erlang-backend]
@@ -24,9 +24,7 @@ flowchart LR
     ECI --> MediaOSS[(Alibaba OSS: clips/media)]
     ECI --> Qwen[DashScope / Qwen Cloud]
     ECI --> Firebase[Firebase Auth + FCM]
-    ECI --> KMS[Alibaba Cloud KMS: secrets and keys]
-    KMS -.-> DB
-    KMS -.-> MediaOSS
+    ECI --> GSM[Google Cloud Secret Manager: runtime secrets]
 ```
 
 ## Deployment Notes
@@ -38,18 +36,18 @@ flowchart LR
 - FastAPI runs from the existing `backend/Dockerfile` image on ECI, pushed via ACR Personal Edition (`crpi-9kvwsegbpo7ict75.ap-southeast-3.personal.cr.aliyuncs.com`) and deployed by `scripts/deployment/backend.ps1 -Deploy` into the `erlang-backend` container group on the RDS vSwitch. Public entry is the standing EIP `erlang-eic-static-ip` (47.250.155.149).
 - The Caddy sidecar routes `/api` and `/healthz` to FastAPI and reverse-proxies everything else to the OSS web bucket; it must pass WebSocket upgrades and long-lived SSE responses (the Caddyfile sets `flush_interval -1`).
 - ApsaraDB PostgreSQL replaces local SQLite in production.
-- `data/sentineledge_demo.db` is local-only and must not be deployed.
+- `data/erlang_demo.db` is local-only and must not be deployed.
 
 ## Database Migration (SQLite -> ApsaraDB RDS PostgreSQL)
 
 The backend reads `DATABASE_URL` (a `postgresql+asyncpg://` DSN). In production it
-comes from the Alibaba KMS secret — either a full `DATABASE_URL` key or discrete
+comes from Google Secret Manager — either a full `DATABASE_URL` key or discrete
 `RDS_HOST` / `RDS_PORT` / `RDS_DB` / `RDS_USER` / `RDS_PASSWORD` keys (user/password
 are URL-encoded automatically when the DSN is assembled). All datetimes are stored
 UTC; clients convert for display.
 
 One-time cutover from the local demo DB (machine IP must be in the RDS whitelist;
-`DATABASE_URL` resolves from the KMS secret via `.env`):
+`DATABASE_URL` resolves from Google Secret Manager via `.env`):
 
 ```powershell
 alembic -c backend\alembic.ini upgrade head
@@ -65,7 +63,7 @@ removes only `*_smoketest` rows. Schema upgrades on later deploys run the same
 the migrations, so `docker run --rm -e ... <image> alembic upgrade head` works
 before rolling the app revision.
 - Alibaba OSS stores event clips, thumbnails, and future uploaded recordings.
-- Alibaba Cloud KMS stores or protects production secrets such as database credentials, `SESSION_SECRET_KEY`, `QWEN_API_KEY`, Firebase service account material, and OSS encryption keys.
+- Google Cloud Secret Manager stores runtime secrets such as database credentials, `SESSION_SECRET_KEY`, `QWEN_API_KEY`, and Firebase Admin service-account material. The ECI runtime identity can read only `erlang-prod-secrets` and `erlang-db-secrets`; it cannot read database-superuser credentials.
 - DashScope/Qwen handles cloud verification when `VERIFICATION_ENABLED=true`.
 - Firebase remains the identity provider and FCM push provider.
-- Secrets and service account files must be injected from KMS-backed deployment secrets or environment variables, not committed to Git.
+- The Google Secret Manager reader JSON remains outside Git. Development reads that external file directly; `backend.ps1` Base64-encodes it for transport to production ECI, where the backend removes the encoded environment value after loading secrets.

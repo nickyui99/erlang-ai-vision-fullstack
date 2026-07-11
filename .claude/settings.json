@@ -4,7 +4,7 @@
       "mcp__codegraph__*",
       "PowerShell(codegraph status)",
       "PowerShell($env:Path += \";C:\\\\Users\\\\Kenneth Chua\\\\flutter\\\\bin\"; \\(Get-Command flutter -ErrorAction SilentlyContinue\\).Source; flutter --version 2>&1 | Select-Object -First 3)",
-      "PowerShell(Set-Location \"c:\\\\Users\\\\nicho\\\\OneDrive\\\\Documents\\\\Pointstar\\\\Teams_Migration\\\\SentinelEdge-Fullstack\\\\frontend\\\\sentineledge_app\"; flutter test --reporter expanded 2>&1 | Out-File -FilePath \"$env:TEMP\\\\se_test.log\" -Encoding utf8; Select-String -Path \"$env:TEMP\\\\se_test.log\" -Pattern \"Expected:|Actual:|Exception|EXCEPTION|error:|\\\\+\\\\d+ -\\\\d+\" | Select-Object -First 60 | ForEach-Object { $_.Line })",
+      "PowerShell(Set-Location \"c:\\\\Users\\\\nicho\\\\OneDrive\\\\Documents\\\\Pointstar\\\\Teams_Migration\\\\erlang-ai-vision-fullstack\\\\frontend\\\\sentineledge_app\"; flutter test --reporter expanded 2>&1 | Out-File -FilePath \"$env:TEMP\\\\se_test.log\" -Encoding utf8; Select-String -Path \"$env:TEMP\\\\se_test.log\" -Pattern \"Expected:|Actual:|Exception|EXCEPTION|error:|\\\\+\\\\d+ -\\\\d+\" | Select-Object -First 60 | ForEach-Object { $_.Line })",
       "Read(//c/Users/nicho/AppData/Local/Temp/**)",
       "Bash(cd \"/c/Users/nicho/AppData/Local/Temp\" && grep -n \"camera-first\\\\|PTZ preferences\\\\|EXCEPTION CAUGHT BY FLUTTER TEST\\\\|was thrown\\\\|GoException\\\\|GoError\\\\|no routes\\\\|Could not\\\\|_dependents\\\\|assertion\" se_test.log | head -50)"
     ]

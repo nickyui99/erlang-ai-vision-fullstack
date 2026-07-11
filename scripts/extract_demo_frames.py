@@ -7,7 +7,7 @@ camera.
 
 Needs opencv — run it with the LaptopEdge venv (it has cv2), e.g.:
 
-    cd SentinelEdge-Fullstack
+    cd erlang-ai-vision-fullstack
     ../SentinelEdge_LaptopEdge/.venv/Scripts/python.exe scripts/extract_demo_frames.py \
         --camera driveway --video path/to/driveway_clip.mp4
 

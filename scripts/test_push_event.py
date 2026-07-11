@@ -17,10 +17,10 @@ Prerequisites for an actual notification to arrive:
 
 Usage
 -----
-  cd SentinelEdge-Fullstack
+  cd erlang-ai-vision-fullstack
   $env:PYTHONPATH = 'backend'
 
-  # Local SQLite (data/sentineledge_demo.db from .env):
+  # Local SQLite (data/erlang_demo.db from .env):
   python scripts/test_push_event.py
 
   # Just show how many tokens the account has (no event created):
@@ -31,7 +31,7 @@ Usage
       --summary "Test: person at the front door" --repeat 3
 
   # Production RDS (an explicit DATABASE_URL always wins over .env):
-  $env:DATABASE_URL = 'postgresql+asyncpg://USER:PASSWORD@HOST:5432/sentineledge'
+  $env:DATABASE_URL = 'postgresql+asyncpg://USER:PASSWORD@HOST:5432/erlang'
   python scripts/test_push_event.py
 """
 
@@ -59,7 +59,7 @@ from sqlalchemy import select  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
 
 
-DEFAULT_EMAIL = "judge@sentineledge.ai"
+DEFAULT_EMAIL = "judge@erlang.ai"
 
 
 async def _resolve_user(session, email: str) -> User:

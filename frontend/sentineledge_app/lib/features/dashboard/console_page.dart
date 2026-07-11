@@ -54,7 +54,7 @@ class DeviceControlPage extends StatefulWidget {
 }
 
 class _DeviceControlPageState extends State<DeviceControlPage> {
-  SentinelEdgeApiClient? _apiClient;
+  ErlangVisionApiClient? _apiClient;
   EdgeDevice? _device;
   List<SurveillanceAgent> _agents = const [];
   Object? _error;

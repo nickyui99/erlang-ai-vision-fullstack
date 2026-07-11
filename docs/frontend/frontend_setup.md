@@ -1,6 +1,6 @@
 # Frontend Setup
 
-The SentinelEdge frontend is a Flutter app at `frontend/sentineledge_app`.
+The Erlang AI Vision frontend is a Flutter app at `frontend/sentineledge_app`.
 
 ## Current Scope
 
@@ -9,7 +9,7 @@ The app currently covers the authenticated smart-camera console flow:
 - Firebase Google sign-in and email/password sign-in in Flutter (email/password accounts must verify their email before the backend accepts the session).
 - Firebase ID token retrieval from the signed-in user.
 - Backend login through `POST /api/v1/auth/firebase/login`.
-- Display of the backend user profile returned by SentinelEdge.
+- Display of the backend user profile returned by Erlang AI Vision.
 - Logout through Firebase Auth and the backend session.
 - Camera-first dashboard with smart-camera style device cards.
 - Device registration and one-time edge-token display.
@@ -100,7 +100,7 @@ http://localhost:8000
 Override it when needed:
 
 ```powershell
-flutter run -d web-server --web-port 8080 --dart-define-from-file=config/firebase.json --dart-define=SENTINELEDGE_API_BASE_URL=http://localhost:8000
+flutter run -d web-server --web-port 8080 --dart-define-from-file=config/firebase.json --dart-define=ERLANG_API_BASE_URL=http://localhost:8000
 ```
 
 ## Platform Backend URLs
@@ -113,7 +113,7 @@ Default backend URLs in the Flutter app:
 | Android emulator | `http://10.0.2.2:8000` |
 | iOS simulator | `http://localhost:8000` |
 
-Web release builds default to the page origin (same host as the served app) instead of `localhost:8000`. An explicit `--dart-define=SENTINELEDGE_API_BASE_URL` always overrides these defaults.
+Web release builds default to the page origin (same host as the served app) instead of `localhost:8000`. An explicit `--dart-define=ERLANG_API_BASE_URL` always overrides these defaults.
 
 ## Auth Request
 
@@ -124,7 +124,7 @@ POST /api/v1/auth/firebase/login
 Authorization: Bearer <firebase_id_token>
 ```
 
-The backend verifies the token with Firebase Admin SDK, creates or updates the local user, and sets the SentinelEdge session cookie.
+The backend verifies the token with Firebase Admin SDK, creates or updates the local user, and sets the Erlang AI Vision session cookie.
 
 ## Validation
 

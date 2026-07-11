@@ -1,6 +1,6 @@
 # Backend Setup Guide
 
-This guide covers the local backend setup for SentinelEdge.
+This guide covers the local backend setup for Erlang AI Vision.
 
 ## Project Paths
 
@@ -12,7 +12,7 @@ This guide covers the local backend setup for SentinelEdge.
 | `scripts/demo_sqlite_schema.sql` | Demo SQLite schema. |
 | `scripts/generate_demo_sqlite.py` | Recreates the demo SQLite database with seed data. |
 | `scripts/inspect_demo_sqlite.py` | Prints demo database tables and row counts. |
-| `data/sentineledge_demo.db` | Generated demo SQLite database. |
+| `data/erlang_demo.db` | Generated demo SQLite database. |
 
 ## Local Database
 
@@ -21,7 +21,7 @@ Initial backend development uses SQLite.
 Recommended local database URL:
 
 ```env
-DATABASE_URL=sqlite+aiosqlite:///./data/sentineledge_demo.db
+DATABASE_URL=sqlite+aiosqlite:///./data/erlang_demo.db
 ```
 
 Regenerate the demo database:
@@ -55,16 +55,16 @@ Minimum local `.env` values:
 
 ```env
 APP_ENV=development
-APP_NAME=SentinelEdge Backend
+APP_NAME=Erlang AI Vision Backend
 API_PREFIX=/api/v1
 
-DATABASE_URL=sqlite+aiosqlite:///./data/sentineledge_demo.db
+DATABASE_URL=sqlite+aiosqlite:///./data/erlang_demo.db
 
 FIREBASE_PROJECT_ID=change-me
 GOOGLE_APPLICATION_CREDENTIALS=C:\path\to\firebase-service-account.json
 
 SESSION_SECRET_KEY=change-me
-SESSION_COOKIE_NAME=sentineledge_session
+SESSION_COOKIE_NAME=erlang_session
 SESSION_EXPIRE_MINUTES=1440
 
 SIGNED_URL_TTL_SECONDS=900
@@ -106,7 +106,7 @@ Firebase Google sign-in -> user.getIdToken() -> POST /api/v1/auth/firebase/login
 Backend flow:
 
 ```text
-verify Firebase ID token -> upsert local users row -> issue SentinelEdge session cookie
+verify Firebase ID token -> upsert local users row -> issue Erlang AI Vision session cookie
 ```
 
 ## SQLite Rules
@@ -136,7 +136,7 @@ alembic -c backend\alembic.ini upgrade head --sql
 Apply migrations to a throwaway local database:
 
 ```powershell
-$env:DATABASE_URL="sqlite+aiosqlite:///C:/tmp/sentineledge_m2_test.db"
+$env:DATABASE_URL="sqlite+aiosqlite:///C:/tmp/erlang_m2_test.db"
 alembic -c backend\alembic.ini upgrade head
 alembic -c backend\alembic.ini current
 ```
@@ -147,7 +147,7 @@ Expected current revision:
 20260707_0008
 ```
 
-Avoid running migration experiments against `data/sentineledge_demo.db`; keep that file as the seeded demo database.
+Avoid running migration experiments against `data/erlang_demo.db`; keep that file as the seeded demo database.
 
 ## Related Docs
 

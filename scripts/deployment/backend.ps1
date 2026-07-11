@@ -177,6 +177,46 @@ for line in (repo_root / ".env").read_text().splitlines():
     if line and not line.startswith("#") and "=" in line:
         k, _, v = line.partition("=")
         os.environ.setdefault(k.strip(), v.strip())
+
+# The reader key stays outside the repo. Only its encoded bytes are sent to the
+# backend container; Base64 prevents JSON/newline corruption but is not encryption.
+project_id = os.environ.get("GOOGLE_SECRET_MANAGER_PROJECT", "").strip()
+expected_secret_names = ("erlang-prod-secrets", "erlang-db-secrets")
+secret_names = tuple(
+    name.strip()
+    for name in os.environ.get("GOOGLE_SECRET_MANAGER_SECRETS", "").split(",")
+    if name.strip()
+)
+if not project_id:
+    sys.exit("GOOGLE_SECRET_MANAGER_PROJECT is required in .env for deployment")
+if secret_names != expected_secret_names:
+    sys.exit(
+        "GOOGLE_SECRET_MANAGER_SECRETS must be exactly "
+        + ",".join(expected_secret_names)
+    )
+
+credential_path_value = os.environ.get(
+    "GOOGLE_SECRET_MANAGER_CREDENTIALS_FILE", ""
+).strip()
+if not credential_path_value:
+    sys.exit("GOOGLE_SECRET_MANAGER_CREDENTIALS_FILE is required in .env")
+credential_path = Path(credential_path_value).expanduser()
+if not credential_path.is_absolute():
+    credential_path = repo_root / credential_path
+if not credential_path.is_file():
+    sys.exit(f"Google Secret Manager reader key was not found: {credential_path}")
+credential_bytes = credential_path.read_bytes()
+try:
+    credential_document = json.loads(credential_bytes.decode("utf-8"))
+except (UnicodeDecodeError, json.JSONDecodeError):
+    sys.exit("Google Secret Manager reader key must be a valid UTF-8 JSON file")
+required_credential_fields = {"type", "client_email", "private_key", "token_uri"}
+if not isinstance(credential_document, dict) or not required_credential_fields.issubset(
+    credential_document
+):
+    sys.exit("Google Secret Manager reader key is missing required service-account fields")
+reader_credential_b64 = base64.b64encode(credential_bytes).decode("ascii")
+
 AK = os.environ["ALIBABA_CLOUD_ACCESS_KEY_ID"]
 SK = os.environ["ALIBABA_CLOUD_ACCESS_KEY_SECRET"]
 
@@ -215,7 +255,7 @@ except Exception as exc:
         raise
     roa("CreateRepo", "PUT", "/repos", {"Repo": {
         "RepoNamespace": acr_namespace, "RepoName": image_name,
-        "RepoType": "PRIVATE", "Summary": "SentinelEdge FastAPI backend"}})
+        "RepoType": "PRIVATE", "Summary": "Erlang AI Vision FastAPI backend"}})
     print(f"created ACR repo {acr_namespace}/{image_name} (private)", file=sys.stderr)
 
 token_data = roa("GetAuthorizationToken", "GET", "/tokens")["body"]["data"]
@@ -260,7 +300,7 @@ if sgs:
 else:
     sg_id = ecs.create_security_group(em.CreateSecurityGroupRequest(
         region_id=region, vpc_id=vpc_id, security_group_name=sg_name,
-        description="SentinelEdge backend ECI: HTTP in")).body.security_group_id
+        description="Erlang AI Vision backend ECI: HTTP in")).body.security_group_id
     for port in ("80/80", "443/443"):
         ecs.authorize_security_group(em.AuthorizeSecurityGroupRequest(
             region_id=region, security_group_id=sg_id, ip_protocol="tcp",
@@ -321,10 +361,18 @@ if existing:
                 region_id=region, container_group_name=group_name)).body.container_groups:
             break
 
-backend_env = [{"Key": k, "Value": os.environ.get(k, "")} for k in (
-    "ALICLOUD_KMS_SECRET_NAME", "ALICLOUD_REGION_ID",
-    "ALIBABA_CLOUD_ACCESS_KEY_ID", "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
-)] + [{"Key": "APP_ENV", "Value": "production"}]
+backend_env = [
+    {"Key": "APP_ENV", "Value": "production"},
+    {"Key": "GOOGLE_SECRET_MANAGER_PROJECT", "Value": project_id},
+    {
+        "Key": "GOOGLE_SECRET_MANAGER_SECRETS",
+        "Value": ",".join(expected_secret_names),
+    },
+    {
+        "Key": "GOOGLE_SECRET_MANAGER_CREDENTIALS_B64",
+        "Value": reader_credential_b64,
+    },
+]
 
 eip_id = os.environ.get("SE_EIP_ID", "")
 eip_cfg = {"EipInstanceId": eip_id} if eip_id else {"AutoCreateEip": True, "EipBandwidth": 5}

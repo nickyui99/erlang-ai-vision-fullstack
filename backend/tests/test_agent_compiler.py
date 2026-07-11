@@ -17,7 +17,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 os.environ["APP_ENV"] = "test"
-os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{(Path(tempfile.gettempdir()) / 'sentineledge_compiler_pytest.db').as_posix()}"
+os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{(Path(tempfile.gettempdir()) / 'erlang_compiler_pytest.db').as_posix()}"
 
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
@@ -142,7 +142,7 @@ async def _reset_db() -> None:
 
 def _client() -> TestClient:
     client = TestClient(app)
-    client.cookies.set("sentineledge_session", create_session_token("usr_c"))
+    client.cookies.set("erlang_session", create_session_token("usr_c"))
     return client
 
 

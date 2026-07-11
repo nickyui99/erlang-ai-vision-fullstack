@@ -1,4 +1,4 @@
-# SentinelEdge Backend API Endpoints
+# Erlang AI Vision Backend API Endpoints
 
 Base API prefix: `/api/v1`
 

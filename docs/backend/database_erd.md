@@ -1,4 +1,4 @@
-# SentinelEdge Database ERD
+# Erlang AI Vision Database ERD
 
 This schema is implemented by SQLAlchemy models in `backend/app/models/`, starting from the core Alembic revision `20260620_0001_create_core_tables.py` and extended by later revisions (e.g. `20260623_0004_device_tilt.py` adds `devices.current_tilt`, `20260623_0005_push_tokens.py` adds the `push_tokens` table).
 
@@ -213,7 +213,7 @@ erDiagram
 
 | Field | Description |
 |---|---|
-| `user_id` | Internal primary key for the SentinelEdge user. |
+| `user_id` | Internal primary key for the Erlang AI Vision user. |
 | `google_sub` | Stable unique Firebase `uid`. |
 | `email` | User email from Firebase Auth. Useful for display and account lookup, but not the primary identity key. |
 | `email_verified` | Whether Firebase reports the email as verified. |

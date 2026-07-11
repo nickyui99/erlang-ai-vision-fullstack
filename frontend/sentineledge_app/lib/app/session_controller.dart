@@ -19,14 +19,14 @@ enum SessionStatus { restoring, signedIn, signedOut }
 /// which is what lets routing (not a widget) gate the console.
 class SessionController extends ChangeNotifier {
   SessionController({
-    SentinelEdgeApiClient? apiClient,
+    ErlangVisionApiClient? apiClient,
     BackendAuthClient? authClient,
     PushNotificationService? pushNotifications,
-  }) : apiClient = apiClient ?? SentinelEdgeApiClient(),
+  }) : apiClient = apiClient ?? ErlangVisionApiClient(),
        _authClient = authClient ?? BackendAuthClient(),
        _pushNotifications = pushNotifications ?? PushNotificationService();
 
-  final SentinelEdgeApiClient apiClient;
+  final ErlangVisionApiClient apiClient;
   final BackendAuthClient _authClient;
   final PushNotificationService _pushNotifications;
 

@@ -5,7 +5,7 @@ built yet, so armed agents never produce activity on their own. This script post
 events to ``/api/v1/edge/events`` exactly like that tier would, so you can watch
 the full loop: event -> AI verification -> alert -> frontend activity + AI trail.
 
-    cd SentinelEdge-Fullstack
+    cd erlang-ai-vision-fullstack
     $env:PYTHONPATH = 'backend'
     python scripts/simulate_event.py                          # one high-severity event
     python scripts/simulate_event.py --count 3 --interval 4

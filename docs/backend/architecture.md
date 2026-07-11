@@ -1,6 +1,6 @@
-# SentinelEdge Backend Architecture
+# Erlang AI Vision Backend Architecture
 
-This document describes the current backend architecture in `SentinelEdge-Fullstack` and how it connects to the sibling edge repositories.
+This document describes the current backend architecture in `erlang-ai-vision-fullstack` and how it connects to the sibling edge repositories.
 
 ## Scope
 
@@ -52,7 +52,7 @@ sequenceDiagram
     App->>Backend: POST /api/v1/auth/firebase/login
     Backend->>Firebase: verify ID token
     Backend->>DB: create/update user
-    Backend-->>App: SentinelEdge session cookie
+    Backend-->>App: Erlang AI Vision session cookie
     App->>Backend: GET /api/v1/users/me
 ```
 

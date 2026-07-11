@@ -26,7 +26,7 @@ class DeviceControlView extends StatefulWidget {
   });
 
   final EdgeDevice device;
-  final SentinelEdgeApiClient apiClient;
+  final ErlangVisionApiClient apiClient;
 
   /// All agent definitions (used to assign/unassign protection to this device).
   final List<SurveillanceAgent> agents;

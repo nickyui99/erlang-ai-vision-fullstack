@@ -22,20 +22,20 @@ Idempotent: safe to run repeatedly. All rows use fixed IDs and are merged.
 
 Usage
 -----
-  cd SentinelEdge-Fullstack
+  cd erlang-ai-vision-fullstack
   $env:PYTHONPATH = 'backend'
 
-  # Local SQLite (data/sentineledge_demo.db is picked up from .env):
+  # Local SQLite (data/erlang_demo.db is picked up from .env):
   python scripts/create_judge_account.py
 
   # Production RDS (point DATABASE_URL at RDS; an explicit env var always wins
   # over the .env value). Grab the RDS URL from the KMS secret, or run this
   # inside the deployed backend container where settings already resolve to RDS:
-  $env:DATABASE_URL = 'postgresql+asyncpg://USER:PASSWORD@HOST:5432/sentineledge'
+  $env:DATABASE_URL = 'postgresql+asyncpg://USER:PASSWORD@HOST:5432/erlang'
   python scripts/create_judge_account.py
 
   # Override the credentials handed to judges:
-  python scripts/create_judge_account.py --email judge@sentineledge.ai --password "Judge2026!" --name "Hackathon Judge"
+  python scripts/create_judge_account.py --email judge@erlang.ai --password "Judge2026!" --name "Hackathon Judge"
 
 Firebase Admin credentials + the target database both come from the same config
 loader the app uses (app.core.config -> KMS), so no extra wiring is needed.
@@ -70,8 +70,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
 
 
 # --- Defaults handed to judges ------------------------------------------------
-DEFAULT_EMAIL = "judge@sentineledge.ai"
-DEFAULT_PASSWORD = "SentinelEdge2026!"
+DEFAULT_EMAIL = "judge@erlang.ai"
+DEFAULT_PASSWORD = "ErlangVision2026!"
 DEFAULT_NAME = "Hackathon Judge"
 DEFAULT_API_BASE = "http://localhost:8000"
 

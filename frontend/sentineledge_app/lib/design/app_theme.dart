@@ -5,7 +5,7 @@ import 'app_spacing.dart';
 import 'app_typography.dart';
 
 /// Assembles [ThemeData] from the design tokens. Replaces the old
-/// `LegacySentinelEdgeTheme`. Light is the primary target; dark is provided so
+/// `LegacyErlangVisionTheme`. Light is the primary target; dark is provided so
 /// `ThemeMode.system` keeps working.
 class AppTheme {
   AppTheme._();

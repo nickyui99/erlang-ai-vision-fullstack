@@ -16,7 +16,7 @@ import '../../shared/console_widgets.dart';
 class AddCameraWizard extends StatefulWidget {
   const AddCameraWizard({required this.apiClient, super.key});
 
-  final SentinelEdgeApiClient apiClient;
+  final ErlangVisionApiClient apiClient;
 
   @override
   State<AddCameraWizard> createState() => _AddCameraWizardState();

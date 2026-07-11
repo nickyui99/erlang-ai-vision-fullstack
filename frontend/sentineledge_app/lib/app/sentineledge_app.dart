@@ -21,16 +21,16 @@ abstract final class AppRoutes {
   static const consoleSettings = '/console/settings';
 }
 
-class SentinelEdgeApp extends StatefulWidget {
-  const SentinelEdgeApp({required this.session, super.key});
+class ErlangVisionApp extends StatefulWidget {
+  const ErlangVisionApp({required this.session, super.key});
 
   final SessionController session;
 
   @override
-  State<SentinelEdgeApp> createState() => _SentinelEdgeAppState();
+  State<ErlangVisionApp> createState() => _ErlangVisionAppState();
 }
 
-class _SentinelEdgeAppState extends State<SentinelEdgeApp> {
+class _ErlangVisionAppState extends State<ErlangVisionApp> {
   final ThemeModeController _themeModeController = ThemeModeController();
   late final GoRouter _router = AppRouter.build(widget.session);
 

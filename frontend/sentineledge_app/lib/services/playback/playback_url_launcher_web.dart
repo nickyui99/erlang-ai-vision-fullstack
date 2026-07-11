@@ -4,7 +4,7 @@ Future<bool> openPlaybackUrl(String url, {bool download = false}) async {
   if (download) {
     final anchor = web.HTMLAnchorElement()
       ..href = url
-      ..download = 'sentineledge-clip.mp4'
+      ..download = 'erlang-clip.mp4'
       ..target = '_blank'
       ..rel = 'noopener';
     web.document.body?.append(anchor);

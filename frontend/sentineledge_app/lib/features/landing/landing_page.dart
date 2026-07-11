@@ -11,7 +11,7 @@ const _agentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
 const _scenarioAsset = 'assets/landing/edge-ai-scenario.png';
 const _architectureFlowAsset =
     'assets/landing/erlang-ai-vision-architecture-flow.png';
-const _githubUrl = 'https://github.com/nickyui99/SentinelEdge-Fullstack';
+const _githubUrl = 'https://github.com/nickyui99/erlang-ai-vision-fullstack';
 const _iotRepoUrl = 'https://github.com/KennethChua1998/SentinelEdge_IOT';
 const _laptopEdgeRepoUrl = 'https://github.com/KennethChua1998/SentinelEdge_LaptopEdge';
 
@@ -1964,7 +1964,7 @@ class _SubmissionBadgePanel extends StatelessWidget {
           const _Eyebrow(label: 'Source code'),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'nickyui99/SentinelEdge-Fullstack',
+            'nickyui99/erlang-ai-vision-fullstack',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white),
           ),
           const SizedBox(height: AppSpacing.md),

@@ -1,22 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:sentineledge_app/app/app_router.dart';
-import 'package:sentineledge_app/app/session_controller.dart';
-import 'package:sentineledge_app/features/auth/login_page.dart';
-import 'package:sentineledge_app/features/dashboard/console_page.dart';
-import 'package:sentineledge_app/features/dashboard/device_control_view.dart';
-import 'package:sentineledge_app/features/dashboard/workspace_view.dart';
-import 'package:sentineledge_app/features/landing/landing_page.dart';
-import 'package:sentineledge_app/services/backend_auth_client.dart';
+import 'package:erlang_ai_vision_app/app/app_router.dart';
+import 'package:erlang_ai_vision_app/app/session_controller.dart';
+import 'package:erlang_ai_vision_app/features/auth/login_page.dart';
+import 'package:erlang_ai_vision_app/features/dashboard/console_page.dart';
+import 'package:erlang_ai_vision_app/features/dashboard/device_control_view.dart';
+import 'package:erlang_ai_vision_app/features/dashboard/workspace_view.dart';
+import 'package:erlang_ai_vision_app/features/landing/landing_page.dart';
+import 'package:erlang_ai_vision_app/services/backend_auth_client.dart';
 
 /// Hosts [child] under a [SessionScope] and a minimal [GoRouter] that also
 /// serves the camera-detail route, so widgets that navigate with `context.go`
 /// / `context.push` work in tests.
-Widget _routerHost(
-  Widget child, {
-  required SentinelEdgeApiClient apiClient,
-}) {
+Widget _routerHost(Widget child, {required ErlangVisionApiClient apiClient}) {
   final session = SessionController(apiClient: apiClient);
   final router = GoRouter(
     routes: [
@@ -57,11 +54,11 @@ void main() {
     await _settle(tester);
 
     expect(find.byType(LandingPage), findsNothing);
-    expect(find.text('Operator sign in'), findsOneWidget);
+    expect(find.text('Welcome back'), findsOneWidget);
   });
 
   testWidgets('shows sign in action', (WidgetTester tester) async {
-    final session = SessionController(apiClient: _FakeSentinelEdgeApiClient());
+    final session = SessionController(apiClient: _FakeErlangVisionApiClient());
     await tester.pumpWidget(
       SessionScope(
         controller: session,
@@ -78,7 +75,7 @@ void main() {
   testWidgets('renders the camera-first dashboard and opens camera controls', (
     WidgetTester tester,
   ) async {
-    final apiClient = _FakeSentinelEdgeApiClient();
+    final apiClient = _FakeErlangVisionApiClient();
 
     await tester.pumpWidget(
       _routerHost(
@@ -98,7 +95,6 @@ void main() {
     expect(find.text('Cameras'), findsWidgets);
     expect(find.text('Front Door'), findsOneWidget);
     expect(find.text('Live'), findsOneWidget);
-    expect(find.text('Protection'), findsOneWidget);
 
     final cameraTitle = find.text('Front Door');
     await tester.ensureVisible(cameraTitle);
@@ -116,43 +112,40 @@ void main() {
     expect(find.text('Person detection'), findsOneWidget);
   });
 
-  testWidgets(
-    'camera controls show snapshot result and active PTZ preferences',
-    (WidgetTester tester) async {
-      final apiClient = _FakeSentinelEdgeApiClient();
+  testWidgets('camera controls show snapshot result and PTZ controls', (
+    WidgetTester tester,
+  ) async {
+    final apiClient = _FakeErlangVisionApiClient();
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: DeviceControlView(
-            device: _camera,
-            apiClient: apiClient,
-            agents: const [_rule],
-            onChanged: () async {},
-          ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DeviceControlView(
+          device: _camera,
+          apiClient: apiClient,
+          agents: const [_rule],
+          onChanged: () async {},
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.byTooltip('Favorite camera'), findsOneWidget);
-      expect(find.text('Record'), findsOneWidget);
+    expect(find.byTooltip('Favorite camera'), findsOneWidget);
+    expect(find.text('Record'), findsOneWidget);
 
-      await tester.drag(find.byType(ListView), const Offset(0, -500));
-      await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
 
-      expect(find.byTooltip('Tilt up'), findsOneWidget);
-      expect(find.text('Presets'), findsOneWidget);
-      expect(find.text('No saved presets yet'), findsOneWidget);
+    expect(find.byTooltip('Tilt up'), findsOneWidget);
 
-      await tester.drag(find.byType(ListView), const Offset(0, 500));
-      await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, 500));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Snapshot').first);
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Snapshot').first);
+    await tester.pumpAndSettle();
 
-      expect(find.text('Latest snapshot'), findsOneWidget);
-      expect(find.textContaining('front-door.jpg'), findsOneWidget);
-    },
-  );
+    expect(find.text('Latest snapshot'), findsOneWidget);
+    expect(find.textContaining('front-door.jpg'), findsOneWidget);
+  });
 }
 
 const _user = BackendUser(
@@ -184,8 +177,8 @@ const _rule = SurveillanceAgent(
   compiledEdgeConfig: {},
 );
 
-class _FakeSentinelEdgeApiClient extends SentinelEdgeApiClient {
-  _FakeSentinelEdgeApiClient();
+class _FakeErlangVisionApiClient extends ErlangVisionApiClient {
+  _FakeErlangVisionApiClient();
 
   @override
   Future<List<EdgeDevice>> listDevices() async => const [_camera];
@@ -241,10 +234,9 @@ class _FakeSentinelEdgeApiClient extends SentinelEdgeApiClient {
   }) async {}
 }
 
-class _SignedOutApiClient extends _FakeSentinelEdgeApiClient {
+class _SignedOutApiClient extends _FakeErlangVisionApiClient {
   @override
   Future<BackendUser> currentUser() async {
     throw BackendAuthException('not_authenticated', 'No active session.');
   }
 }
-

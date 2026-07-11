@@ -53,11 +53,11 @@ if ($LASTEXITCODE -ne 0) {
 # --- Apply lifecycle rules --------------------------------------------------
 # oss2 handles request signing; PowerShell hands it the bucket/region/values.
 
-$env:SENTINELEDGE_OSS_BUCKET = $Bucket
-$env:SENTINELEDGE_OSS_REGION = $Region
-$env:SENTINELEDGE_EVENT_RETENTION_DAYS = $EventRetentionDays
-$env:SENTINELEDGE_RECORDING_RETENTION_DAYS = $RecordingRetentionDays
-$env:SENTINELEDGE_REPO_ROOT = $RepoRoot
+$env:ERLANG_OSS_BUCKET = $Bucket
+$env:ERLANG_OSS_REGION = $Region
+$env:ERLANG_EVENT_RETENTION_DAYS = $EventRetentionDays
+$env:ERLANG_RECORDING_RETENTION_DAYS = $RecordingRetentionDays
+$env:ERLANG_REPO_ROOT = $RepoRoot
 
 Write-Host "Applying lifecycle rules to OSS bucket $Bucket ($Region)..." -ForegroundColor Cyan
 @'
@@ -66,11 +66,11 @@ from pathlib import Path
 import oss2
 from oss2.models import BucketLifecycle, LifecycleExpiration, LifecycleRule
 
-repo_root = Path(os.environ["SENTINELEDGE_REPO_ROOT"])
-bucket_name = os.environ["SENTINELEDGE_OSS_BUCKET"]
-region = os.environ["SENTINELEDGE_OSS_REGION"]
-event_days = int(os.environ["SENTINELEDGE_EVENT_RETENTION_DAYS"])
-recording_days = int(os.environ["SENTINELEDGE_RECORDING_RETENTION_DAYS"])
+repo_root = Path(os.environ["ERLANG_REPO_ROOT"])
+bucket_name = os.environ["ERLANG_OSS_BUCKET"]
+region = os.environ["ERLANG_OSS_REGION"]
+event_days = int(os.environ["ERLANG_EVENT_RETENTION_DAYS"])
+recording_days = int(os.environ["ERLANG_RECORDING_RETENTION_DAYS"])
 
 env_file = repo_root / ".env"
 if env_file.exists():

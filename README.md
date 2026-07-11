@@ -94,7 +94,10 @@ Erlang AI Vision Flutter console
 pip install -r backend\requirements.txt
 Copy-Item .env.example .env
 
-# 2. Run backend + Flutter web together
+# 2. Initialize or upgrade the local SQLite schema
+python -m alembic -c backend\alembic.ini upgrade head
+
+# 3. Run backend + Flutter web together
 .\scripts\start-dev.ps1
 ```
 

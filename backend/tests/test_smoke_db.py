@@ -5,7 +5,7 @@ Default run (CI / local, temp SQLite):
     APP_ENV=test PYTHONPATH=backend pytest backend/tests/test_smoke_db.py -v
 
 Validating a live Alibaba RDS instance after scripts/migrate_sqlite_to_rds.py
-(run this file STANDALONE — in a full-suite run the first-imported module's
+(run this file STANDALONE â€” in a full-suite run the first-imported module's
 DATABASE_URL wins because the engine is created at import):
 
     APP_ENV=test PYTHONPATH=backend DATABASE_URL=postgresql+asyncpg://... \
@@ -37,7 +37,7 @@ if os.environ.get("SMOKE_USE_KMS") != "1":
     # unset so the KMS loader supplies the RDS DSN (live-instance validation).
     os.environ.setdefault(
         "DATABASE_URL",
-        f"sqlite+aiosqlite:///{(Path(tempfile.gettempdir()) / 'sentineledge_smoke_pytest.db').as_posix()}",
+        f"sqlite+aiosqlite:///{(Path(tempfile.gettempdir()) / 'erlang_smoke_pytest.db').as_posix()}",
     )
 
 import pytest  # noqa: E402
@@ -150,7 +150,7 @@ async def _seed_smoke_fixtures() -> None:
 
 def _client() -> TestClient:
     client = TestClient(app)
-    client.cookies.set("sentineledge_session", create_session_token("usr_smoketest"))
+    client.cookies.set("erlang_session", create_session_token("usr_smoketest"))
     return client
 
 
@@ -245,7 +245,7 @@ def test_json_column_round_trip() -> None:
     stage1 = {
         "detector": "person",
         "boxes": [{"x": 0.42, "y": 0.2, "w": 0.1, "h": 0.3}],
-        "labels": ["人", "person"],
+        "labels": ["äºº", "person"],
         "nested": {"deep": {"value": 1.5, "flag": True, "none": None}},
     }
     created = client.post(
