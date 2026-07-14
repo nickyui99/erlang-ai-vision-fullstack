@@ -69,11 +69,19 @@ class _DeviceControlPageState extends State<DeviceControlPage> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  /// Loads the device + agents. [silent] refreshes the data in place without
+  /// flipping [_loading] (which would swap in [_ConsoleLoading] and tear down
+  /// the whole [DeviceControlView]) -- used by `onChanged` so a pan/tilt or any
+  /// other in-view action reconciles state without the screen flashing to a
+  /// spinner and losing the live stream. The initial load and error-retry keep
+  /// the spinner (silent: false).
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     final apiClient = _apiClient!;
     try {
       final device = await apiClient.getDevice(widget.deviceId);
@@ -86,6 +94,9 @@ class _DeviceControlPageState extends State<DeviceControlPage> {
       });
     } catch (error) {
       if (!mounted) return;
+      // A background refresh failure must not tear down the current view; the
+      // action that triggered it already surfaces its own error to the user.
+      if (silent) return;
       setState(() {
         _error = error;
         _loading = false;
@@ -111,7 +122,7 @@ class _DeviceControlPageState extends State<DeviceControlPage> {
       device: device,
       apiClient: _apiClient!,
       agents: _agents,
-      onChanged: _load,
+      onChanged: () => _load(silent: true),
     );
   }
 }
