@@ -110,6 +110,14 @@ void main() {
   ) async {
     final apiClient = _FakeErlangVisionApiClient();
 
+    // The camera-first dashboard is a responsive grid; give it a desktop-sized
+    // surface so the camera cards lay out without overflowing the default
+    // 800x600 test viewport.
+    tester.view.physicalSize = const Size(1400, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       _routerHost(
         WorkspaceView(
@@ -142,6 +150,9 @@ void main() {
     await _settle(tester);
 
     expect(find.byTooltip('Pan left'), findsOneWidget);
+    // Protection now lives inside the camera detail view (the default secondary
+    // panel), not on the dashboard.
+    expect(find.text('Protection'), findsWidgets);
     expect(find.text('Person detection'), findsOneWidget);
   });
 
