@@ -40,6 +40,39 @@ Future<void> _settle(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('landing investigation stages show approved technology visuals', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LandingPage(
+          onLaunchDemo: () {},
+          onLogin: () {},
+          onViewArchitecture: () {},
+          onViewQwen: () {},
+          onViewGithub: () {},
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(
+      find.byKey(const ValueKey('stage-visual-edge-hardware')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('stage-visual-local-yolo')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('stage-visual-cloud-alibaba')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('stage-visual-cloud-qwen')),
+      findsOneWidget,
+    );
+  });
   testWidgets('native root route opens login instead of landing page', (
     WidgetTester tester,
   ) async {
