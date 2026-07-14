@@ -445,7 +445,81 @@ class _HeroCopy extends StatelessWidget {
             },
           ),
         ),
+        const SizedBox(height: AppSpacing.lg),
+        const _Reveal(
+          delay: Duration(milliseconds: 380),
+          child: Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _PlatformAvailabilityChip(
+                icon: Icons.android,
+                platform: 'Android',
+                status: 'Available',
+                tone: AppColors.success,
+              ),
+              _PlatformAvailabilityChip(
+                icon: Icons.language,
+                platform: 'Web',
+                status: 'Available',
+                tone: AppColors.success,
+              ),
+              _PlatformAvailabilityChip(
+                icon: Icons.apple,
+                platform: 'iOS',
+                status: 'Coming soon',
+                tone: AppColors.neutral400,
+              ),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+}
+
+class _PlatformAvailabilityChip extends StatelessWidget {
+  const _PlatformAvailabilityChip({
+    required this.icon,
+    required this.platform,
+    required this.status,
+    required this.tone,
+  });
+
+  final IconData icon;
+  final String platform;
+  final String status;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelStyle = Theme.of(context).textTheme.labelMedium;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 17, color: tone),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            platform,
+            style: labelStyle?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(status, style: labelStyle?.copyWith(color: tone)),
+        ],
+      ),
     );
   }
 }
