@@ -85,6 +85,7 @@ flutter:
     - assets/brand/erlang-ai-agent-icon.png
     - assets/landing/edge-ai-scenario.png
     - assets/landing/frontdoor-cctv.gif
+    - assets/landing/laptop-frame.png
     - assets/landing/erlang-ai-vision-architecture-flow.png
 
   # An image asset can refer to one or more resolution-specific "variants", see

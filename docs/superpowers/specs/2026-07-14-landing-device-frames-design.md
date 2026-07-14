@@ -1,47 +1,32 @@
-# Landing Device Frames Design
+# Landing Laptop Frame Design
 
 **Date:** 2026-07-14  
-**Status:** Approved visual direction
+**Status:** Approved revised direction
 
 ## Goal
 
-Shorten the first landing section and present the product as a responsive desktop-and-mobile system without weakening the judge-facing EdgeAgent story.
+Keep the original single-console hero composition, shorten it by removing the static metric row, and present the console inside a polished laptop frame.
 
-## Approved composition
+## Final composition
 
-- Remove the full static metric strip: Online cameras, Armed agents, and Qwen verdicts.
-- Place the existing desktop console preview inside a realistic Flutter laptop frame.
-- Add a narrower mobile product preview inside a Flutter iPhone frame.
-- Overlap the iPhone over the laptop's lower-right edge on wide layouts.
-- Keep the laptop visually dominant because it explains camera perception, protection-agent configuration, and Qwen audit activity.
-- Use the iPhone to show the mobile monitoring/control experience rather than duplicating all desktop content.
+- Keep one desktop console preview; do not add a phone preview.
+- Remove Online cameras, Armed agents, and Qwen verdicts from the hero.
+- Preserve the live camera, Protection agent, audit activity, and camera controls.
+- Use the generated transparent laptop shell at `assets/landing/laptop-frame.png`.
+- Render the live Flutter console beneath the transparent screen opening.
+- Keep navigation and hero actions unchanged.
+
+## Asset requirements
+
+The laptop is a front-facing dark graphite product render with no logo, text, watermark, baked-in UI, shadow, or background. Both the exterior and screen were generated on chroma key and converted to alpha so the asset functions as an overlay.
 
 ## Responsive behavior
 
-- Wide desktop: laptop and overlapping iPhone form one compact hero illustration.
-- Medium width: reduce overlap and scale both devices without clipping.
-- Narrow/mobile: stack the laptop above the iPhone, center both, and preserve readable controls.
-- The first landing section must not gain horizontal scrolling.
-
-## Content hierarchy
-
-1. Hero headline and primary actions.
-2. Laptop live-camera console.
-3. iPhone mobile status/control preview.
-4. Protection-agent and audit details within the device presentation.
-
-The removed metric values must not be relocated elsewhere in the hero.
-
-## Implementation boundaries
-
-- Reuse existing Flutter assets, colors, spacing, and animation.
-- Build frames with Flutter layout and decoration primitives; add no image-frame dependency.
-- Keep navigation and button behavior unchanged.
-- Limit changes to the landing preview and directly related widget tests.
+Scale the laptop and live console together as one 3:2 composition. The landing page must not introduce horizontal overflow. The console remains readable through a fitted fixed design surface.
 
 ## Verification
 
-- Run Flutter formatting, static analysis, and widget tests.
-- Check wide, medium, and narrow constraints for overflow.
-- Confirm metric labels no longer render.
-- Confirm laptop and iPhone frames remain visible and camera/agent/audit content is retained.
+- Format and statically analyze the modified Dart file.
+- Confirm the three metric labels and all phone-frame widgets are absent.
+- Confirm the generated image is registered in `pubspec.yaml`.
+- Review the live web build at desktop and mobile widths.

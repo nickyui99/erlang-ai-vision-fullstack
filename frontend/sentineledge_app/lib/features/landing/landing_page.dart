@@ -455,119 +455,65 @@ class _ConsolePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final stackVertically = constraints.maxWidth < 520;
-        if (stackVertically) {
-          return Column(
+    return AspectRatio(
+      aspectRatio: 1.5,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final height = constraints.maxHeight;
+          return Stack(
             children: [
-              const _LaptopFrame(child: _CompactLaptopPreview()),
-              const SizedBox(height: AppSpacing.xl),
-              const Center(child: SizedBox(width: 220, child: _PhoneFrame())),
+              Positioned(
+                left: width * 0.172,
+                top: height * 0.102,
+                width: width * 0.656,
+                height: height * 0.611,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: const FittedBox(
+                    fit: BoxFit.fill,
+                    child: SizedBox(
+                      width: 820,
+                      height: 620,
+                      child: _DesktopConsoleSurface(),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Image.asset(
+                    'assets/landing/laptop-frame.png',
+                    fit: BoxFit.fill,
+                    filterQuality: FilterQuality.high,
+                  ),
+                ),
+              ),
             ],
           );
-        }
-
-        return AspectRatio(
-          aspectRatio: 1.28,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned(
-                left: 0,
-                bottom: 10,
-                width: constraints.maxWidth * 0.84,
-                child: const _LaptopFrame(child: _DesktopPreviewContent()),
-              ),
-              Positioned(
-                right: 0,
-                bottom: 0,
-                width: constraints.maxWidth * 0.22,
-                child: const _PhoneFrame(),
-              ),
-            ],
-          ),
-        );
-      },
+        },
+      ),
     );
   }
 }
 
-class _LaptopFrame extends StatelessWidget {
-  const _LaptopFrame({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      key: const ValueKey('landing-laptop-frame'),
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AspectRatio(
-          aspectRatio: 1.42,
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF252A33),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFF4A515D)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.36),
-                  blurRadius: 34,
-                  offset: const Offset(0, 20),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: child,
-            ),
-          ),
-        ),
-        Container(
-          height: 12,
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFFD5D8DE), Color(0xFF8C939F)],
-            ),
-            borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
-          ),
-          child: Center(
-            child: Container(
-              width: 72,
-              height: 3,
-              decoration: BoxDecoration(
-                color: const Color(0xFF6F7681),
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DesktopPreviewContent extends StatelessWidget {
-  const _DesktopPreviewContent();
+class _DesktopConsoleSurface extends StatelessWidget {
+  const _DesktopConsoleSurface();
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Container(
-          width: 72,
+          width: 92,
           color: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
           child: const _PreviewRail(),
         ),
         Expanded(
           child: Container(
             color: AppColors.lightBackground,
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -596,187 +542,6 @@ class _DesktopPreviewContent extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _CompactLaptopPreview extends StatelessWidget {
-  const _CompactLaptopPreview();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.lightBackground,
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _PreviewHeader(),
-          SizedBox(height: AppSpacing.sm),
-          Expanded(child: _CameraPreviewCard()),
-        ],
-      ),
-    );
-  }
-}
-
-class _PhoneFrame extends StatelessWidget {
-  const _PhoneFrame();
-
-  @override
-  Widget build(BuildContext context) {
-    return AspectRatio(
-      key: const ValueKey('landing-phone-frame'),
-      aspectRatio: 0.49,
-      child: Container(
-        padding: const EdgeInsets.all(7),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1D222B),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: const Color(0xFF4A515D), width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.42),
-              blurRadius: 28,
-              offset: const Offset(0, 18),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(23),
-          child: Stack(
-            children: [
-              const Positioned.fill(child: _MobilePreviewContent()),
-              Align(
-                alignment: Alignment.topCenter,
-                child: Container(
-                  width: 58,
-                  height: 16,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF1D222B),
-                    borderRadius: BorderRadius.vertical(
-                      bottom: Radius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: Container(
-                  width: 54,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 7),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.72),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MobilePreviewContent extends StatelessWidget {
-  const _MobilePreviewContent();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.lightBackground,
-      padding: const EdgeInsets.fromLTRB(10, 24, 10, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Image.asset(_cameraIconAsset, width: 24, height: 24),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Front Door',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(color: AppColors.neutral900),
-                ),
-              ),
-              const _LightStatusPill(label: 'live', tone: AppColors.success),
-            ],
-          ),
-          const SizedBox(height: 9),
-          Expanded(
-            flex: 6,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
-                'assets/landing/frontdoor-cctv.gif',
-                fit: BoxFit.cover,
-                alignment: const Alignment(0.25, -0.2),
-                gaplessPlayback: true,
-              ),
-            ),
-          ),
-          const SizedBox(height: 9),
-          _LightPanel(
-            padding: const EdgeInsets.all(9),
-            child: Row(
-              children: [
-                Image.asset(_agentIconAsset, width: 24, height: 24),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Protection agent',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelMedium,
-                      ),
-                      Text(
-                        'Person detection',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 9),
-          const Row(
-            children: [
-              Expanded(
-                child: _ControlButton(
-                  icon: Icons.camera_alt_outlined,
-                  label: 'Snap',
-                ),
-              ),
-              SizedBox(width: 5),
-              Expanded(
-                child: _ControlButton(
-                  icon: Icons.keyboard_arrow_left,
-                  label: 'Pan',
-                ),
-              ),
-              SizedBox(width: 5),
-              Expanded(
-                child: _ControlButton(
-                  icon: Icons.keyboard_arrow_up,
-                  label: 'Tilt',
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }
@@ -2827,18 +2592,14 @@ class _ProofItem {
 }
 
 class _LightPanel extends StatelessWidget {
-  const _LightPanel({
-    required this.child,
-    this.padding = const EdgeInsets.all(AppSpacing.lg),
-  });
+  const _LightPanel({required this.child});
 
   final Widget child;
-  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: padding,
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: AppRadius.lgAll,
