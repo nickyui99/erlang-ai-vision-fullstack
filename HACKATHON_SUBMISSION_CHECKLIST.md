@@ -13,7 +13,7 @@
 - [ ] Make `SentinelEdge_LaptopEdge` public.
 - [ ] Make `SentinelEdge_IOT` public.
 - [ ] Add an open-source license to LaptopEdge.
-- [ ] Add an open-source license to IoT.
+- [x] Add an open-source license to IoT.
 - [ ] Configure a public domain for the Alibaba Cloud deployment.
 - [ ] Enable HTTPS with a valid TLS certificate.
 - [ ] Verify Firebase permits the production domain.
@@ -33,16 +33,16 @@
 - [ ] Add the public demo-video URL.
 - [ ] Add judge testing instructions.
 - [ ] Add links to all three repositories.
-- [ ] Add a prominent architecture diagram.
+- [x] Add a prominent architecture diagram.
 - [ ] Add a direct Alibaba Cloud deployment-proof link.
 - [ ] List the Qwen models used.
 - [ ] Explain why Qwen is essential to the project.
 - [ ] Document what was built after May 26, 2026.
 - [ ] Add team-member information.
-- [ ] Add a no-hardware demo walkthrough.
-- [ ] Add a full physical-device setup walkthrough.
+- [x] Add a no-hardware demo walkthrough.
+- [x] Add a full physical-device setup walkthrough.
 - [ ] Add expected results to every setup step.
-- [ ] Add troubleshooting guidance.
+- [x] Add troubleshooting guidance.
 - [ ] Configure the GitHub repository description.
 - [ ] Configure the GitHub homepage with the live-demo URL.
 - [ ] Add GitHub topics such as `qwen`, `edge-ai`, `iot`, `flutter`, `fastapi`, and `alibaba-cloud`.
@@ -68,9 +68,9 @@
 ## EdgeAgent judging criteria
 
 - [ ] Clearly illustrate the flow: sensor → edge inference → Qwen Cloud → decision → physical action.
-- [ ] Document which processing happens locally.
-- [ ] Document which data is sent to Qwen Cloud.
-- [ ] Explain how user privacy is protected.
+- [x] Document which processing happens locally.
+- [x] Document which data is sent to Qwen Cloud.
+- [x] Explain how user privacy is protected.
 - [ ] Measure edge-to-cloud event latency.
 - [ ] Measure Qwen verification latency.
 - [ ] Measure bandwidth reduction from local triage.
@@ -80,7 +80,7 @@
 - [ ] Demonstrate complete Qwen Cloud outage behavior.
 - [ ] Demonstrate event queueing and reconnection.
 - [ ] Demonstrate local operation without cloud access.
-- [ ] Document camera-actuation safeguards.
+- [x] Document camera-actuation safeguards.
 - [ ] Add human confirmation for risky physical actions, if applicable.
 - [ ] Compare the system with a cloud-only camera pipeline.
 
@@ -124,6 +124,14 @@
 - [ ] Add retry and exponential backoff for Qwen rate limits.
 - [ ] Add graceful handling for malformed Qwen responses.
 - [ ] Add graceful handling for unavailable OSS or RDS services.
+
+## IoT firmware verification
+
+- [x] Build the XIAO ESP32-S3 target: pio run -e xiao_s3.
+- [x] Build the USB-CDC target: pio run -e usb_stream.
+- [x] Build the Wokwi target: pio run -e wokwi.
+- [x] Reconcile IoT protocol, wiring, simulation, USB, and current-system documentation.
+- [ ] Complete final dual-servo hardware-in-loop validation.
 
 ## Tests and CI
 
