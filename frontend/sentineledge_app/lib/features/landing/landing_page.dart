@@ -457,8 +457,8 @@ class _ConsolePreview extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 680;
-        if (compact) {
+        final stackVertically = constraints.maxWidth < 520;
+        if (stackVertically) {
           return Column(
             children: [
               const _LaptopFrame(child: _CompactLaptopPreview()),
@@ -469,20 +469,20 @@ class _ConsolePreview extends StatelessWidget {
         }
 
         return AspectRatio(
-          aspectRatio: 1.05,
+          aspectRatio: 1.28,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              const Positioned(
+              Positioned(
                 left: 0,
-                top: 0,
-                right: 72,
-                child: _LaptopFrame(child: _DesktopPreviewContent()),
+                bottom: 10,
+                width: constraints.maxWidth * 0.84,
+                child: const _LaptopFrame(child: _DesktopPreviewContent()),
               ),
               Positioned(
                 right: 0,
                 bottom: 0,
-                width: constraints.maxWidth * 0.27,
+                width: constraints.maxWidth * 0.22,
                 child: const _PhoneFrame(),
               ),
             ],
