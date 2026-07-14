@@ -456,6 +456,46 @@ class _ConsolePreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AspectRatio(
+      aspectRatio: 1.38,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final height = constraints.maxHeight;
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: width * 0.06,
+                right: width * -0.08,
+                bottom: height * 0.04,
+                child: const _LaptopConsolePreview(),
+              ),
+              Positioned(
+                left: 0,
+                bottom: 0,
+                width: width * 0.27,
+                child: IgnorePointer(
+                  child: Image.asset(
+                    'assets/landing/mobile-agent-frame.png',
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _LaptopConsolePreview extends StatelessWidget {
+  const _LaptopConsolePreview();
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
       aspectRatio: 1.5,
       child: LayoutBuilder(
         builder: (context, constraints) {

@@ -1,22 +1,19 @@
-# Single Laptop Landing Preview Implementation Plan
+# Laptop and Mobile Landing Preview Implementation Plan
 
-**Goal:** Restore the original single-console landing preview, remove the static metric row, and frame it with a generated transparent laptop asset.
+**Goal:** Add the supplied Erlang AI Agent mobile screen beside the enlarged laptop while retaining the original live console and removing the metric row.
 
 ## Changes
 
-- Restore the pre-phone landing console composition.
-- Generate a front-facing chroma-key laptop product render using the built-in image generator.
-- Remove the chroma key locally to create `assets/landing/laptop-frame.png`.
-- Register the asset in `pubspec.yaml`.
-- Render the original desktop console behind the transparent screen aperture.
-- Remove the metric strip and its unused metric widget.
-- Remove all phone-frame and side-by-side responsive code.
+- Generate a graphite phone cutout from the user-supplied mobile screenshot using built-in imagegen.
+- Remove its chroma key into `assets/landing/mobile-agent-frame.png`.
+- Register the phone asset in `pubspec.yaml`.
+- Extract the existing laptop preview into a reusable nested widget.
+- Compose an enlarged laptop at the right and a bottom-aligned phone overlapping its left edge.
+- Keep the live laptop console and existing hero behavior unchanged.
 
 ## Verification
 
-- Run Dart formatting.
-- Run static analysis on `landing_page.dart`.
+- Run Dart formatting and static analysis.
 - Run `git diff --check`.
-- Launch the local Flutter web server for visual review.
 - Do not run Flutter tests per user request.
 - Do not push or merge before user approval.

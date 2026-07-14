@@ -1,32 +1,33 @@
-# Landing Laptop Frame Design
+# Landing Laptop and Mobile Frame Design
 
 **Date:** 2026-07-14  
 **Status:** Approved revised direction
 
 ## Goal
 
-Keep the original single-console hero composition, shorten it by removing the static metric row, and present the console inside a polished laptop frame.
+Keep the original live-console hero, remove the static metric row, and present the product across desktop and mobile with an enlarged laptop plus an overlapping phone.
 
 ## Final composition
 
-- Keep one desktop console preview; do not add a phone preview.
 - Remove Online cameras, Armed agents, and Qwen verdicts from the hero.
-- Preserve the live camera, Protection agent, audit activity, and camera controls.
-- Use the generated transparent laptop shell at `assets/landing/laptop-frame.png`.
-- Render the live Flutter console beneath the transparent screen opening.
+- Preserve the live camera, Protection agent, audit activity, and camera controls inside the laptop.
+- Use `assets/landing/laptop-frame.png` as the transparent laptop overlay.
+- Use `assets/landing/mobile-agent-frame.png` for the supplied Erlang AI Agent mobile screen.
+- Position the phone in front of the laptop's left edge and bottom-align the devices.
+- Let the laptop extend slightly wider than the original preview so its screen remains prominent.
 - Keep navigation and hero actions unchanged.
 
 ## Asset requirements
 
-The laptop is a front-facing dark graphite product render with no logo, text, watermark, baked-in UI, shadow, or background. Both the exterior and screen were generated on chroma key and converted to alpha so the asset functions as an overlay.
+Both device cutouts are built-in imagegen outputs produced on flat chroma key and converted to alpha. The mobile asset preserves the user-supplied agent screen inside a graphite phone shell. No device asset may include an exterior background or watermark.
 
 ## Responsive behavior
 
-Scale the laptop and live console together as one 3:2 composition. The landing page must not introduce horizontal overflow. The console remains readable through a fitted fixed design surface.
+Scale both devices as one composition. The laptop remains dominant; the phone uses roughly 27% of the composition width and overlaps only the laptop's left edge. The hero must not introduce horizontal overflow.
 
 ## Verification
 
 - Format and statically analyze the modified Dart file.
-- Confirm the three metric labels and all phone-frame widgets are absent.
-- Confirm the generated image is registered in `pubspec.yaml`.
-- Review the live web build at desktop and mobile widths.
+- Confirm the metric labels remain absent.
+- Confirm both generated assets are registered in `pubspec.yaml`.
+- Review the local web build at desktop and mobile widths.
