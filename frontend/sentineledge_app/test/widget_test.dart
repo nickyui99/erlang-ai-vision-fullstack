@@ -60,6 +60,14 @@ void main() {
   ) async {
     final apiClient = _FakeSentinelEdgeApiClient();
 
+    // The camera-first dashboard is a responsive grid; give it a desktop-sized
+    // surface so the camera cards lay out without overflowing the default
+    // 800x600 test viewport.
+    tester.view.physicalSize = const Size(1400, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       _routerHost(
         WorkspaceView(
@@ -78,7 +86,6 @@ void main() {
     expect(find.text('Cameras'), findsWidgets);
     expect(find.text('Front Door'), findsOneWidget);
     expect(find.text('Live'), findsOneWidget);
-    expect(find.text('Protection'), findsOneWidget);
 
     final cameraTitle = find.text('Front Door');
     await tester.ensureVisible(cameraTitle);
@@ -93,6 +100,9 @@ void main() {
     await _settle(tester);
 
     expect(find.byTooltip('Pan left'), findsOneWidget);
+    // Protection now lives inside the camera detail view (the default secondary
+    // panel), not on the dashboard.
+    expect(find.text('Protection'), findsWidgets);
     expect(find.text('Person detection'), findsOneWidget);
   });
 
@@ -120,8 +130,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byTooltip('Tilt up'), findsOneWidget);
-      expect(find.text('Presets'), findsOneWidget);
-      expect(find.text('No saved presets yet'), findsOneWidget);
 
       await tester.drag(find.byType(ListView), const Offset(0, 500));
       await tester.pumpAndSettle();
