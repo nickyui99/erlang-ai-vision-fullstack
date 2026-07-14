@@ -455,95 +455,327 @@ class _ConsolePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: AppColors.neutral50,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.22),
-            blurRadius: 60,
-            offset: const Offset(0, 28),
-          ),
-        ],
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 680;
-          if (compact) {
-            return SizedBox(
-              height: 840,
-              child: Container(
-                color: AppColors.lightBackground,
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: const [
-                    _PreviewHeader(),
-                    SizedBox(height: AppSpacing.md),
-                    _MetricStrip(),
-                    SizedBox(height: AppSpacing.md),
-                    Expanded(child: _CameraPreviewCard()),
-                    SizedBox(height: AppSpacing.md),
-                    _AgentPreviewCard(),
-                  ],
-                ),
-              ),
-            );
-          }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 680;
+        if (compact) {
+          return Column(
+            children: [
+              const _LaptopFrame(child: _CompactLaptopPreview()),
+              const SizedBox(height: AppSpacing.xl),
+              const Center(child: SizedBox(width: 220, child: _PhoneFrame())),
+            ],
+          );
+        }
 
-          return AspectRatio(
-            aspectRatio: 1.18,
-            child: Row(
-              children: [
-                Container(
-                  width: 92,
-                  color: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                  child: const _PreviewRail(),
+        return AspectRatio(
+          aspectRatio: 1.05,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Positioned(
+                left: 0,
+                top: 0,
+                right: 72,
+                child: _LaptopFrame(child: _DesktopPreviewContent()),
+              ),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                width: constraints.maxWidth * 0.27,
+                child: const _PhoneFrame(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LaptopFrame extends StatelessWidget {
+  const _LaptopFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: const ValueKey('landing-laptop-frame'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AspectRatio(
+          aspectRatio: 1.42,
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF252A33),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFF4A515D)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.36),
+                  blurRadius: 34,
+                  offset: const Offset(0, 20),
                 ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: child,
+            ),
+          ),
+        ),
+        Container(
+          height: 12,
+          margin: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFD5D8DE), Color(0xFF8C939F)],
+            ),
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+          ),
+          child: Center(
+            child: Container(
+              width: 72,
+              height: 3,
+              decoration: BoxDecoration(
+                color: const Color(0xFF6F7681),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DesktopPreviewContent extends StatelessWidget {
+  const _DesktopPreviewContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 72,
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          child: const _PreviewRail(),
+        ),
+        Expanded(
+          child: Container(
+            color: AppColors.lightBackground,
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _PreviewHeader(),
+                const SizedBox(height: AppSpacing.md),
                 Expanded(
-                  child: Container(
-                    color: AppColors.lightBackground,
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const _PreviewHeader(),
-                        const SizedBox(height: AppSpacing.md),
-                        const _MetricStrip(),
-                        const SizedBox(height: AppSpacing.md),
-                        Expanded(
-                          child: Row(
-                            children: [
-                              const Expanded(
-                                flex: 7,
-                                child: _CameraPreviewCard(),
-                              ),
-                              const SizedBox(width: AppSpacing.md),
-                              Expanded(
-                                flex: 5,
-                                child: Column(
-                                  children: const [
-                                    Expanded(child: _AgentPreviewCard()),
-                                    SizedBox(height: AppSpacing.md),
-                                    Expanded(child: _AuditPreviewCard()),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
+                  child: Row(
+                    children: [
+                      const Expanded(flex: 7, child: _CameraPreviewCard()),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        flex: 5,
+                        child: Column(
+                          children: const [
+                            Expanded(child: _AgentPreviewCard()),
+                            SizedBox(height: AppSpacing.md),
+                            Expanded(child: _AuditPreviewCard()),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          );
-        },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CompactLaptopPreview extends StatelessWidget {
+  const _CompactLaptopPreview();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.lightBackground,
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _PreviewHeader(),
+          SizedBox(height: AppSpacing.sm),
+          Expanded(child: _CameraPreviewCard()),
+        ],
+      ),
+    );
+  }
+}
+
+class _PhoneFrame extends StatelessWidget {
+  const _PhoneFrame();
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      key: const ValueKey('landing-phone-frame'),
+      aspectRatio: 0.49,
+      child: Container(
+        padding: const EdgeInsets.all(7),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1D222B),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: const Color(0xFF4A515D), width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.42),
+              blurRadius: 28,
+              offset: const Offset(0, 18),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(23),
+          child: Stack(
+            children: [
+              const Positioned.fill(child: _MobilePreviewContent()),
+              Align(
+                alignment: Alignment.topCenter,
+                child: Container(
+                  width: 58,
+                  height: 16,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1D222B),
+                    borderRadius: BorderRadius.vertical(
+                      bottom: Radius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Container(
+                  width: 54,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 7),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MobilePreviewContent extends StatelessWidget {
+  const _MobilePreviewContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.lightBackground,
+      padding: const EdgeInsets.fromLTRB(10, 24, 10, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Image.asset(_cameraIconAsset, width: 24, height: 24),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Front Door',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(color: AppColors.neutral900),
+                ),
+              ),
+              const _LightStatusPill(label: 'live', tone: AppColors.success),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Expanded(
+            flex: 6,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                'assets/landing/frontdoor-cctv.gif',
+                fit: BoxFit.cover,
+                alignment: const Alignment(0.25, -0.2),
+                gaplessPlayback: true,
+              ),
+            ),
+          ),
+          const SizedBox(height: 9),
+          _LightPanel(
+            padding: const EdgeInsets.all(9),
+            child: Row(
+              children: [
+                Image.asset(_agentIconAsset, width: 24, height: 24),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Protection agent',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                      Text(
+                        'Person detection',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 9),
+          const Row(
+            children: [
+              Expanded(
+                child: _ControlButton(
+                  icon: Icons.camera_alt_outlined,
+                  label: 'Snap',
+                ),
+              ),
+              SizedBox(width: 5),
+              Expanded(
+                child: _ControlButton(
+                  icon: Icons.keyboard_arrow_left,
+                  label: 'Pan',
+                ),
+              ),
+              SizedBox(width: 5),
+              Expanded(
+                child: _ControlButton(
+                  icon: Icons.keyboard_arrow_up,
+                  label: 'Tilt',
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -802,45 +1034,6 @@ class _RevealState extends State<_Reveal> with SingleTickerProviderStateMixin {
         return Opacity(opacity: _t.value, child: content);
       },
       child: widget.child,
-    );
-  }
-}
-
-class _MetricStrip extends StatelessWidget {
-  const _MetricStrip();
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final itemWidth = constraints.maxWidth < 520
-            ? constraints.maxWidth
-            : (constraints.maxWidth - AppSpacing.sm * 2) / 3;
-        return Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: const [
-            _MiniMetric(
-              icon: Icons.videocam_outlined,
-              label: 'Online cameras',
-              value: '3/3',
-              tone: AppColors.success,
-            ),
-            _MiniMetric(
-              icon: Icons.smart_toy_outlined,
-              label: 'Armed agents',
-              value: '6',
-              tone: AppColors.success,
-            ),
-            _MiniMetric(
-              icon: Icons.fact_check_outlined,
-              label: 'Qwen verdicts',
-              value: '12',
-              tone: AppColors.info,
-            ),
-          ].map((child) => SizedBox(width: itemWidth, child: child)).toList(),
-        );
-      },
     );
   }
 }
@@ -2024,12 +2217,30 @@ class _ProjectResourcesSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const checklist = [
-      ('Fullstack repository', 'Flutter web, FastAPI backend, cloud deployment scripts, and product documentation.'),
-      ('IoT firmware repository', 'ESP32 camera firmware, device behavior, and physical camera control live in SentinelEdge_IOT.'),
-      ('Laptop edge repository', 'The bridge that connects camera streams, local detection, and command relay lives in SentinelEdge_LaptopEdge.'),
-      ('Cloud deployment', 'Frontend OSS publishing and backend ECI deployment scripts are included in the repository.'),
-      ('Architecture diagram', 'Clear edge bridge, backend, database, Qwen Cloud, and Flutter console flow.'),
-      ('Product walkthrough', 'Camera pairing, live stream, agent rule, event, clip, Qwen verdict, and audit trail are the core flow.'),
+      (
+        'Fullstack repository',
+        'Flutter web, FastAPI backend, cloud deployment scripts, and product documentation.',
+      ),
+      (
+        'IoT firmware repository',
+        'ESP32 camera firmware, device behavior, and physical camera control live in SentinelEdge_IOT.',
+      ),
+      (
+        'Laptop edge repository',
+        'The bridge that connects camera streams, local detection, and command relay lives in SentinelEdge_LaptopEdge.',
+      ),
+      (
+        'Cloud deployment',
+        'Frontend OSS publishing and backend ECI deployment scripts are included in the repository.',
+      ),
+      (
+        'Architecture diagram',
+        'Clear edge bridge, backend, database, Qwen Cloud, and Flutter console flow.',
+      ),
+      (
+        'Product walkthrough',
+        'Camera pairing, live stream, agent rule, event, clip, Qwen verdict, and audit trail are the core flow.',
+      ),
     ];
 
     return _LightSection(
@@ -2048,21 +2259,21 @@ class _ProjectResourcesSection extends StatelessWidget {
                   children: [
                     _SubmissionBadgePanel(onLogin: null),
                     const SizedBox(height: AppSpacing.lg),
-                    for (final item in checklist) _ChecklistRow(title: item.$1, body: item.$2),
+                    for (final item in checklist)
+                      _ChecklistRow(title: item.$1, body: item.$2),
                   ],
                 )
               : Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _SubmissionBadgePanel(onLogin: null),
-                    ),
+                    Expanded(child: _SubmissionBadgePanel(onLogin: null)),
                     const SizedBox(width: AppSpacing.xl),
                     Expanded(
                       flex: 2,
                       child: Column(
                         children: [
-                          for (final item in checklist) _ChecklistRow(title: item.$1, body: item.$2),
+                          for (final item in checklist)
+                            _ChecklistRow(title: item.$1, body: item.$2),
                         ],
                       ),
                     ),
@@ -2132,12 +2343,16 @@ class _SubmissionBadgePanel extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
           Text(
             'nickyui99/erlang-ai-vision-fullstack',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(color: Colors.white),
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
             'Open the working repositories for the web app, backend, IoT camera firmware, laptop edge bridge, deployment scripts, and project documentation.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.neutral300),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.neutral300),
           ),
           const SizedBox(height: AppSpacing.xl),
           const _DarkPill(
@@ -2609,47 +2824,6 @@ class _ProofItem {
   final IconData icon;
   final String title;
   final String body;
-}
-
-class _MiniMetric extends StatelessWidget {
-  const _MiniMetric({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.tone,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color tone;
-
-  @override
-  Widget build(BuildContext context) {
-    return _LightPanel(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Row(
-        children: [
-          Icon(icon, color: tone, size: 20),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.neutral900,
-                  ),
-                ),
-                Text(label, style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _LightPanel extends StatelessWidget {
