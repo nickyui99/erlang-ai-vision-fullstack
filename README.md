@@ -16,6 +16,75 @@
 
 </div>
 
+## 🏆 Qwen Cloud Global Hackathon
+
+Submission for the **Qwen Cloud Global Hackathon — Track 5: EdgeAgent**.
+
+| | |
+|---|---|
+| **Live application** | [To Be Done] *(public domain + HTTPS in progress — this link will be updated)* |
+| **Demo video** | *coming before submission — will be linked here and on Devpost* |
+| **Repositories** | [erlang-ai-vision-fullstack](https://github.com/nickyui99/erlang-ai-vision-fullstack) (cloud + app, this repo) · [SentinelEdge_LaptopEdge](https://github.com/KennethChua1998/SentinelEdge_LaptopEdge) (edge bridge) · [SentinelEdge_IOT](https://github.com/KennethChua1998/SentinelEdge_IOT) (ESP32-S3 firmware) |
+| **Deployment** | Alibaba Cloud `ap-southeast-3` (Kuala Lumpur): ECI container (FastAPI + Caddy), OSS (web app + media), RDS PostgreSQL, ACR |
+| **Team** | Nicholas Ooi ([@nickyui99](https://github.com/nickyui99)) · Kenneth Chua ([@KennethChua1998](https://github.com/KennethChua1998)) · Fang Wei Lim · Ng Wei Kiat|
+
+### Qwen models used
+
+| Model | Where it runs | What it does |
+|---|---|---|
+| `qwen3.7-plus` *(image verification)* | Qwen Cloud (DashScope) | Stage-3 event verification (vision + tool calling) — per-event image work runs on the plus tier to keep costs down (falls back to `qwen3.7-plus-2026-05-26`) |
+| `qwen3.7-max` *(chat + text)* | Qwen Cloud (DashScope) | The agentic in-app assistant (Erlang AI Agent), NL-rule compiler, and conversational agent builder (falls back through `qwen3.7-max-2026-05-20` → `qwen3.7-max-preview` → `qwen3.7-max-2026-05-17` → `qwen3.7-max-2026-06-08`) |
+| `qwen3.5:0.8b` | **On the edge laptop** via Ollama | Stage-2 triage: judges every candidate keyframe against the user's rule, locally (also the final vision fallback when every cloud model is exhausted) |
+| `qwen3.5:4b` | **On the edge laptop** via Ollama | Degraded-mode authority: an agentic tool-calling loop (pan, re-snapshot, re-assess) when the cloud is unreachable |
+
+### Why Qwen is essential
+
+The whole architecture is built around the Qwen family spanning **from a 0.8B
+open-weight VLM on a CPU laptop to frontier cloud models** behind one prompt style:
+
+1. **Plain language is the product** — user rules become detector configs through
+   Qwen text models; there is no form-based rule editor.
+2. **The edge filter needs a local VLM** — `qwen3.5:0.8b` triages every candidate
+   frame on the laptop, which is what lets the system drop ~99% of frames before
+   any cloud call (bandwidth, cost, and privacy win).
+3. **Verification needs vision + tools** — `qwen3.7-plus` doesn't just look at a
+   keyframe; it can pan the camera, take a fresh snapshot, and check recent
+   events through audited tool calls before ruling.
+4. **Offline resilience needs the same brain smaller** — when the cloud is cut,
+   `qwen3.5:4b` runs the *same kind* of agentic verification loop locally.
+
+### Built during the hackathon period (after May 26, 2026)
+
+All three repositories were built from scratch during the hackathon window
+(first commit June 11, 2026): the FastAPI backend and Flutter console, the
+laptop edge pipeline (YOLO/YAMNet + Ollama Qwen triage, offline queue, degraded
+mode), the ESP32-S3 firmware with QR provisioning and pan/tilt, the Alibaba
+Cloud deployment, and — in the final week — the MCP tool server with the
+agentic in-app assistant, on-demand recording, instant agent arm/disarm, and
+browser-playable (H.264) event clips. See `HACKATHON_SUBMISSION_CHECKLIST.md`
+and the git history for the full trail.
+
+### 🧑‍⚖️ Judge testing instructions
+
+1. **Sign in** at the live application URL with the judge credentials provided
+   on Devpost (the account is pre-verified — no email confirmation needed).
+2. The dashboard is **pre-seeded**: cameras for each use case, armed agents, and
+   sample events, so there is something to explore immediately.
+3. **Zero-hardware demo**: judge cameras are simulated server-side — the backend
+   streams pre-extracted frames into the live view and runs *real* Qwen-VL
+   detection on them, so the full detect → verify → alert flow works with no
+   physical device.
+4. Things to try:
+   - Create an agent in plain English (e.g. *"alert me if a person lingers at
+     the door after 9pm"*) and inspect the compiled detector config.
+   - Open the **Erlang AI Agent** chat and ask *"which cameras do I have and
+     are any agents armed?"* — it answers from live data via MCP tools, and can
+     arm agents or take snapshots for you.
+   - Open an event and play its clip; check the audited tool calls on verified
+     events.
+5. To run everything locally instead (including the physical-device path), see
+   the [Quickstart](#-quickstart) below.
+
 ## 🎬 See it in action
 
 <!-- Add demo asset at docs/assets/demo.gif (10-15s screen capture) -->
@@ -36,13 +105,14 @@ It spans three tiers:
 | Tier | Repo | Role |
 |------|------|------|
 | **Cloud/App** | this repo | FastAPI backend + Flutter console: auth, agents, live video, verification |
-| **Edge bridge** | `SentinelEdge_LaptopEdge` | Local YOLO/YAMNet detection + Ollama Qwen triage |
-| **Camera** | `SentinelEdge_IOT` | ESP32-S3 firmware, QR provisioning, pan/tilt |
+| **Edge bridge** | [`SentinelEdge_LaptopEdge`](https://github.com/KennethChua1998/SentinelEdge_LaptopEdge) | Local YOLO/YAMNet detection + Ollama Qwen triage |
+| **Camera** | [`SentinelEdge_IOT`](https://github.com/KennethChua1998/SentinelEdge_IOT) | ESP32-S3 firmware, QR provisioning, pan/tilt |
 
 ## ✨ Features
 
 - 🗣️ **Natural-language agents** — describe a rule; Qwen Cloud compiles it to a detector config (keyword fallback, never fails).
 - 💬 **Conversational agent builder** — draft and refine rules through chat, preview the compiled detector.
+- 🤖 **Agentic AI assistant over MCP** — the in-app Erlang AI Agent connects to the platform's own MCP tool server and can inspect cameras, take snapshots, pan/tilt, query events, fetch clips, and create/arm agents for you ([details](#-mcp-tool-server)).
 - 🎥 **Live video fan-out** — edge streams JPEG frames; clients view signed MJPEG/frame URLs.
 - 🧠 **Two-stage AI** — local YOLO/Qwen triage on the edge, cloud Qwen-VL verification for high-value events.
 - 🔍 **Audited verification tools** — the verifier can pan the camera, grab a snapshot, and read recent events — all logged.
@@ -86,6 +156,35 @@ Erlang AI Vision Flutter console
 ```
 
 </details>
+
+## 🔌 MCP tool server
+
+The platform's tools are exposed as a standard **Model Context Protocol** server
+(streamable HTTP) at `POST {API_PREFIX}/mcp/` — by default
+`http://localhost:8000/api/v1/mcp/`. The in-app **Erlang AI Agent** chat connects
+to it as an ordinary MCP client each turn, so anything it can do, any external
+MCP client (Claude, IDEs, agent frameworks) can do too with a valid token.
+
+**Tools** (all scoped to the authenticated user's own data):
+
+| Group | Tools |
+|---|---|
+| Cameras | `list_devices`, `get_device_status`, `get_live_snapshot`, `pan_camera`, `tilt_camera` |
+| Events & media | `query_events`, `get_event_clip`, `list_recordings` |
+| Agents | `list_agents`, `create_agent`, `assign_agent`, `unassign_agent` |
+
+**Auth**: requests carry `Authorization: Bearer <token>` where the token is a
+short-lived signed `mcp_access` token minted by the backend (the chat service
+mints one per turn; a user-facing token endpoint is on the roadmap for external
+clients). Requests without a valid token are rejected before reaching the
+protocol layer.
+
+**Guardrails**: every call is permission-checked against a chat-scope autonomy
+table (emergency escalation is denied), camera movement is clamped to
+servo-safe ranges and rate-limited, every tool call is audited to `tool_audit`,
+and chat turns are capped per account per day (`CHAT_DAILY_MESSAGE_LIMIT`,
+default 200/day) since one agentic turn can spend several Qwen calls. If the
+MCP server is unreachable, the chat degrades gracefully to text-only answers.
 
 ## 🚀 Quickstart
 

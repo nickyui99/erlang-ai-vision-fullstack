@@ -9,11 +9,12 @@
 - [x] Merge `codex/google-secret-manager` into `main`.
 - [x] Switch the local Fullstack repository to `main`.
 - [x] Synchronize local `main` with `origin/main`.
-- [ ] Make `erlang-ai-vision-fullstack` public.
-- [ ] Make `SentinelEdge_LaptopEdge` public.
-- [ ] Make `SentinelEdge_IOT` public.
-- [ ] Add an open-source license to LaptopEdge.
+- [x] Make `erlang-ai-vision-fullstack` public (verified anonymously, July 15).
+- [ ] Make `SentinelEdge_LaptopEdge` public (still returns 404 to a logged-out request as of July 15).
+- [ ] Make `SentinelEdge_IOT` public (still returns 404 to a logged-out request as of July 15).
+- [x] Add an open-source license to LaptopEdge (committed and pushed).
 - [x] Add an open-source license to IoT.
+- [x] Add an open-source license to Fullstack (committed and pushed).
 - [ ] Configure a public domain for the Alibaba Cloud deployment.
 - [ ] Enable HTTPS with a valid TLS certificate.
 - [ ] Verify Firebase permits the production domain.
@@ -25,20 +26,38 @@
 - [ ] Add the video URL to Devpost.
 - [ ] Create `docs/assets/demo.gif` or remove its broken README reference.
 
+## Shipped July 15 (document in README, Devpost, and the demo video)
+
+- [x] Fix the silent no-alerts bug: `/edge/agents/active` now sends `compiled_prompt`/`nl_rule` so edge triage judges the user's actual rule.
+- [x] Fix edge triage verdict parsing (qwen3.5:0.8b's `"trigger"` key alias and two non-JSON reply shapes) — events now escalate end-to-end.
+- [x] Make the app's record button work end-to-end (bridge `command.recording` → LiveRecorder → `POST /edge/recordings`).
+- [x] Preserve event/alert/clip history when an agent is disabled on a camera (unassign disarms the sub-agent instead of deleting it; re-assign re-arms the same row).
+- [x] Instant agent arm/disarm: backend nudges the bridge (`command.refresh_agents`) to re-poll immediately instead of waiting the 30 s config poll.
+- [x] Fix in-app clip playback: recorders now encode H.264 (`avc1`) instead of browser-unplayable `mp4v`, with fallback where no H.264 encoder exists.
+- [x] Expose the platform's tools as an MCP server (`/api/v1/mcp`, 12 user-scoped tools, signed bearer tokens, audited, permission-tabled).
+- [x] Make the Erlang AI Agent chat agentic: it connects to the MCP server as an MCP client and can control cameras, create/arm/disarm agents, query events, and fetch clips/recordings live (falls back to text-only chat if MCP is down).
+- [x] Extract shared agent lifecycle logic into `agent_service` (REST API and MCP tools run identical code).
+- [x] Mention the MCP server in the README (features bullet + "MCP tool server" section with tools, auth, and guardrails).
+- [ ] Add a "generate MCP access token" endpoint/UI for external clients.
+- [x] Rate-limit the agentic chat: per-account daily message cap (`CHAT_DAILY_MESSAGE_LIMIT`, default 200/day, HTTP 429 `chat_daily_limit_reached`, 0 disables) on top of the existing per-turn tool budget (`QWEN_MAX_TOOL_TURNS`).
+- [ ] Optional: upload on-demand recordings to OSS for in-app playback (clips-style signed-URL flow).
+- [ ] Optional: manual event review action (dismiss/acknowledge) so low-severity events can leave "pending review".
+- [ ] Note: clips uploaded before July 15 are `mp4v` and remain download-only; new clips play in-app.
+
 ## README and repository presentation
 
-- [ ] Add a “Qwen Cloud Global Hackathon” section near the top of the README.
-- [ ] State the submission track: `Track 5 — EdgeAgent`.
-- [ ] Add the live application URL.
-- [ ] Add the public demo-video URL.
-- [ ] Add judge testing instructions.
-- [ ] Add links to all three repositories.
+- [x] Add a “Qwen Cloud Global Hackathon” section near the top of the README.
+- [x] State the submission track: `Track 5 — EdgeAgent`.
+- [x] Add the live application URL (currently the EIP `http://47.250.155.149`; swap in the domain + HTTPS link once configured).
+- [ ] Add the public demo-video URL (placeholder row is in the README table — record the video first).
+- [x] Add judge testing instructions.
+- [x] Add links to all three repositories (hackathon table + tier table).
 - [x] Add a prominent architecture diagram.
 - [ ] Add a direct Alibaba Cloud deployment-proof link.
-- [ ] List the Qwen models used.
-- [ ] Explain why Qwen is essential to the project.
-- [ ] Document what was built after May 26, 2026.
-- [ ] Add team-member information.
+- [x] List the Qwen models used.
+- [x] Explain why Qwen is essential to the project.
+- [x] Document what was built after May 26, 2026.
+- [x] Add team-member information.
 - [x] Add a no-hardware demo walkthrough.
 - [x] Add a full physical-device setup walkthrough.
 - [ ] Add expected results to every setup step.
@@ -81,7 +100,7 @@
 - [ ] Demonstrate event queueing and reconnection.
 - [ ] Demonstrate local operation without cloud access.
 - [x] Document camera-actuation safeguards.
-- [ ] Add human confirmation for risky physical actions, if applicable.
+- [ ] Add human confirmation for risky physical actions, if applicable (more relevant since July 15: the chat agent can now pan/tilt cameras and arm/disarm agents via MCP tools — currently guarded by clamps, rate limits, and audit rather than confirmation).
 - [ ] Compare the system with a cloud-only camera pipeline.
 
 ## Production security
@@ -91,7 +110,7 @@
 - [ ] Prevent silent mock-Qwen fallback in production.
 - [ ] Clearly label demo/mock mode in the UI.
 - [ ] Add rate limiting to authentication endpoints.
-- [ ] Add rate limiting to chat endpoints.
+- [x] Add rate limiting to chat endpoints (per-account daily message cap, July 15; burst/per-second limiting can still be added at a proxy if needed).
 - [ ] Add rate limiting to Qwen verification endpoints.
 - [ ] Add request-size limits for images and media.
 - [ ] Confirm CORS permits only required production origins.
@@ -135,9 +154,10 @@
 
 ## Tests and CI
 
-- [x] Run backend tests: 101 passed, 1 skipped.
+- [x] Run backend tests: 143 passed, 1 skipped (July 15; includes MCP server, agentic chat, recording, and history-preservation tests).
+- [x] Run edge (LaptopEdge) tests: triage 11/11 with the real model; all bridge assertions incl. recording + refresh-nudge.
 - [x] Run Flutter tests: 10 passed.
-- [x] Run Flutter static analysis: no issues.
+- [x] Run Flutter static analysis: no issues (re-verified July 15 after assignment-state changes).
 - [ ] Fix the two `aiosqlite` teardown warnings.
 - [ ] Add Qwen timeout tests.
 - [ ] Add Qwen HTTP 429 tests.

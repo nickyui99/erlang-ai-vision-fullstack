@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gpt_markdown/gpt_markdown.dart';
 
 import '../../design/app_colors.dart';
 import '../../design/app_spacing.dart';
@@ -193,7 +194,13 @@ class _AiAgentChatScreenState extends State<AiAgentChatScreen> {
         final message = messages[index];
         return _ChatBubble(
           role: message.role,
-          child: Text(message.content),
+          // Assistant replies arrive as LLM output: Markdown (headers, tables,
+          // bold) and LaTeX math — render them. Qwen emits both \(...\)/\[...\]
+          // and $...$/$$...$$ delimiters; useDollarSignsForLatex covers the
+          // dollar forms too. User messages stay literal text.
+          child: message.role == 'assistant'
+              ? GptMarkdown(message.content, useDollarSignsForLatex: true)
+              : Text(message.content),
         );
       },
     );
