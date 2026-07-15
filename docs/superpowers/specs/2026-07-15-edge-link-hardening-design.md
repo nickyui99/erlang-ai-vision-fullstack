@@ -50,6 +50,8 @@ The QR must not contain `t`, `edge_token`, or any cloud API credential. The UI l
 
 The laptop derives the same `device_link_secret` from its configured edge token. For local-only development without a backend token, `SENTINELEDGE_DEVICE_LINK_SECRET` may supply the derived 43-character value directly. There is no command-line flag for either secret.
 
+The laptop simulator behaves like firmware: it receives only `SENTINELEDGE_DEVICE_LINK_SECRET`, completes the same challenge, and never receives the cloud edge token. The edge console derives the link secret once and supplies separate child environments: the bridge receives the cloud token, while the simulator receives only the derived link secret. Legacy receiver utilities that open a Wi-Fi `DeviceHub` require the link-secret environment variable before listening.
+
 Existing version-1 camera configuration is intentionally rejected. Because the product has not deployed, upgraded cameras must be re-paired rather than retaining an insecure compatibility mode.
 
 ## Camera authentication protocol
@@ -143,7 +145,8 @@ The console may accept the cloud edge token in its masked input for the current 
 - ignore and remove legacy `edge_token` and `remember_token` values when saving configuration;
 - omit both values from `.edge_console.local.json`;
 - omit the token from the child argument list and displayed command;
-- pass `SENTINELEDGE_EDGE_TOKEN` only through a copied child environment;
+- pass `SENTINELEDGE_EDGE_TOKEN` only to the bridge through a copied child environment;
+- derive `SENTINELEDGE_DEVICE_LINK_SECRET` and pass only that value to the simulator child;
 - overwrite the in-memory GUI value when the bridge stops or the console closes.
 
 The implementation will not automatically delete the user's existing ignored file or rotate credentials. The handoff must instruct the user to remove the old file and rotate any token previously stored there.
