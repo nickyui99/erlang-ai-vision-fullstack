@@ -19,6 +19,8 @@ String normalizeAssistantMarkdown(String content) {
   return value.replaceAll(RegExp(r'\n{3,}'), '\n\n');
 }
 
+Color userMessageForeground(Color background) => Colors.white;
+
 String normalizeLatexExpression(String expression) {
   return expression
       .replaceAll(r'\displaystyle ', '')

@@ -209,7 +209,10 @@ class _AiAgentChatScreenState extends State<AiAgentChatScreen> {
           // dollar forms too. User messages stay literal text.
           child: message.role == 'assistant'
               ? AssistantMessageView(content: message.content)
-              : Text(message.content),
+              : Text(
+                  message.content,
+                  style: const TextStyle(color: Colors.white),
+                ),
         );
       },
     );
@@ -416,14 +419,18 @@ class _ChatBubble extends StatelessWidget {
               : (theme.brightness == Brightness.dark
                     ? scheme.surfaceContainerHighest
                     : scheme.surfaceContainerLow),
-          border: Border(
-            left: BorderSide(
-              color: isUser
-                  ? Colors.transparent
-                  : scheme.primary.withValues(alpha: 0.55),
-              width: isUser ? 0 : 3,
-            ),
-          ),
+          // A width-0 BorderSide is a "hairline" border, which Flutter refuses
+          // to paint with a borderRadius (assertion in debug; the exception
+          // aborts paint before the bubble's text is drawn). User bubbles must
+          // carry no border at all.
+          border: isUser
+              ? null
+              : Border(
+                  left: BorderSide(
+                    color: scheme.primary.withValues(alpha: 0.55),
+                    width: 3,
+                  ),
+                ),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(14),
             topRight: const Radius.circular(14),
@@ -433,7 +440,9 @@ class _ChatBubble extends StatelessWidget {
         ),
         child: DefaultTextStyle.merge(
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: isUser ? scheme.onPrimary : scheme.onSurface,
+            color: isUser
+                ? userMessageForeground(scheme.primary)
+                : scheme.onSurface,
           ),
           child: child,
         ),
