@@ -14,6 +14,7 @@ from app.core.config import settings
 SESSION_PURPOSE = "session"
 EDGE_TOKEN_PREFIX = "pbkdf2_sha256"
 EDGE_TOKEN_ITERATIONS = 210_000
+DEVICE_LINK_DERIVATION_LABEL = b"sentineledge-device-link-v1"
 
 
 def _b64encode(value: bytes) -> str:
@@ -82,6 +83,13 @@ def generate_edge_token() -> str:
     return f"se_edge_{secrets.token_urlsafe(32)}"
 
 
+def derive_device_link_secret(raw_edge_token: str) -> str:
+    if not raw_edge_token:
+        raise ValueError("edge token is required")
+    digest = hmac.new(raw_edge_token.encode("utf-8"), DEVICE_LINK_DERIVATION_LABEL, hashlib.sha256).digest()
+    return _b64encode(digest)
+
+
 def hash_edge_token(raw_token: str) -> str:
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac(
@@ -112,3 +120,6 @@ def verify_edge_token(raw_token: str, token_hash: str) -> bool:
         iterations,
     )
     return hmac.compare_digest(actual_digest, expected_digest)
+
+
+

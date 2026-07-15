@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db_session
 from app.core.config import settings
-from app.core.security import create_signed_token, generate_edge_token, hash_edge_token, verify_signed_token
+from app.core.security import create_signed_token, derive_device_link_secret, generate_edge_token, hash_edge_token, verify_signed_token
 from app.models.clip import Clip
 from app.models.recording import Recording
 from app.models.device import Device
@@ -93,7 +93,7 @@ async def create_device(
     await session.commit()
     await session.refresh(device)
 
-    data = DeviceRegistrationRead(device=DeviceRead.model_validate(device), edge_token=raw_edge_token)
+    data = DeviceRegistrationRead(device=DeviceRead.model_validate(device), edge_token=raw_edge_token, device_link_secret=derive_device_link_secret(raw_edge_token))
     return {"data": data.model_dump(mode="json")}
 
 
@@ -503,5 +503,7 @@ async def _send_audited_device_command(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail={"code": "command_timeout", "message": "Edge command timed out"},
         ) from exc
+
+
 
 
