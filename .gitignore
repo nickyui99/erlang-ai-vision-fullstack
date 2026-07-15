@@ -63,3 +63,6 @@ Thumbs.db
 signing-report.txt
 
 .superpowers/
+
+# AI planning docs (internal, not for the public repo)
+docs/superpowers/
