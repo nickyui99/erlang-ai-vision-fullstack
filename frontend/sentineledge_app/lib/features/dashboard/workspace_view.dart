@@ -565,6 +565,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         }
         break;
       case 'device.health_changed':
+      case 'device.control_mode_changed':
         _refreshDevicesOnly();
         break;
       case 'agent.state_changed':

@@ -64,6 +64,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
   bool _isDeleting = false;
   bool _isLoadingEvents = false;
   bool _isLoadingPlayback = false;
+  bool _isSettingMode = false;
   int _selectedSecondaryPanel = 0;
   String? _assigningAgentId;
   String? _playingClipId;
@@ -790,6 +791,8 @@ class _DeviceControlViewState extends State<DeviceControlView> {
         const SizedBox(height: AppSpacing.sm),
         _compactPtzSurface(compact: compact),
         const SizedBox(height: AppSpacing.sm),
+        _controlModeCard(compact: compact),
+        const SizedBox(height: AppSpacing.sm),
         _PlaybackDownloadPanel(
           clips: _playbackClips,
           recordings: _recordings,
@@ -804,6 +807,112 @@ class _DeviceControlViewState extends State<DeviceControlView> {
           showRefresh: !compact,
         ),
       ],
+    );
+  }
+
+  // Per-camera autonomous control mode: off / auto_track / agent. Mutually exclusive --
+  // exactly one controller (none / the deterministic tracker / the LLM agent) owns the servo.
+  static const List<String> _controlModes = ['off', 'auto_track', 'agent'];
+
+  Future<void> _setControlMode(String mode) async {
+    if (_isSettingMode || mode == _device.controlMode) return;
+    setState(() {
+      _isSettingMode = true;
+      _error = null;
+    });
+    try {
+      final updated = await widget.apiClient.setControlMode(
+        _device.deviceId,
+        mode,
+      );
+      if (!mounted) return;
+      setState(() => _device = updated);
+      const labels = {
+        'off': 'Auto control off',
+        'auto_track': 'Auto-tracking on',
+        'agent': 'Agent control on',
+      };
+      _toast(labels[mode] ?? 'Control mode: $mode');
+      await widget.onChanged();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+      _toast(error.toString());
+    } finally {
+      if (mounted) setState(() => _isSettingMode = false);
+    }
+  }
+
+  Widget _controlModeCard({required bool compact}) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    // Normalize any unexpected server value so the SegmentedButton selection is always valid.
+    final mode = _controlModes.contains(_device.controlMode)
+        ? _device.controlMode
+        : 'off';
+    final subtitle = switch (mode) {
+      'auto_track' => 'The camera automatically follows a detected person.',
+      'agent' => _armedHere > 0
+          ? 'The armed agent decides how the camera pans and tilts.'
+          : 'Arm an agent under Protection so it can drive the camera.',
+      _ => 'Manual control only - the camera stays put until you move it.',
+    };
+    return AppCard(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? AppSpacing.md : AppSpacing.lg,
+        vertical: compact ? AppSpacing.sm : AppSpacing.md,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.control_camera_outlined,
+                  size: 20, color: scheme.onSurfaceVariant),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text('Camera control',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+              ),
+              if (_isSettingMode)
+                const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment<String>(
+                value: 'off',
+                icon: Icon(Icons.block_outlined),
+                label: Text('Off'),
+              ),
+              ButtonSegment<String>(
+                value: 'auto_track',
+                icon: Icon(Icons.center_focus_strong_outlined),
+                label: Text('Auto-track'),
+              ),
+              ButtonSegment<String>(
+                value: 'agent',
+                icon: Icon(Icons.smart_toy_outlined),
+                label: Text('Agent'),
+              ),
+            ],
+            selected: {mode},
+            showSelectedIcon: false,
+            onSelectionChanged: _isSettingMode
+                ? null
+                : (selection) => _setControlMode(selection.first),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(subtitle,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: scheme.onSurfaceVariant)),
+        ],
+      ),
     );
   }
 

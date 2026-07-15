@@ -190,6 +190,16 @@ class ErlangVisionApiClient {
     return DeviceCommandResult.fromJson(body['data'] as Map<String, dynamic>);
   }
 
+  /// Sets the camera's autonomous control mode ('off' | 'auto_track' | 'agent').
+  /// The backend persists it and best-effort relays it to the edge; the returned
+  /// device reflects the persisted mode even when the edge is offline.
+  Future<EdgeDevice> setControlMode(String deviceId, String mode) async {
+    final body = await _postObject('/api/v1/devices/$deviceId/control-mode', {
+      'mode': mode,
+    });
+    return EdgeDevice.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
   /// Requests a live snapshot from the edge device.
   Future<DeviceCommandResult> snapshotDevice(String deviceId) async {
     final body = await _postObject('/api/v1/devices/$deviceId/snapshot', null);
@@ -591,6 +601,7 @@ class EdgeDevice {
     this.presets = const [],
     this.ptzCorrectionPan = 0,
     this.ptzCorrectionTilt = 0,
+    this.controlMode = 'off',
   });
 
   final String deviceId;
@@ -606,6 +617,10 @@ class EdgeDevice {
   final List<CameraPreset> presets;
   final int ptzCorrectionPan;
   final int ptzCorrectionTilt;
+
+  /// Autonomous control mode: 'off' | 'auto_track' | 'agent'. Defaults to 'off'
+  /// for older backends that don't yet report the field.
+  final String controlMode;
 
   factory EdgeDevice.fromJson(Map<String, dynamic> json) {
     return EdgeDevice(
@@ -629,6 +644,9 @@ class EdgeDevice {
           int.tryParse(json['ptz_correction_pan'].toString()) ?? 0,
       ptzCorrectionTilt:
           int.tryParse(json['ptz_correction_tilt'].toString()) ?? 0,
+      controlMode: (json['control_mode']?.toString().isNotEmpty ?? false)
+          ? json['control_mode'].toString()
+          : 'off',
     );
   }
 }
