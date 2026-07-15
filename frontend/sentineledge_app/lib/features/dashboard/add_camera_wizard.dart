@@ -148,9 +148,11 @@ class _AddCameraWizardState extends State<AddCameraWizard> {
       's': _ssidController.text.trim(),
       'p': _passwordController.text,
       'h': _hostController.text.trim(),
-      if (_registration != null) 't': _registration!.edgeToken,
+      'v': 2,
+      'path': '/',
+      if (_registration != null) 'k': _registration!.deviceLinkSecret,
     };
-    if (port != 8765) payload['o'] = port; // firmware defaults to 8765
+    payload['o'] = port;
     return jsonEncode(payload);
   }
 
