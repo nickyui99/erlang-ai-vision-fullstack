@@ -428,7 +428,11 @@ class _AddCameraWizardState extends State<AddCameraWizard> {
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.sm),
-          if (_registration != null) ...[\r\n            Text('Laptop bridge token', style: theme.textTheme.labelMedium),\r\n            const SizedBox(height: 4),\r\n            TokenBox(token: _registration!.deviceLinkSecret),\r\n          ],
+          if (_registration != null) ...[
+            Text('Laptop bridge token', style: theme.textTheme.labelMedium),
+            const SizedBox(height: 4),
+            TokenBox(token: _registration!.deviceLinkSecret),
+          ],
           const SizedBox(height: AppSpacing.md),
           Text(
             'The QR contains Wi-Fi details and a scoped laptop-link secret. Only scan it with your camera.',
