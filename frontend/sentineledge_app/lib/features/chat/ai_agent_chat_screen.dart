@@ -1,5 +1,6 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
 
 import '../../design/app_colors.dart';
 import '../../design/app_spacing.dart';
@@ -7,6 +8,7 @@ import '../../services/backend_auth_client.dart';
 import '../../shared/console_widgets.dart';
 import 'ai_agent_icon.dart';
 import 'chat_controller.dart';
+import 'chat_markdown.dart';
 
 /// The interactive Erlang AI Agent chat: a scrolling conversation wired to the
 /// backend, with a drawer to switch between, start, and delete sessions.
@@ -32,8 +34,9 @@ class _AiAgentChatScreenState extends State<AiAgentChatScreen> {
     'What should I review before leaving?',
   ];
 
-  late final ChatController _controller =
-      ChatController(apiClient: widget.apiClient);
+  late final ChatController _controller = ChatController(
+    apiClient: widget.apiClient,
+  );
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
@@ -94,42 +97,54 @@ class _AiAgentChatScreenState extends State<AiAgentChatScreen> {
       appBar: AppBar(
         title: const Text('Erlang AI Agent'),
         actions: [
-          IconButton(
-            tooltip: 'Conversations',
-            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-            icon: const Icon(Icons.menu_rounded),
-          ),
+          if (compact)
+            IconButton(
+              tooltip: 'Conversations',
+              onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+              icon: const Icon(Icons.menu_rounded),
+            ),
           const SizedBox(width: AppSpacing.sm),
         ],
       ),
       endDrawer: _buildDrawer(context),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                compact ? AppSpacing.lg : AppSpacing.xxl,
-                compact ? AppSpacing.md : AppSpacing.xl,
-                compact ? AppSpacing.lg : AppSpacing.xxl,
-                AppSpacing.lg,
-              ),
-              child: ListenableBuilder(
-                listenable: _controller,
-                builder: (context, _) {
-                  return Column(
-                    children: [
-                      Expanded(child: _buildConversation(theme)),
-                      if (_controller.error != null) ...[
-                        const SizedBox(height: AppSpacing.sm),
-                        AppBanner(text: _controller.error!),
-                      ],
-                      const SizedBox(height: AppSpacing.md),
-                      _buildComposer(theme),
+      body: compact
+          ? _buildChatBody(theme, compact)
+          : Row(
+              children: [
+                Expanded(child: _buildChatBody(theme, compact)),
+                _buildDrawer(context, inline: true),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildChatBody(ThemeData theme, bool compact) {
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              compact ? AppSpacing.lg : AppSpacing.xxl,
+              compact ? AppSpacing.md : AppSpacing.xl,
+              compact ? AppSpacing.lg : AppSpacing.xxl,
+              AppSpacing.lg,
+            ),
+            child: ListenableBuilder(
+              listenable: _controller,
+              builder: (context, _) {
+                return Column(
+                  children: [
+                    Expanded(child: _buildConversation(theme)),
+                    if (_controller.error != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      AppBanner(text: _controller.error!),
                     ],
-                  );
-                },
-              ),
+                    const SizedBox(height: AppSpacing.md),
+                    _buildComposer(theme),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -183,13 +198,7 @@ class _AiAgentChatScreenState extends State<AiAgentChatScreen> {
       itemCount: messages.length + (_controller.sending ? 1 : 0),
       itemBuilder: (context, index) {
         if (index >= messages.length) {
-          return const _ChatBubble(
-            role: 'assistant',
-            child: SizedBox.square(
-              dimension: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          );
+          return const AiAgentWaitingIndicator();
         }
         final message = messages[index];
         return _ChatBubble(
@@ -199,7 +208,7 @@ class _AiAgentChatScreenState extends State<AiAgentChatScreen> {
           // and $...$/$$...$$ delimiters; useDollarSignsForLatex covers the
           // dollar forms too. User messages stay literal text.
           child: message.role == 'assistant'
-              ? GptMarkdown(message.content, useDollarSignsForLatex: true)
+              ? AssistantMessageView(content: message.content)
               : Text(message.content),
         );
       },
@@ -250,9 +259,10 @@ class _AiAgentChatScreenState extends State<AiAgentChatScreen> {
     );
   }
 
-  Widget _buildDrawer(BuildContext context) {
+  Widget _buildDrawer(BuildContext context, {bool inline = false}) {
     final theme = Theme.of(context);
     return Drawer(
+      width: 292,
       child: SafeArea(
         child: ListenableBuilder(
           listenable: _controller,
@@ -301,7 +311,8 @@ class _AiAgentChatScreenState extends State<AiAgentChatScreen> {
                           itemBuilder: (context, index) {
                             final session = sessions[index];
                             final selected =
-                                session.sessionId == _controller.currentSessionId;
+                                session.sessionId ==
+                                _controller.currentSessionId;
                             return ListTile(
                               selected: selected,
                               enabled: !busy,
@@ -322,7 +333,7 @@ class _AiAgentChatScreenState extends State<AiAgentChatScreen> {
                               ),
                               onTap: () {
                                 _controller.selectSession(session.sessionId);
-                                Navigator.of(context).pop();
+                                if (!inline) Navigator.of(context).pop();
                               },
                             );
                           },
@@ -401,8 +412,18 @@ class _ChatBubble extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isUser
-              ? scheme.primaryContainer
-              : scheme.surfaceContainerHighest,
+              ? scheme.primary
+              : (theme.brightness == Brightness.dark
+                    ? scheme.surfaceContainerHighest
+                    : scheme.surfaceContainerLow),
+          border: Border(
+            left: BorderSide(
+              color: isUser
+                  ? Colors.transparent
+                  : scheme.primary.withValues(alpha: 0.55),
+              width: isUser ? 0 : 3,
+            ),
+          ),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(14),
             topRight: const Radius.circular(14),
@@ -412,7 +433,7 @@ class _ChatBubble extends StatelessWidget {
         ),
         child: DefaultTextStyle.merge(
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: isUser ? scheme.onPrimaryContainer : scheme.onSurface,
+            color: isUser ? scheme.onPrimary : scheme.onSurface,
           ),
           child: child,
         ),
@@ -456,6 +477,97 @@ class _SuggestionRow extends StatelessWidget {
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Communicates model work without exposing internal implementation details.
+class AiAgentWaitingIndicator extends StatefulWidget {
+  const AiAgentWaitingIndicator({super.key});
+
+  @override
+  State<AiAgentWaitingIndicator> createState() =>
+      _AiAgentWaitingIndicatorState();
+}
+
+class _AiAgentWaitingIndicatorState extends State<AiAgentWaitingIndicator>
+    with SingleTickerProviderStateMixin {
+  static const _messages = [
+    'Erlang is thinking...',
+    'Reviewing your camera context...',
+    'Shaping a useful answer...',
+  ];
+  Timer? _messageTimer;
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..repeat(reverse: true);
+  var _messageIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _messageTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _rotateMessage(),
+    );
+  }
+
+  void _rotateMessage() {
+    if (!mounted) return;
+    setState(() => _messageIndex = (_messageIndex + 1) % _messages.length);
+  }
+
+  @override
+  void dispose() {
+    _messageTimer?.cancel();
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      container: true,
+      label: 'Erlang is thinking',
+      liveRegion: true,
+      child: AnimatedBuilder(
+        animation: _pulse,
+        builder: (context, child) => Container(
+          margin: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          decoration: BoxDecoration(
+            color: scheme.primaryContainer.withValues(alpha: 0.45),
+            borderRadius: AppRadius.mdAll,
+            border: Border.all(color: scheme.primary.withValues(alpha: 0.18)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Opacity(
+                opacity: 0.55 + (_pulse.value * 0.45),
+                child: const AnimatedAiAgentIcon(size: 24),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 280),
+                child: Text(
+                  _messages[_messageIndex],
+                  key: ValueKey(_messageIndex),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
