@@ -88,6 +88,7 @@ flutter:
     - assets/landing/laptop-frame.png
     - assets/landing/mobile-agent-frame.png
     - assets/landing/erlang-ai-vision-architecture-flow.png
+    - assets/landing/erlang-cloud-architecture.png
     - assets/landing/pipeline/xiao-esp32-s3.png
     - assets/landing/pipeline/ultralytics-yolo26.png
     - assets/landing/pipeline/qwen.png

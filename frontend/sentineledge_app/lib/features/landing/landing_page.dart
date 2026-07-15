@@ -17,6 +17,7 @@ const _alibabaCloudAsset = 'assets/landing/pipeline/alibaba-cloud.png';
 const _youtubeDemoUrl = '';
 const _architectureFlowAsset =
     'assets/landing/erlang-ai-vision-architecture-flow.png';
+const _cloudArchitectureAsset = 'assets/landing/erlang-cloud-architecture.png';
 const _githubUrl = 'https://github.com/nickyui99/erlang-ai-vision-fullstack';
 const _iotRepoUrl = 'https://github.com/KennethChua1998/SentinelEdge_IOT';
 const _laptopEdgeRepoUrl =
@@ -2219,7 +2220,7 @@ class _ArchitectureSection extends StatelessWidget {
           const SizedBox(height: AppSpacing.xl),
           const _Eyebrow(label: 'Cloud architecture'),
           const SizedBox(height: AppSpacing.md),
-          _CloudArchitecturePlaceholder(compact: compact),
+          _CloudArchitectureImage(compact: compact),
         ],
       ),
     );
@@ -2343,47 +2344,41 @@ class _UseCaseImpactSection extends StatelessWidget {
   }
 }
 
-class _CloudArchitecturePlaceholder extends StatelessWidget {
-  const _CloudArchitecturePlaceholder({required this.compact});
+class _CloudArchitectureImage extends StatelessWidget {
+  const _CloudArchitectureImage({required this.compact});
 
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      constraints: BoxConstraints(minHeight: compact ? 220 : 360),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.neutral900,
         borderRadius: AppRadius.lgAll,
         border: Border.all(color: AppColors.lightBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 16),
+          ),
+        ],
       ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.image_outlined,
-              size: compact ? 36 : 48,
-              color: AppColors.neutral400,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              'Cloud architecture image placeholder',
-              textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(color: AppColors.neutral700),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Replace this with the final architecture visual.',
-              textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppColors.neutral500),
-            ),
-          ],
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(
+        _cloudArchitectureAsset,
+        width: double.infinity,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        semanticLabel: 'Erlang AI Vision cloud architecture',
+        errorBuilder: (context, error, stackTrace) => Container(
+          constraints: BoxConstraints(minHeight: compact ? 220 : 360),
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.image_not_supported_outlined,
+            color: Colors.white,
+            size: 32,
+          ),
         ),
       ),
     );
