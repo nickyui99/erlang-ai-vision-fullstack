@@ -19,6 +19,19 @@ from app.services.qwen_client import QwenError
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
+def _limit_exceeded(exc: chat_service.ChatDailyLimitExceeded) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail={
+            "code": "chat_daily_limit_reached",
+            "message": (
+                f"Daily chat limit reached ({exc.limit} messages/day). "
+                "It resets at midnight UTC."
+            ),
+        },
+    )
+
+
 async def _get_owned_session(
     session: AsyncSession, user_id: str, session_id: str
 ) -> ChatSession:
@@ -55,6 +68,8 @@ async def create_chat_session(
         chat = await chat_service.create_session(
             session, current_user.user_id, first_message=first_message
         )
+    except chat_service.ChatDailyLimitExceeded as exc:
+        raise _limit_exceeded(exc) from exc
     except QwenError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -88,6 +103,8 @@ async def send_chat_message(
     chat = await _get_owned_session(session, current_user.user_id, session_id)
     try:
         assistant_msg = await chat_service.generate_turn(session, chat, payload.content)
+    except chat_service.ChatDailyLimitExceeded as exc:
+        raise _limit_exceeded(exc) from exc
     except QwenError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

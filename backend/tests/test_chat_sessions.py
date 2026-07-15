@@ -149,3 +149,51 @@ def test_delete_session() -> None:
 
     assert client.get("/api/v1/chat/sessions").json()["data"] == []
     assert client.get(f"/api/v1/chat/sessions/{session_id}/messages").status_code == 404
+
+
+def test_daily_message_limit_returns_429(monkeypatch) -> None:
+    # Cost guardrail: each agentic turn can spend several Qwen/tool calls, so user
+    # messages are capped per account per UTC day.
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "chat_daily_message_limit", 2)
+    client = _client()
+    session_id = client.post("/api/v1/chat/sessions", json={}).json()["data"]["session_id"]
+
+    for i in range(2):
+        ok = client.post(
+            f"/api/v1/chat/sessions/{session_id}/messages", json={"content": f"msg {i}"}
+        )
+        assert ok.status_code == 201
+
+    blocked = client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages", json={"content": "one too many"}
+    )
+    assert blocked.status_code == 429
+    assert blocked.json()["error"]["code"] == "chat_daily_limit_reached"
+
+    # The cap counts the ACCOUNT's messages across sessions: a fresh session with a
+    # first_message is also blocked, and no orphan session row is left behind.
+    before = len(client.get("/api/v1/chat/sessions").json()["data"])
+    blocked_new = client.post("/api/v1/chat/sessions", json={"first_message": "hi"})
+    assert blocked_new.status_code == 429
+    assert len(client.get("/api/v1/chat/sessions").json()["data"]) == before
+
+    # Another account is unaffected (per-account, not global).
+    other = _client("usr_b")
+    other_session = other.post("/api/v1/chat/sessions", json={}).json()["data"]["session_id"]
+    assert other.post(
+        f"/api/v1/chat/sessions/{other_session}/messages", json={"content": "hello"}
+    ).status_code == 201
+
+
+def test_daily_message_limit_zero_disables(monkeypatch) -> None:
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "chat_daily_message_limit", 0)
+    client = _client()
+    session_id = client.post("/api/v1/chat/sessions", json={}).json()["data"]["session_id"]
+    for i in range(3):
+        assert client.post(
+            f"/api/v1/chat/sessions/{session_id}/messages", json={"content": f"m{i}"}
+        ).status_code == 201

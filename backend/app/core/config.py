@@ -46,6 +46,21 @@ class Settings(BaseSettings):
     alerts_enabled: bool = Field(default=True, validation_alias="ALERTS_ENABLED")
     alert_min_severity: str = Field(default="high", validation_alias="ALERT_MIN_SEVERITY")
 
+    # MCP tool server (mounted at {api_prefix}/mcp) and the chat agent's client loop.
+    # mcp_internal_base_url is where the chat service dials its own MCP server —
+    # localhost in the single-container deployment.
+    mcp_server_enabled: bool = Field(default=True, validation_alias="MCP_SERVER_ENABLED")
+    mcp_internal_base_url: str = Field(
+        default="http://localhost:8000", validation_alias="MCP_INTERNAL_BASE_URL"
+    )
+    mcp_token_ttl_seconds: int = Field(default=300, validation_alias="MCP_TOKEN_TTL_SECONDS")
+    # Cost guardrail for the agentic chat: each user turn can spend several Qwen
+    # calls (tool loop) plus MCP tool executions, so cap user messages per UTC day
+    # per account. 0 disables the cap.
+    chat_daily_message_limit: int = Field(
+        default=200, validation_alias="CHAT_DAILY_MESSAGE_LIMIT"
+    )
+
     # Milestone 9 — Qwen Cloud verification (DashScope OpenAI-compatible).
     # Verification is opt-in: it stays off until VERIFICATION_ENABLED=true so the
     # default ingestion/alert path is unchanged. Without a QWEN_API_KEY the
@@ -57,26 +72,35 @@ class Settings(BaseSettings):
         default="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
         validation_alias="QWEN_BASE_URL",
     )
-    qwen_model: str = Field(default="qwen-vl-max", validation_alias="QWEN_MODEL")
-    # Text tasks (NL-rule compiler, agent builder, chat) are text-only, so they use a
-    # text model (not the vision model). Free-first: the primary is a free-tier model and
-    # the paid tail only runs once free quota is spent. Falls back to a deterministic
-    # keyword compiler in test/key-less environments. QWEN_COMPILER_MODEL is still honoured
-    # as a legacy alias so existing deployments keep working.
+    # Cloud vision model (image verification: stage-3 event verification + demo
+    # triage): qwen3.7-plus — these run per event, so the plus tier keeps image
+    # costs down. The chatbot / compiler / builder use qwen3.7-max below.
+    qwen_model: str = Field(default="qwen3.7-plus", validation_alias="QWEN_MODEL")
+    # The chatbot (Erlang AI Agent), NL-rule compiler, and agent builder run on
+    # this model. Falls back to a deterministic keyword compiler in test/key-less
+    # environments. QWEN_COMPILER_MODEL is still honoured as a legacy alias so
+    # existing deployments keep working.
     qwen_text_model: str = Field(
-        default="qwen3.7-plus",
+        default="qwen3.7-max",
         validation_alias=AliasChoices("QWEN_TEXT_MODEL", "QWEN_COMPILER_MODEL"),
     )
     # Ordered fallback chains, tried after the primary on quota/rate-limit/connection
     # errors (see QwenClient). Comma-separated "model" (DashScope) or "model@base_url"
-    # (e.g. a local Ollama VLM). Text: free models first, paid qwen-plus as last resort.
-    # Vision: the free tier has no image model, so we fall back to a local Ollama VLM.
+    # (e.g. a local Ollama VLM). Text walks the qwen3.7-max snapshot/preview releases;
+    # vision falls back to the qwen3.7-plus snapshot, then a local Ollama VLM so
+    # verification still has eyes when every cloud model is exhausted.
     qwen_text_fallback_models: str = Field(
-        default="qwen3.7-max,glm-5.1,deepseek-v4-pro,deepseek-v4-flash,qwen-plus",
+        default=(
+            "qwen3.7-max-2026-05-20,qwen3.7-max-preview,"
+            "qwen3.7-max-2026-05-17,qwen3.7-max-2026-06-08"
+        ),
         validation_alias="QWEN_TEXT_FALLBACK_MODELS",
     )
     qwen_vision_fallback_models: str = Field(
-        default="qwen3.5:0.8b@http://localhost:11434/v1",
+        default=(
+            "qwen3.7-plus-2026-05-26,"
+            "qwen3.5:0.8b@http://localhost:11434/v1"
+        ),
         validation_alias="QWEN_VISION_FALLBACK_MODELS",
     )
     # API key for "model@base_url" fallback endpoints (local servers). Ollama ignores it.

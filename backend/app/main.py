@@ -1,5 +1,5 @@
 import asyncio
-from contextlib import asynccontextmanager, suppress
+from contextlib import AsyncExitStack, asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,16 +12,33 @@ from app.core.middleware import RequestIdMiddleware
 from app.services import media_retention_service
 
 
+def _mcp_mount_enabled() -> bool:
+    # The MCP SDK's StreamableHTTPSessionManager can only .run() once per process,
+    # but the test suite re-enters the app lifespan (one per TestClient context) —
+    # so the HTTP mount stays off under APP_ENV=test; tests drive the MCP server
+    # and the chat tool loop directly instead.
+    return settings.mcp_server_enabled and settings.app_env != "test"
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    sweep_task: asyncio.Task | None = None
-    if settings.media_sweep_interval_seconds > 0:
-        sweep_task = asyncio.create_task(media_retention_service.run_sweep_loop())
-    yield
-    if sweep_task is not None:
-        sweep_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await sweep_task
+    async with AsyncExitStack() as stack:
+        if _mcp_mount_enabled():
+            # The streamable-HTTP session manager must be running for the mounted
+            # MCP app (built in create_app) to serve requests.
+            from app.mcp.server import mcp_server
+
+            await stack.enter_async_context(mcp_server.session_manager.run())
+        sweep_task: asyncio.Task | None = None
+        if settings.media_sweep_interval_seconds > 0:
+            sweep_task = asyncio.create_task(media_retention_service.run_sweep_loop())
+        try:
+            yield
+        finally:
+            if sweep_task is not None:
+                sweep_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await sweep_task
 
 
 def create_app() -> FastAPI:
@@ -46,6 +63,13 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(api_router, prefix=settings.api_prefix)
+
+    if _mcp_mount_enabled():
+        # The platform's tools as an MCP server (bearer-token gated); the Erlang AI
+        # Agent chat connects to this as an MCP client, and external clients can too.
+        from app.mcp.server import build_mcp_asgi_app
+
+        app.mount(f"{settings.api_prefix}/mcp", build_mcp_asgi_app())
 
     return app
 

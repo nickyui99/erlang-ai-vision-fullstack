@@ -62,7 +62,10 @@ async def _converse(messages: list[dict]) -> tuple[str, str | None, str | None]:
     if settings.app_env == "test" or not settings.qwen_api_key:
         return _fallback(messages)
     try:
-        client = QwenClient(model=settings.qwen_compiler_model)
+        # NOTE: the settings FIELD is qwen_text_model (QWEN_COMPILER_MODEL is only
+        # its legacy env alias) — settings.qwen_compiler_model does not exist and
+        # raised AttributeError past the except tuple below (500 on /agents/builder).
+        client = QwenClient(model=settings.qwen_text_model)
         convo = [{"role": "system", "content": _SYSTEM_PROMPT}] + _sanitize(messages)
         response = await client.chat(convo)
         obj = _extract_json(response.content)

@@ -18,7 +18,7 @@ PAN_MIN_DEG, PAN_MAX_DEG = 15, 165
 TILT_MIN_DEG, TILT_MAX_DEG = 60, 140
 
 
-# Autonomy table. Tools not listed are treated as denied.
+# Autonomy table for the per-event VERIFICATION agent. Tools not listed are denied.
 AUTONOMY: dict[str, str] = {
     "get_live_snapshot": "allow",
     "pan_camera": "allow",
@@ -33,9 +33,29 @@ AUTONOMY: dict[str, str] = {
     "disarm_agent": "deny",
 }
 
+# Autonomy table for the user-facing CHAT agent (the Erlang AI Agent view, connected
+# through the MCP server). The user is present and every action is theirs to see, so
+# agent management is allowed here; emergency escalation stays denied.
+CHAT_AUTONOMY: dict[str, str] = {
+    "list_devices": "allow",
+    "get_device_status": "allow",
+    "get_live_snapshot": "allow",
+    "pan_camera": "allow",
+    "tilt_camera": "allow",
+    "query_events": "allow",
+    "get_event_clip": "allow",
+    "list_recordings": "allow",
+    "list_agents": "allow",
+    "create_agent": "allow",
+    "assign_agent": "allow",
+    "unassign_agent": "allow",
+    "send_emergency_alert": "deny",
+}
 
-def is_allowed(tool_name: str) -> bool:
-    return AUTONOMY.get(tool_name) == "allow"
+
+def is_allowed(tool_name: str, scope: str = "verify") -> bool:
+    table = CHAT_AUTONOMY if scope == "chat" else AUTONOMY
+    return table.get(tool_name) == "allow"
 
 
 def _to_int(angle: object, default: int = 90) -> int:
