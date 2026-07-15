@@ -186,8 +186,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   /// prior selection) never auto-opens it.
   void _maybeOpenEventSheet() {
     if (!mounted || _eventSheetOpen || _selectedEventId == null) return;
-    final compact =
-        MediaQuery.sizeOf(context).width < AppBreakpoints.compact;
+    final compact = MediaQuery.sizeOf(context).width < AppBreakpoints.compact;
     if (!compact) return;
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _showEventDetailSheet(),
@@ -441,10 +440,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   Future<void> _openAiAgentChat() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => AiAgentChatScreen(
-          apiClient: widget.apiClient,
-          user: widget.user,
-        ),
+        builder: (_) =>
+            AiAgentChatScreen(apiClient: widget.apiClient, user: widget.user),
       ),
     );
   }
@@ -459,7 +456,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     final result = await showDialog<_AgentFormResult>(
       context: context,
       builder: (_) => mode == 'ai'
-          ? _AgentBuilderDialog(apiClient: widget.apiClient, initialAgent: agent)
+          ? _AgentBuilderDialog(
+              apiClient: widget.apiClient,
+              initialAgent: agent,
+            )
           : _AgentFormDialog(agent: agent),
     );
     if (result == null) return;
@@ -544,7 +544,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           showEventAlert(
             ScaffoldMessenger.maybeOf(context),
             title: 'New ${(severity ?? 'event').toLowerCase()} detection',
-            body: message.data['summary']?.toString() ??
+            body:
+                message.data['summary']?.toString() ??
                 'A camera event needs review.',
             tone: toneForSeverity(severity),
           );
@@ -622,8 +623,17 @@ class _WorkspaceViewState extends State<WorkspaceView> {
               destinations: destinations
                   .map(
                     (item) => NavigationDestination(
-                      icon: Icon(item.icon),
-                      selectedIcon: Icon(item.selectedIcon),
+                      icon: item.label == 'Agents'
+                          ? const AnimatedAgentNavOrb(
+                              key: ValueKey('agents-nav-orb'),
+                            )
+                          : Icon(item.icon),
+                      selectedIcon: item.label == 'Agents'
+                          ? const AnimatedAgentNavOrb(
+                              key: ValueKey('agents-nav-orb-selected'),
+                              selected: true,
+                            )
+                          : Icon(item.selectedIcon),
                       label: item.label,
                     ),
                   )
@@ -1092,8 +1102,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       return device.name.toLowerCase().contains(query) ||
           (device.location ?? '').toLowerCase().contains(query) ||
           device.healthStatus.toLowerCase().contains(query);
-    }).toList()
-      ..sort(_deviceComparator);
+    }).toList()..sort(_deviceComparator);
 
     final addCameraAction = AppButton(
       label: 'Add camera',
@@ -1132,9 +1141,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                       child: Text(entry.value),
                     ),
                 ],
-                onChanged: (value) => setState(
-                  () => _deviceSort = value ?? 'favorites',
-                ),
+                onChanged: (value) =>
+                    setState(() => _deviceSort = value ?? 'favorites'),
               ),
             ],
           ),
@@ -1144,6 +1152,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           else if (_devices.isEmpty)
             EmptyState(
               icon: Icons.videocam_off_outlined,
+
               title: 'No cameras registered',
               message:
                   'Add your first camera or edge device to start the surveillance loop.',
@@ -1157,7 +1166,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             const EmptyState(
               icon: Icons.search_off_outlined,
               title: 'No matching cameras',
-              message: 'Clear the search field to show every registered device.',
+              message:
+                  'Clear the search field to show every registered device.',
               compact: true,
             )
           else
@@ -1167,18 +1177,18 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                 final crossAxisCount = flatMobile
                     ? 1
                     : width < 360
-                        ? 1
-                        : width < 620
-                            ? 2
-                            : width < 980
-                                ? 3
-                                : 4;
+                    ? 1
+                    : width < 620
+                    ? 2
+                    : width < 980
+                    ? 3
+                    : 4;
                 final spacing = width < 360 ? AppSpacing.sm : AppSpacing.md;
                 final aspectRatio = crossAxisCount == 1
                     ? (flatMobile ? 1.75 : 2.05)
                     : width < 620
-                        ? 0.82
-                        : 1.08;
+                    ? 0.82
+                    : 1.08;
 
                 return GridView.builder(
                   shrinkWrap: true,
@@ -1223,8 +1233,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -1504,8 +1514,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       }
       if (_events.isEmpty) {
         return [
-          const EmptyState(
+          EmptyState(
             icon: Icons.event_busy_outlined,
+
             title: 'No events yet',
             message:
                 'Submit an edge event after arming an agent to review detections here.',
@@ -1533,10 +1544,12 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         children: [
           // Pull down to refresh — no button on mobile.
           Text(
-            _events.isEmpty ? 'No detections yet' : '${_events.length} detections',
+            _events.isEmpty
+                ? 'No detections yet'
+                : '${_events.length} detections',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           ...eventItems(flat: true),
@@ -2051,7 +2064,10 @@ class _QuickArmSheetState extends State<_QuickArmSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Arm ${widget.device.name}', style: theme.textTheme.titleMedium),
+              Text(
+                'Arm ${widget.device.name}',
+                style: theme.textTheme.titleMedium,
+              ),
               const SizedBox(height: 2),
               Text(
                 'Choose which detection rules watch this camera',
@@ -2384,11 +2400,20 @@ class _NavItem extends StatelessWidget {
             ? MainAxisAlignment.start
             : MainAxisAlignment.center,
         children: [
-          Icon(
-            selected ? destination.selectedIcon : destination.icon,
-            size: 22,
-            color: fg,
-          ),
+          if (destination.label == 'Agents')
+            AnimatedAgentNavOrb(
+              key: ValueKey(
+                selected ? 'agents-sidebar-orb-selected' : 'agents-sidebar-orb',
+              ),
+              size: 27,
+              selected: selected,
+            )
+          else
+            Icon(
+              selected ? destination.selectedIcon : destination.icon,
+              size: 22,
+              color: fg,
+            ),
           if (extended) ...[
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -2655,9 +2680,7 @@ class _EventTimelineCard extends StatelessWidget {
           onTap: onTap,
           child: Container(
             decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: scheme.outlineVariant),
-              ),
+              border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
             ),
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
             child: Row(
@@ -3370,7 +3393,9 @@ class _WorkspaceBody extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: compact
-                    ? theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)
+                    ? theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      )
                     : theme.textTheme.headlineSmall,
               ),
               Text(
@@ -3940,7 +3965,9 @@ class _AgentBuilderDialogState extends State<_AgentBuilderDialog> {
 
   String? _scheduleLabelOf(Map<String, dynamic> config) {
     final schedule = config['schedule'];
-    if (schedule is Map && schedule['start'] != null && schedule['end'] != null) {
+    if (schedule is Map &&
+        schedule['start'] != null &&
+        schedule['end'] != null) {
       return '${schedule['start']}–${schedule['end']}';
     }
     return null;
@@ -4114,7 +4141,8 @@ class _AgentBuilderDialogState extends State<_AgentBuilderDialog> {
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _send(),
                       decoration: const InputDecoration(
-                        hintText: 'e.g. tell me if a car pulls into the driveway',
+                        hintText:
+                            'e.g. tell me if a car pulls into the driveway',
                       ),
                     ),
                   ),
@@ -4165,7 +4193,9 @@ class _BuilderBubble extends StatelessWidget {
           maxWidth: MediaQuery.sizeOf(context).width * 0.62,
         ),
         decoration: BoxDecoration(
-          color: isUser ? scheme.primaryContainer : scheme.surfaceContainerHighest,
+          color: isUser
+              ? scheme.primaryContainer
+              : scheme.surfaceContainerHighest,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(14),
             topRight: const Radius.circular(14),
@@ -4312,7 +4342,9 @@ class _CreateAgentChooser extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              isEdit ? 'Pick how you\'d like to edit it.' : 'Pick how you\'d like to start.',
+              isEdit
+                  ? 'Pick how you\'d like to edit it.'
+                  : 'Pick how you\'d like to start.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -4431,4 +4463,3 @@ String _formatDate(DateTime? value) {
   }
   return value.toLocal().toString().split('.').first;
 }
-

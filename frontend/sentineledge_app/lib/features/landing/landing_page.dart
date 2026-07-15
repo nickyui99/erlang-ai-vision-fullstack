@@ -9,6 +9,12 @@ const _logoAsset = 'assets/brand/erlang-ai-vision-logo-long-white.png';
 const _cameraIconAsset = 'assets/brand/erlang-ai-camera-tile-icon.png';
 const _agentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
 const _scenarioAsset = 'assets/landing/edge-ai-scenario.png';
+const _xiaoEsp32Asset = 'assets/landing/pipeline/xiao-esp32-s3.png';
+const _ultralyticsAsset = 'assets/landing/pipeline/ultralytics-yolo26.png';
+const _qwenAsset = 'assets/landing/pipeline/qwen.png';
+const _alibabaCloudAsset = 'assets/landing/pipeline/alibaba-cloud.png';
+// Add the public watch URL after the hackathon demo is uploaded.
+const _youtubeDemoUrl = '';
 const _architectureFlowAsset =
     'assets/landing/erlang-ai-vision-architecture-flow.png';
 const _githubUrl = 'https://github.com/nickyui99/erlang-ai-vision-fullstack';
@@ -88,6 +94,13 @@ class _LandingPageState extends State<LandingPage> {
                   _Reveal(
                     style: _RevealStyle.slideLeft,
                     child: _ProofSection(compact: compact),
+                  ),
+                  _Reveal(
+                    style: _RevealStyle.zoom,
+                    child: _DemoVideoSection(
+                      compact: compact,
+                      onLaunchDemo: widget.onLaunchDemo,
+                    ),
                   ),
                   _Reveal(
                     style: _RevealStyle.slideRight,
@@ -445,7 +458,81 @@ class _HeroCopy extends StatelessWidget {
             },
           ),
         ),
+        const SizedBox(height: AppSpacing.lg),
+        const _Reveal(
+          delay: Duration(milliseconds: 380),
+          child: Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _PlatformAvailabilityChip(
+                icon: Icons.android,
+                platform: 'Android',
+                status: 'Available',
+                tone: AppColors.success,
+              ),
+              _PlatformAvailabilityChip(
+                icon: Icons.language,
+                platform: 'Web',
+                status: 'Available',
+                tone: AppColors.success,
+              ),
+              _PlatformAvailabilityChip(
+                icon: Icons.apple,
+                platform: 'iOS',
+                status: 'Coming soon',
+                tone: AppColors.neutral400,
+              ),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+}
+
+class _PlatformAvailabilityChip extends StatelessWidget {
+  const _PlatformAvailabilityChip({
+    required this.icon,
+    required this.platform,
+    required this.status,
+    required this.tone,
+  });
+
+  final IconData icon;
+  final String platform;
+  final String status;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelStyle = Theme.of(context).textTheme.labelMedium;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 17, color: tone),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            platform,
+            style: labelStyle?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(status, style: labelStyle?.copyWith(color: tone)),
+        ],
+      ),
     );
   }
 }
@@ -455,96 +542,133 @@ class _ConsolePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: AppColors.neutral50,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.22),
-            blurRadius: 60,
-            offset: const Offset(0, 28),
-          ),
-        ],
-      ),
+    return AspectRatio(
+      aspectRatio: 1.38,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final compact = constraints.maxWidth < 680;
-          if (compact) {
-            return SizedBox(
-              height: 840,
-              child: Container(
-                color: AppColors.lightBackground,
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: const [
-                    _PreviewHeader(),
-                    SizedBox(height: AppSpacing.md),
-                    _MetricStrip(),
-                    SizedBox(height: AppSpacing.md),
-                    Expanded(child: _CameraPreviewCard()),
-                    SizedBox(height: AppSpacing.md),
-                    _AgentPreviewCard(),
-                  ],
+          final width = constraints.maxWidth;
+          final height = constraints.maxHeight;
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: width * 0.06,
+                right: width * -0.08,
+                bottom: height * 0.04,
+                child: const _LaptopConsolePreview(),
+              ),
+              Positioned(
+                left: 0,
+                bottom: 0,
+                width: width * 0.27,
+                child: IgnorePointer(
+                  child: Image.asset(
+                    'assets/landing/mobile-agent-frame.png',
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                  ),
                 ),
               ),
-            );
-          }
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
 
-          return AspectRatio(
-            aspectRatio: 1.18,
-            child: Row(
-              children: [
-                Container(
-                  width: 92,
-                  color: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                  child: const _PreviewRail(),
-                ),
-                Expanded(
-                  child: Container(
-                    color: AppColors.lightBackground,
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const _PreviewHeader(),
-                        const SizedBox(height: AppSpacing.md),
-                        const _MetricStrip(),
-                        const SizedBox(height: AppSpacing.md),
-                        Expanded(
-                          child: Row(
-                            children: [
-                              const Expanded(
-                                flex: 7,
-                                child: _CameraPreviewCard(),
-                              ),
-                              const SizedBox(width: AppSpacing.md),
-                              Expanded(
-                                flex: 5,
-                                child: Column(
-                                  children: const [
-                                    Expanded(child: _AgentPreviewCard()),
-                                    SizedBox(height: AppSpacing.md),
-                                    Expanded(child: _AuditPreviewCard()),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+class _LaptopConsolePreview extends StatelessWidget {
+  const _LaptopConsolePreview();
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 1.5,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final height = constraints.maxHeight;
+          return Stack(
+            children: [
+              Positioned(
+                left: width * 0.172,
+                top: height * 0.102,
+                width: width * 0.656,
+                height: height * 0.611,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: const FittedBox(
+                    fit: BoxFit.fill,
+                    child: SizedBox(
+                      width: 820,
+                      height: 620,
+                      child: _DesktopConsoleSurface(),
                     ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Image.asset(
+                    'assets/landing/laptop-frame.png',
+                    fit: BoxFit.fill,
+                    filterQuality: FilterQuality.high,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DesktopConsoleSurface extends StatelessWidget {
+  const _DesktopConsoleSurface();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 92,
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+          child: const _PreviewRail(),
+        ),
+        Expanded(
+          child: Container(
+            color: AppColors.lightBackground,
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _PreviewHeader(),
+                const SizedBox(height: AppSpacing.md),
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Expanded(flex: 7, child: _CameraPreviewCard()),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        flex: 5,
+                        child: Column(
+                          children: const [
+                            Expanded(child: _AgentPreviewCard()),
+                            SizedBox(height: AppSpacing.md),
+                            Expanded(child: _AuditPreviewCard()),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          );
-        },
-      ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -806,45 +930,6 @@ class _RevealState extends State<_Reveal> with SingleTickerProviderStateMixin {
   }
 }
 
-class _MetricStrip extends StatelessWidget {
-  const _MetricStrip();
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final itemWidth = constraints.maxWidth < 520
-            ? constraints.maxWidth
-            : (constraints.maxWidth - AppSpacing.sm * 2) / 3;
-        return Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: const [
-            _MiniMetric(
-              icon: Icons.videocam_outlined,
-              label: 'Online cameras',
-              value: '3/3',
-              tone: AppColors.success,
-            ),
-            _MiniMetric(
-              icon: Icons.smart_toy_outlined,
-              label: 'Armed agents',
-              value: '6',
-              tone: AppColors.success,
-            ),
-            _MiniMetric(
-              icon: Icons.fact_check_outlined,
-              label: 'Qwen verdicts',
-              value: '12',
-              tone: AppColors.info,
-            ),
-          ].map((child) => SizedBox(width: itemWidth, child: child)).toList(),
-        );
-      },
-    );
-  }
-}
-
 class _CameraPreviewCard extends StatelessWidget {
   const _CameraPreviewCard();
 
@@ -1083,6 +1168,194 @@ class _ProofSection extends StatelessWidget {
   }
 }
 
+class _DemoVideoSection extends StatelessWidget {
+  const _DemoVideoSection({required this.compact, required this.onLaunchDemo});
+
+  final bool compact;
+  final VoidCallback onLaunchDemo;
+
+  void _playDemo() {
+    if (_youtubeDemoUrl.isNotEmpty) {
+      openExternalUrl(_youtubeDemoUrl);
+      return;
+    }
+    onLaunchDemo();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasYoutubeVideo = _youtubeDemoUrl.isNotEmpty;
+    return _LightSection(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeading(
+            eyebrow: 'YouTube demo',
+            title: 'See the full agent workflow in under two minutes.',
+            body:
+                'Follow a camera event from local edge detection through Qwen verification, an auditable verdict, and the operator response.',
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+          Semantics(
+            button: true,
+            label: hasYoutubeVideo
+                ? 'Watch Erlang AI Vision demo on YouTube'
+                : 'Launch the Erlang AI Vision interactive demo',
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _playDemo,
+                borderRadius: AppRadius.lgAll,
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppColors.neutral900,
+                      borderRadius: AppRadius.lgAll,
+                      border: Border.all(color: AppColors.lightBorder),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.16),
+                          blurRadius: 30,
+                          offset: const Offset(0, 18),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.asset(
+                          _scenarioAsset,
+                          fit: BoxFit.cover,
+                          filterQuality: FilterQuality.high,
+                        ),
+                        const DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Color(0x26000000), Color(0xCC080B12)],
+                              stops: [0.20, 1.0],
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: compact ? AppSpacing.lg : AppSpacing.xxl,
+                          top: compact ? AppSpacing.lg : AppSpacing.xl,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF0033),
+                              borderRadius: const BorderRadius.all(
+                                Radius.circular(999),
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                                SizedBox(width: AppSpacing.xs),
+                                Text(
+                                  'YOUTUBE DEMO',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1.1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Center(
+                          child: Container(
+                            width: compact ? 72 : 92,
+                            height: compact ? 72 : 92,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.28),
+                                  blurRadius: 24,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.play_arrow_rounded,
+                              color: Color(0xFFFF0033),
+                              size: 52,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: compact ? AppSpacing.lg : AppSpacing.xxl,
+                          right: compact ? AppSpacing.lg : AppSpacing.xxl,
+                          bottom: compact ? AppSpacing.lg : AppSpacing.xl,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'From natural-language rule to verified alert',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge
+                                          ?.copyWith(color: Colors.white),
+                                    ),
+                                    const SizedBox(height: AppSpacing.xs),
+                                    Text(
+                                      hasYoutubeVideo
+                                          ? 'Watch the product walkthrough on YouTube.'
+                                          : 'Interactive demo available now. YouTube upload pending.',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: AppColors.neutral300,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (!compact) ...[
+                                const SizedBox(width: AppSpacing.lg),
+                                Icon(
+                                  Icons.open_in_new_rounded,
+                                  color: Colors.white.withValues(alpha: 0.78),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TraditionalVsAgenticSection extends StatelessWidget {
   const _TraditionalVsAgenticSection({required this.compact});
 
@@ -1095,7 +1368,7 @@ class _TraditionalVsAgenticSection extends StatelessWidget {
         icon: Icons.notifications_active_outlined,
         aspect: 'Alerting',
         traditional:
-            'Motion and pixel triggers fire on shadows, pets, rain, and headlights — a flood of false alarms that trains operators to ignore them.',
+            'Basic motion and object models can detect people or vehicles, but shadows, pets, reflections, and occlusion still trigger costly false alarms.',
         agentic:
             'Edge detectors flag candidates, then Qwen Cloud verifies the event against your rule before anyone is alerted.',
       ),
@@ -1103,7 +1376,7 @@ class _TraditionalVsAgenticSection extends StatelessWidget {
         icon: Icons.inbox_outlined,
         aspect: 'What you review',
         traditional:
-            'Operators scrub hours of continuous footage to find the one moment that actually mattered.',
+            'Detection clips are surfaced automatically, but operators still review every candidate to separate genuine incidents from model noise.',
         agentic:
             'Only verified events reach the timeline — each with a plain-English summary, snapshot, and clip.',
       ),
@@ -1111,7 +1384,7 @@ class _TraditionalVsAgenticSection extends StatelessWidget {
         icon: Icons.rule_outlined,
         aspect: 'Rules',
         traditional:
-            'Fixed motion zones and schedules that an installer has to reconfigure on-site.',
+            'Predefined object classes, confidence thresholds, zones, and schedules cannot express the full context of what actually matters.',
         agentic:
             'Natural-language rules like “alert if a person lingers at the front door after 10 PM,” editable in seconds.',
       ),
@@ -1119,7 +1392,7 @@ class _TraditionalVsAgenticSection extends StatelessWidget {
         icon: Icons.psychology_outlined,
         aspect: 'Verdict & context',
         traditional:
-            'A raw clip with no explanation of what happened or how urgent it is.',
+            'A class label and confidence score show what the model detected, but not whether it matches your intent or how urgent it is.',
         agentic:
             'A reasoned verdict with severity, a confidence score, and a recommended action: notify, monitor, or escalate.',
       ),
@@ -1127,7 +1400,7 @@ class _TraditionalVsAgenticSection extends StatelessWidget {
         icon: Icons.travel_explore_outlined,
         aspect: 'Active investigation',
         traditional:
-            'A passive recorder — it captures frames, it does not investigate them.',
+            'A basic ML detector scores the available frame or clip once; it cannot gather fresh evidence when the scene is ambiguous.',
         agentic:
             'The agent gathers more evidence: pulls a fresh snapshot, pans the camera, and checks device status and recent events.',
       ),
@@ -1135,7 +1408,7 @@ class _TraditionalVsAgenticSection extends StatelessWidget {
         icon: Icons.verified_outlined,
         aspect: 'Response & audit',
         traditional:
-            'You find out hours later when someone checks the DVR, and take the footage at face value.',
+            'An alert fires when a model crosses its threshold, with no reasoning trace explaining why it fired or what evidence was checked.',
         agentic:
             'High-severity events push a realtime alert the moment they are verified, and every AI tool call is written to an auditable trail.',
       ),
@@ -1146,10 +1419,10 @@ class _TraditionalVsAgenticSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const _SectionHeading(
-            eyebrow: 'Traditional vs. agentic',
-            title: 'A camera that reasons, not just records.',
+            eyebrow: 'Smart CCTV vs. agentic AI',
+            title: 'Beyond detection: understand what actually matters.',
             body:
-                'Traditional CCTV records everything and alerts on movement, leaving people to sort real threats from noise. Erlang AI Vision adds an AI agent that verifies, explains, and investigates every event before it interrupts you.',
+                'Basic smart CCTV adds motion and object detection, but threshold-based models still confuse candidates with real incidents. Erlang AI Vision keeps edge ML for speed, then uses an AI agent to verify context, explain the verdict, and investigate before alerting you.',
           ),
           const SizedBox(height: AppSpacing.xxl),
           // A three-column table reads best on wide screens; on narrow screens
@@ -1238,8 +1511,8 @@ class _ComparisonTable extends StatelessWidget {
         _TableCellBox(child: SizedBox.shrink()),
         _TableCellBox(
           child: _ColumnHeader(
-            icon: Icons.videocam_off_outlined,
-            label: 'Traditional CCTV',
+            icon: Icons.analytics_outlined,
+            label: 'Basic smart CCTV',
             color: AppColors.neutral500,
           ),
         ),
@@ -1372,9 +1645,9 @@ class _ComparisonRow extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           _ComparisonCell(
-            label: 'Traditional CCTV',
+            label: 'Basic smart CCTV',
             text: item.traditional,
-            icon: Icons.close_rounded,
+            icon: Icons.analytics_outlined,
             accent: AppColors.neutral500,
             background: AppColors.neutral100,
             textColor: AppColors.neutral600,
@@ -1476,19 +1749,45 @@ class _AgenticInvestigationSection extends StatelessWidget {
         step: 'Stage 1',
         title: 'Edge detection',
         body:
-            'ESP32 cameras and the laptop bridge run YOLO (and optional YAMNet audio) to flag candidate events on-site.',
+            'XIAO ESP32-S3 cameras capture events on-site and relay them to the laptop edge bridge.',
+        visuals: [
+          _StageVisual(
+            asset: _xiaoEsp32Asset,
+            keyName: 'stage-visual-edge-hardware',
+            semanticLabel: 'Seeed Studio XIAO ESP32-S3 board',
+          ),
+        ],
       ),
       _StageItem(
         step: 'Stage 2',
         title: 'Local triage',
         body:
-            'A local Qwen model filters obvious noise so only meaningful candidates reach the cloud.',
+            'Ultralytics YOLO filters visual noise locally so only meaningful candidates reach the cloud.',
+        visuals: [
+          _StageVisual(
+            asset: _ultralyticsAsset,
+            keyName: 'stage-visual-local-yolo',
+            semanticLabel: 'Ultralytics YOLO26',
+          ),
+        ],
       ),
       _StageItem(
         step: 'Stage 3',
         title: 'Cloud verification',
         body:
-            'Qwen Cloud reasons about the event against your natural-language rule and issues the final verdict.',
+            'Qwen on Alibaba Cloud reasons against your natural-language rule and issues the final verdict.',
+        visuals: [
+          _StageVisual(
+            asset: _alibabaCloudAsset,
+            keyName: 'stage-visual-cloud-alibaba',
+            semanticLabel: 'Alibaba Cloud',
+          ),
+          _StageVisual(
+            asset: _qwenAsset,
+            keyName: 'stage-visual-cloud-qwen',
+            semanticLabel: 'Qwen',
+          ),
+        ],
       ),
     ];
 
@@ -1578,11 +1877,25 @@ class _StageItem {
     required this.step,
     required this.title,
     required this.body,
+    required this.visuals,
   });
 
   final String step;
   final String title;
   final String body;
+  final List<_StageVisual> visuals;
+}
+
+class _StageVisual {
+  const _StageVisual({
+    required this.asset,
+    required this.keyName,
+    required this.semanticLabel,
+  });
+
+  final String asset;
+  final String keyName;
+  final String semanticLabel;
 }
 
 class _StageCard extends StatelessWidget {
@@ -1600,10 +1913,23 @@ class _StageCard extends StatelessWidget {
         borderRadius: AppRadius.lgAll,
         border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final narrow = constraints.maxWidth < 440;
+          final title = Text(
+            item.title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(color: Colors.white),
+          );
+          final body = Text(
+            item.body,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.neutral300),
+          );
+          final visuals = _StageVisualStrip(visuals: item.visuals);
+          final step = Text(
             item.step,
             style: AppTypography.tabular(
               Theme.of(context).textTheme.labelLarge!.copyWith(
@@ -1611,30 +1937,78 @@ class _StageCard extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
-          ),
-          const SizedBox(width: AppSpacing.lg),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          );
+
+          if (narrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  item.title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(color: Colors.white),
+                Row(
+                  children: [
+                    step,
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(child: title),
+                  ],
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  item.body,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: AppColors.neutral300),
-                ),
+                const SizedBox(height: AppSpacing.sm),
+                body,
+                const SizedBox(height: AppSpacing.md),
+                SizedBox(height: 72, child: visuals),
               ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              step,
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    title,
+                    const SizedBox(height: AppSpacing.xs),
+                    body,
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              SizedBox(width: 118, height: 76, child: visuals),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _StageVisualStrip extends StatelessWidget {
+  const _StageVisualStrip({required this.visuals});
+
+  final List<_StageVisual> visuals;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        for (var index = 0; index < visuals.length; index++) ...[
+          if (index > 0) const SizedBox(width: AppSpacing.sm),
+          Flexible(
+            child: Semantics(
+              label: visuals[index].semanticLabel,
+              image: true,
+              child: Image.asset(
+                visuals[index].asset,
+                key: ValueKey(visuals[index].keyName),
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 }
@@ -2024,12 +2398,30 @@ class _ProjectResourcesSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const checklist = [
-      ('Fullstack repository', 'Flutter web, FastAPI backend, cloud deployment scripts, and product documentation.'),
-      ('IoT firmware repository', 'ESP32 camera firmware, device behavior, and physical camera control live in SentinelEdge_IOT.'),
-      ('Laptop edge repository', 'The bridge that connects camera streams, local detection, and command relay lives in SentinelEdge_LaptopEdge.'),
-      ('Cloud deployment', 'Frontend OSS publishing and backend ECI deployment scripts are included in the repository.'),
-      ('Architecture diagram', 'Clear edge bridge, backend, database, Qwen Cloud, and Flutter console flow.'),
-      ('Product walkthrough', 'Camera pairing, live stream, agent rule, event, clip, Qwen verdict, and audit trail are the core flow.'),
+      (
+        'Fullstack repository',
+        'Flutter web, FastAPI backend, cloud deployment scripts, and product documentation.',
+      ),
+      (
+        'IoT firmware repository',
+        'ESP32 camera firmware, device behavior, and physical camera control live in SentinelEdge_IOT.',
+      ),
+      (
+        'Laptop edge repository',
+        'The bridge that connects camera streams, local detection, and command relay lives in SentinelEdge_LaptopEdge.',
+      ),
+      (
+        'Cloud deployment',
+        'Frontend OSS publishing and backend ECI deployment scripts are included in the repository.',
+      ),
+      (
+        'Architecture diagram',
+        'Clear edge bridge, backend, database, Qwen Cloud, and Flutter console flow.',
+      ),
+      (
+        'Product walkthrough',
+        'Camera pairing, live stream, agent rule, event, clip, Qwen verdict, and audit trail are the core flow.',
+      ),
     ];
 
     return _LightSection(
@@ -2048,21 +2440,21 @@ class _ProjectResourcesSection extends StatelessWidget {
                   children: [
                     _SubmissionBadgePanel(onLogin: null),
                     const SizedBox(height: AppSpacing.lg),
-                    for (final item in checklist) _ChecklistRow(title: item.$1, body: item.$2),
+                    for (final item in checklist)
+                      _ChecklistRow(title: item.$1, body: item.$2),
                   ],
                 )
               : Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _SubmissionBadgePanel(onLogin: null),
-                    ),
+                    Expanded(child: _SubmissionBadgePanel(onLogin: null)),
                     const SizedBox(width: AppSpacing.xl),
                     Expanded(
                       flex: 2,
                       child: Column(
                         children: [
-                          for (final item in checklist) _ChecklistRow(title: item.$1, body: item.$2),
+                          for (final item in checklist)
+                            _ChecklistRow(title: item.$1, body: item.$2),
                         ],
                       ),
                     ),
@@ -2132,12 +2524,16 @@ class _SubmissionBadgePanel extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
           Text(
             'nickyui99/erlang-ai-vision-fullstack',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(color: Colors.white),
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
             'Open the working repositories for the web app, backend, IoT camera firmware, laptop edge bridge, deployment scripts, and project documentation.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.neutral300),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.neutral300),
           ),
           const SizedBox(height: AppSpacing.xl),
           const _DarkPill(
@@ -2611,60 +3007,15 @@ class _ProofItem {
   final String body;
 }
 
-class _MiniMetric extends StatelessWidget {
-  const _MiniMetric({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.tone,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color tone;
-
-  @override
-  Widget build(BuildContext context) {
-    return _LightPanel(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Row(
-        children: [
-          Icon(icon, color: tone, size: 20),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.neutral900,
-                  ),
-                ),
-                Text(label, style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _LightPanel extends StatelessWidget {
-  const _LightPanel({
-    required this.child,
-    this.padding = const EdgeInsets.all(AppSpacing.lg),
-  });
+  const _LightPanel({required this.child});
 
   final Widget child;
-  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: padding,
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: AppRadius.lgAll,

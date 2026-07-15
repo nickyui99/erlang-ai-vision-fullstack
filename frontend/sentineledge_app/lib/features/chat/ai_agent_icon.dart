@@ -8,6 +8,168 @@ import '../../design/app_motion.dart';
 /// Brand mascot asset for the Erlang AI Agent.
 const aiAgentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
 
+/// Compact, Flutter-only animated orb for the Agents navigation destination.
+/// Orange and blue drift vertically while the selected icon lifts out of the
+/// navigation bar. It uses no raster asset and honours reduced motion.
+class AnimatedAgentNavOrb extends StatefulWidget {
+  const AnimatedAgentNavOrb({super.key, this.size = 27, this.selected = false});
+
+  final double size;
+  final bool selected;
+
+  @override
+  State<AnimatedAgentNavOrb> createState() => _AnimatedAgentNavOrbState();
+}
+
+class _AnimatedAgentNavOrbState extends State<AnimatedAgentNavOrb>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 3),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reducedMotion = AppMotion.reduced(context);
+
+    return Semantics(
+      label: 'AI Agents',
+      image: true,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final progress = reducedMotion ? 0.5 : _controller.value;
+          return AnimatedContainer(
+            duration: AppMotion.fast,
+            curve: AppMotion.emphasized,
+            transform: Matrix4.translationValues(0, widget.selected ? -5 : 0, 0)
+              ..scaleByDouble(
+                widget.selected ? 1.12 : 1.0,
+                widget.selected ? 1.12 : 1.0,
+                1.0,
+                1.0,
+              ),
+            transformAlignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: widget.selected
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFFFF6A1A).withValues(alpha: 0.34),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                      BoxShadow(
+                        color: const Color(0xFF1597FF).withValues(alpha: 0.30),
+                        blurRadius: 12,
+                        offset: const Offset(0, -2),
+                      ),
+                    ]
+                  : const [],
+            ),
+            child: SizedBox.square(
+              dimension: widget.size,
+              child: CustomPaint(
+                painter: _AgentNavOrbPainter(progress: progress),
+                child: Center(
+                  child: Text(
+                    'AI',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: widget.size * 0.34,
+                      height: 1,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                      shadows: const [
+                        Shadow(color: Color(0x66000000), blurRadius: 3),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AgentNavOrbPainter extends CustomPainter {
+  const _AgentNavOrbPainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final center = rect.center;
+    final radius = size.shortestSide / 2;
+    final travel = (progress - 0.5) * size.height * 0.72;
+
+    canvas.save();
+    canvas.clipPath(Path()..addOval(rect));
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: const [
+            Color(0xFFFF8A1F),
+            Color(0xFFFF4D1F),
+            Color(0xFF3478F6),
+            Color(0xFF10B8FF),
+          ],
+          stops: const [0.0, 0.36, 0.66, 1.0],
+          transform: _VerticalGradientTransform(travel),
+        ).createShader(rect),
+    );
+    canvas.drawCircle(
+      center + Offset(-radius * 0.24, -radius * 0.30),
+      radius * 0.52,
+      Paint()
+        ..blendMode = BlendMode.plus
+        ..shader = RadialGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.30),
+            Colors.white.withValues(alpha: 0),
+          ],
+        ).createShader(rect),
+    );
+    canvas.restore();
+
+    canvas.drawCircle(
+      center,
+      radius - 0.8,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..color = Colors.white.withValues(alpha: 0.55),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _AgentNavOrbPainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}
+
+class _VerticalGradientTransform extends GradientTransform {
+  const _VerticalGradientTransform(this.offsetY);
+
+  final double offsetY;
+
+  @override
+  Matrix4 transform(Rect bounds, {TextDirection? textDirection}) =>
+      Matrix4.translationValues(0, offsetY, 0);
+}
+
 /// The animated red-blue "aurora" orb used for the AI Agent FAB and the chat
 /// empty state. Honours reduced-motion by freezing the animation.
 class AnimatedAiAgentIcon extends StatefulWidget {
@@ -51,7 +213,9 @@ class _AnimatedAiAgentIconState extends State<AnimatedAiAgentIcon>
               // orb read as a single soft light source, not a flat disc.
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.16 + breath * 0.16),
+                  color: AppColors.primary.withValues(
+                    alpha: 0.16 + breath * 0.16,
+                  ),
                   blurRadius: widget.size * (0.24 + breath * 0.14),
                   spreadRadius: widget.size * 0.01,
                   offset: Offset(-widget.size * 0.04, widget.size * 0.06),
@@ -115,31 +279,58 @@ class _AgentAuroraPainter extends CustomPainter {
 
     // Keep every glow contained within the disc.
     canvas.save();
-    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: center, radius: radius)));
+    canvas.clipPath(
+      Path()..addOval(Rect.fromCircle(center: center, radius: radius)),
+    );
 
-    void glow(double angle, double dist, double blobRadius, Color color, double alpha) {
+    void glow(
+      double angle,
+      double dist,
+      double blobRadius,
+      Color color,
+      double alpha,
+    ) {
       final c = center + Offset(math.cos(angle) * dist, math.sin(angle) * dist);
       final r = Rect.fromCircle(center: c, radius: blobRadius);
       canvas.drawCircle(
         c,
         blobRadius,
         Paint()
-          ..blendMode = BlendMode.plus // additive: overlaps brighten, never mud
+          ..blendMode = BlendMode
+              .plus // additive: overlaps brighten, never mud
           ..shader = RadialGradient(
-            colors: [color.withValues(alpha: alpha), color.withValues(alpha: 0)],
+            colors: [
+              color.withValues(alpha: alpha),
+              color.withValues(alpha: 0),
+            ],
             stops: const [0.0, 1.0],
           ).createShader(r),
       );
     }
 
     // 2. Red and blue pools drifting on opposite sides, breathing in size.
-    glow(phase * 0.9, radius * (0.34 + 0.08 * drift),
-        radius * (0.82 + 0.10 * breath), _red, 0.80);
-    glow(phase * 0.9 + math.pi + 0.5, radius * (0.36 - 0.08 * drift),
-        radius * (0.84 + 0.10 * (1 - breath)), _blue, 0.82);
+    glow(
+      phase * 0.9,
+      radius * (0.34 + 0.08 * drift),
+      radius * (0.82 + 0.10 * breath),
+      _red,
+      0.80,
+    );
+    glow(
+      phase * 0.9 + math.pi + 0.5,
+      radius * (0.36 - 0.08 * drift),
+      radius * (0.84 + 0.10 * (1 - breath)),
+      _blue,
+      0.82,
+    );
     // A small mingling spark keeps the centre alive without clutter.
-    glow(-phase * 0.6, radius * 0.16 * drift,
-        radius * (0.42 + 0.08 * breath), _spark, 0.28);
+    glow(
+      -phase * 0.6,
+      radius * 0.16 * drift,
+      radius * (0.42 + 0.08 * breath),
+      _spark,
+      0.28,
+    );
 
     // 3. Glassy specular highlight, upper-left.
     final hl = center + Offset(-radius * 0.30, -radius * 0.34);
@@ -149,7 +340,10 @@ class _AgentAuroraPainter extends CustomPainter {
       Paint()
         ..blendMode = BlendMode.plus
         ..shader = RadialGradient(
-          colors: [Colors.white.withValues(alpha: 0.20), Colors.white.withValues(alpha: 0)],
+          colors: [
+            Colors.white.withValues(alpha: 0.20),
+            Colors.white.withValues(alpha: 0),
+          ],
           stops: const [0.0, 1.0],
         ).createShader(Rect.fromCircle(center: hl, radius: radius * 0.60)),
     );
@@ -161,7 +355,10 @@ class _AgentAuroraPainter extends CustomPainter {
       Paint()
         ..blendMode = BlendMode.plus
         ..shader = RadialGradient(
-          colors: [Colors.white.withValues(alpha: 0.10), Colors.white.withValues(alpha: 0)],
+          colors: [
+            Colors.white.withValues(alpha: 0.10),
+            Colors.white.withValues(alpha: 0),
+          ],
           stops: const [0.0, 1.0],
         ).createShader(Rect.fromCircle(center: center, radius: radius * 0.52)),
     );
