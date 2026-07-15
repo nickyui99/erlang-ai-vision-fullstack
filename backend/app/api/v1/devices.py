@@ -18,10 +18,17 @@ from app.models.recording import Recording
 from app.models.device import Device
 from app.models.tool_audit import ToolAudit
 from app.models.user import User
-from app.schemas.command import DeviceCommandResult, DeviceControlCommand, DevicePanCommand, DeviceTiltCommand
+from app.schemas.command import (
+    DeviceCommandResult,
+    DeviceControlCommand,
+    DeviceControlModeCommand,
+    DevicePanCommand,
+    DeviceTiltCommand,
+)
 from app.schemas.device import DeviceCreate, DeviceRead, DeviceRegistrationRead, DeviceUpdate, LiveStreamUrlRead
 from app.schemas.media import ClipRead, RecordingRead
 from app.services.edge_command_hub import EdgeCommandTimeoutError, EdgeNotConnectedError, edge_command_hub
+from app.services.realtime_bus import realtime_bus
 from app.services.video_stream_broker import video_stream_broker
 from app.services.demo_simulator import demo_simulator
 
@@ -267,6 +274,52 @@ async def control_device(
         payload=command_payload,
     )
     return {"data": result.model_dump(mode="json")}
+
+@router.post("/{device_id}/control-mode")
+async def set_device_control_mode(
+    device_id: str,
+    payload: DeviceControlModeCommand,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Set a camera's autonomous control mode (off / auto_track / agent).
+
+    Persistence is the source of truth: the mode is saved first, then best-effort relayed live to
+    the edge. If the edge is offline the request still succeeds (relayed=false) and the edge picks
+    up the persisted mode on its next /agents/active poll -- so toggling never depends on a live
+    edge connection.
+    """
+    device = await _get_owned_device(session, current_user.user_id, device_id)
+
+    # Best-effort relay first (mirrors the pan/tilt command path). A relay failure must not fail
+    # the request: the mode still persists below and the edge restores it on its next poll.
+    relayed = False
+    try:
+        result = await _send_audited_device_command(
+            session=session,
+            user=current_user,
+            device=device,
+            tool_name="set_control_mode",
+            command_type="command.set_control_mode",
+            payload={"mode": payload.mode},
+        )
+        relayed = result.status == "ok"
+    except HTTPException:
+        relayed = False
+
+    # Persist (source of truth) regardless of relay outcome, then announce to open app sessions.
+    device.control_mode = payload.mode
+    device.updated_at = datetime.now(UTC)
+    await session.commit()
+    await session.refresh(device)
+    await realtime_bus.publish(
+        current_user.user_id,
+        "device.control_mode_changed",
+        {"device_id": device.device_id, "control_mode": device.control_mode},
+    )
+    data = DeviceRead.model_validate(device).model_dump(mode="json")
+    return {"data": {**data, "relayed": relayed}}
+
 
 @router.post("/{device_id}/stream-url")
 async def create_device_stream_url(

@@ -33,8 +33,17 @@ OTHER_EDGE_TOKEN = "edge-token-m7-other"
 EDGE_HEADERS = {"Authorization": f"Bearer {EDGE_TOKEN}"}
 
 
+# Clients entered as context managers during a test, torn down after it.
+_entered_clients: list["TestClient"] = []
+
+
 def setup_function() -> None:
     asyncio.run(_reset_db())
+
+
+def teardown_function() -> None:
+    while _entered_clients:
+        _entered_clients.pop().__exit__(None, None, None)
 
 
 async def _reset_db() -> None:
@@ -96,7 +105,14 @@ async def _reset_db() -> None:
 
 
 def _client(user_id: str = "usr_m7") -> TestClient:
+    # Enter the TestClient context so websocket_connect() and the threaded client.post()
+    # in the relay tests share ONE blocking portal / event loop. A bare TestClient() gives
+    # each call its own loop, so the shared edge_command_hub ends up driving a WebSocket
+    # bound to one loop from a request handler running on another -> cross-loop deadlock.
+    # (Real deployments run every connection on a single Uvicorn loop, so this only bit tests.)
     client = TestClient(app)
+    client.__enter__()
+    _entered_clients.append(client)
     client.cookies.set("erlang_session", create_session_token(user_id))
     return client
 
@@ -351,6 +367,123 @@ def test_command_returns_504_when_edge_does_not_respond_and_audits_failure() -> 
     audits = asyncio.run(_audit_rows())
     assert len(audits) == 1
     assert audits[0].result["error"]["code"] == "command_timeout"
+
+
+def test_set_control_mode_persists_and_relays_when_edge_connected() -> None:
+    client = _client()
+
+    with client.websocket_connect("/api/v1/edge/ws", headers=EDGE_HEADERS) as websocket:
+        response_holder: dict[str, object] = {}
+
+        def post_mode() -> None:
+            response_holder["response"] = client.post(
+                "/api/v1/devices/dev_m7/control-mode", json={"mode": "auto_track"}
+            )
+
+        thread = threading.Thread(target=post_mode)
+        thread.start()
+        command = websocket.receive_json()
+        websocket.send_json(
+            {
+                "type": "response.command_result",
+                "request_id": command["request_id"],
+                "status": "ok",
+                "payload": {"control_mode": "auto_track"},
+            }
+        )
+        thread.join(timeout=3)
+
+    response = response_holder["response"]
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["control_mode"] == "auto_track"   # persisted on the device row
+    assert data["relayed"] is True                 # delivered live to the connected edge
+    assert command["type"] == "command.set_control_mode"
+    assert command["device_id"] == "dev_m7"
+    assert command["payload"] == {"mode": "auto_track"}
+
+    # persistence survives a fresh read
+    read = client.get("/api/v1/devices/dev_m7")
+    assert read.json()["data"]["control_mode"] == "auto_track"
+
+    audits = asyncio.run(_audit_rows())
+    assert len(audits) == 1
+    assert audits[0].tool_name == "set_control_mode"
+    assert audits[0].called_by == "user"
+
+
+def test_set_control_mode_persists_when_edge_offline() -> None:
+    # No edge connected: the request still succeeds (mode persists, relayed=false); the edge will
+    # pick it up on its next /agents/active poll.
+    client = _client()
+
+    response = client.post("/api/v1/devices/dev_m7/control-mode", json={"mode": "agent"})
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["control_mode"] == "agent"
+    assert data["relayed"] is False
+    assert client.get("/api/v1/devices/dev_m7").json()["data"]["control_mode"] == "agent"
+
+
+def test_set_control_mode_rejects_invalid_mode() -> None:
+    client = _client()
+    response = client.post("/api/v1/devices/dev_m7/control-mode", json={"mode": "spin"})
+    assert response.status_code == 422
+
+
+def test_set_control_mode_ownership_and_auth() -> None:
+    assert TestClient(app).post(
+        "/api/v1/devices/dev_m7/control-mode", json={"mode": "off"}
+    ).status_code == 401
+    assert _client("usr_other").post(
+        "/api/v1/devices/dev_m7/control-mode", json={"mode": "off"}
+    ).status_code == 404
+
+
+def test_active_configs_includes_control_mode() -> None:
+    # The edge poll response carries control_mode so a reconnecting edge restores the last mode.
+    client = _client()
+    client.post("/api/v1/devices/dev_m7/control-mode", json={"mode": "agent"})
+
+    edge = TestClient(app).get("/api/v1/edge/agents/active", headers=EDGE_HEADERS)
+    assert edge.status_code == 200
+    assert edge.json()["control_mode"] == "agent"
+
+
+def test_agent_control_returns_clamped_candidate_offline_model() -> None:
+    # With the offline MockQwen (test env), the model yields no action, so the endpoint falls
+    # back to the edge-supplied deterministic candidate -- clamped to the servo limits.
+    client = TestClient(app)
+    situation = {
+        "behavior": "follow",
+        "target_classes": ["person"],
+        "detections": [{"label": "person", "confidence": 0.9}],
+        "pan": 90, "tilt": 90,
+        "candidate": {"cmd": "pan", "angle": 999},  # out of range on purpose
+    }
+    response = client.post("/api/v1/edge/agent-control", headers=EDGE_HEADERS, json=situation)
+    assert response.status_code == 200
+    assert response.json()["data"]["action"] == {"cmd": "pan", "angle": 180}  # clamped
+
+    audits = asyncio.run(_audit_rows())
+    assert len(audits) == 1
+    assert audits[0].tool_name == "agent_camera_control"
+    assert audits[0].called_by == "agent"
+
+
+def test_agent_control_holds_when_no_candidate() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/edge/agent-control", headers=EDGE_HEADERS,
+        json={"behavior": "scan", "detections": [], "candidate": None},
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["action"] is None  # hold
+
+
+def test_agent_control_requires_edge_token() -> None:
+    assert TestClient(app).post("/api/v1/edge/agent-control", json={}).status_code in (401, 403)
 
 
 def test_pan_angle_validation() -> None:

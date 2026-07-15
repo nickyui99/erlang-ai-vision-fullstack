@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 import secrets
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Response, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, Header, HTTPException, Response, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +13,7 @@ from app.models.clip import Clip
 from app.models.device import Device
 from app.models.event import Event
 from app.models.recording import Recording
+from app.models.tool_audit import ToolAudit
 from app.schemas.agent import EdgeAgentConfigRead
 from app.schemas.device import DeviceHeartbeat, DeviceRead
 from app.schemas.event import EdgeEventCreate, EventRead
@@ -27,6 +28,7 @@ from app.schemas.media import (
 from app.core.config import settings
 from app.services import alert_service
 from app.services import verification_service
+from app.services.camera_control_service import decide_camera_control
 from app.services.media_url_service import media_url_service
 from app.services.edge_command_hub import edge_command_hub
 from app.services.realtime_bus import realtime_bus
@@ -46,6 +48,10 @@ def _new_clip_id() -> str:
 
 def _new_recording_id() -> str:
     return f"rec_{secrets.token_urlsafe(18)}"
+
+
+def _new_audit_id() -> str:
+    return f"aud_{secrets.token_urlsafe(18)}"
 
 
 @router.websocket("/ws")
@@ -177,7 +183,38 @@ async def active_agent_configs(
         ).model_dump(mode="json")
         for agent in result.scalars()
     ]
-    return {"data": configs}
+    # control_mode travels alongside the configs so a reconnecting edge restores the last
+    # servo-ownership mode (off/auto_track/agent) it was set to.
+    return {"data": configs, "control_mode": edge_device.control_mode}
+
+
+@router.post("/agent-control")
+async def agent_camera_control(
+    situation: dict = Body(...),
+    edge_device: Device = Depends(get_edge_device),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Decide the next PTZ move for a device in "agent" control mode.
+
+    The laptop edge posts a compact scene "situation" (behavior, detections, current
+    pan/tilt, and a deterministic fallback ``candidate``); we ask the cloud model for the
+    next move, clamp it to the servo limits, audit it, and return the action (or null to
+    hold). Never trusts the model — the action is sanitized in camera_control_service.
+    """
+    action = await decide_camera_control(situation)
+    audit = ToolAudit(
+        audit_id=_new_audit_id(),
+        user_id=edge_device.user_id,
+        device_id=edge_device.device_id,
+        tool_name="agent_camera_control",
+        arguments=situation,
+        result={"action": action},
+        called_by="agent",
+        timestamp=datetime.now(UTC),
+    )
+    session.add(audit)
+    await session.commit()
+    return {"data": {"action": action}}
 
 
 @router.post("/events", status_code=status.HTTP_201_CREATED)

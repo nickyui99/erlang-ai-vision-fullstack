@@ -30,6 +30,10 @@ class Device(Base):
     presets: Mapped[list[dict] | None] = mapped_column(JSON, default=list)
     ptz_correction_pan: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     ptz_correction_tilt: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # Per-camera autonomous control mode: "off" (manual only), "auto_track" (deterministic
+    # follow), or "agent" (LLM-driven). The edge reads this to pick which controller owns the
+    # servo. Persisted so it survives edge restarts / reconnects.
+    control_mode: Mapped[str] = mapped_column(String(16), nullable=False, server_default="off")
     last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

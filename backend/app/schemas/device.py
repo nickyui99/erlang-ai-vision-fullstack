@@ -51,6 +51,7 @@ class DeviceRead(BaseModel):
     presets: list[CameraPreset] = Field(default_factory=list)
     ptz_correction_pan: int = 0
     ptz_correction_tilt: int = 0
+    control_mode: Literal["off", "auto_track", "agent"] = "off"
     last_seen: UTCDatetime | None = None
     created_at: UTCDatetime
     updated_at: UTCDatetime
