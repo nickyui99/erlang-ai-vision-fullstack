@@ -91,7 +91,8 @@ void main() {
     expect(controller.sending, isFalse);
   });
 
-  test('loadSessions restores history for the newest session', () async {
+  test('loadSessions opens a fresh chat but keeps prior sessions in the drawer',
+      () async {
     final api = _FakeApi();
     final seed = ChatController(apiClient: api);
     await seed.loadSessions();
@@ -100,7 +101,27 @@ void main() {
     final reopened = ChatController(apiClient: api);
     await reopened.loadSessions();
 
-    expect(reopened.currentSessionId, isNotNull);
+    // The drawer still lists the prior conversation...
+    expect(reopened.sessions, hasLength(1));
+    expect(reopened.sessions.first.title, 'Persisted question');
+    // ...but the screen opens on an empty new chat, not the old history.
+    expect(reopened.currentSessionId, isNull);
+    expect(reopened.messages, isEmpty);
+  });
+
+  test('selectSession still restores a prior conversation from the drawer',
+      () async {
+    final api = _FakeApi();
+    final seed = ChatController(apiClient: api);
+    await seed.loadSessions();
+    await seed.sendMessage('Persisted question');
+    final priorId = seed.currentSessionId!;
+
+    final reopened = ChatController(apiClient: api);
+    await reopened.loadSessions();
+    await reopened.selectSession(priorId);
+
+    expect(reopened.currentSessionId, priorId);
     expect(reopened.messages.map((m) => m.content).toList(),
         ['Persisted question', 'reply to Persisted question']);
   });

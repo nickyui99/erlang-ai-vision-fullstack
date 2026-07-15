@@ -65,6 +65,8 @@ async def execute_tool(call: QwenToolCall, context: ToolContext) -> ToolResult:
     try:
         if name == "pan_camera":
             result = await _pan_camera(args, context)
+        elif name == "tilt_camera":
+            result = await _tilt_camera(args, context)
         elif name == "get_live_snapshot":
             result = await _get_live_snapshot(context)
         elif name == "get_device_status":
@@ -83,25 +85,46 @@ async def execute_tool(call: QwenToolCall, context: ToolContext) -> ToolResult:
 
 
 async def _pan_camera(args: dict, context: ToolContext) -> ToolResult:
-    angle = permissions.clamp_angle(args.get("angle", 90))
+    return await _move_camera(
+        tool="pan_camera",
+        command_type="command.pan_camera",
+        angle=permissions.clamp_pan(args.get("angle", 90)),
+        context=context,
+    )
+
+
+async def _tilt_camera(args: dict, context: ToolContext) -> ToolResult:
+    return await _move_camera(
+        tool="tilt_camera",
+        command_type="command.tilt_camera",
+        angle=permissions.clamp_tilt(args.get("angle", 90)),
+        context=context,
+    )
+
+
+async def _move_camera(
+    *, tool: str, command_type: str, angle: int, context: ToolContext
+) -> ToolResult:
+    # Pan and tilt share the per-event movement budget so the servo is protected
+    # regardless of which axis the model chooses to move.
     allowed, reason = permissions.pan_rate_limiter.check_and_register(
         context.event_id, time.monotonic()
     )
     if not allowed:
-        return ToolResult("pan_camera", ok=False, error=reason, data={"requested_angle": angle})
+        return ToolResult(tool, ok=False, error=reason, data={"requested_angle": angle})
     try:
         raw = await edge_command_hub.send_command(
             context.device_id,
             {
-                "type": "command.pan_camera",
+                "type": command_type,
                 "request_id": _command_id(),
                 "device_id": context.device_id,
                 "payload": {"angle": angle},
             },
         )
-        return ToolResult("pan_camera", ok=True, data={"angle": angle, "status": raw.get("status")})
+        return ToolResult(tool, ok=True, data={"angle": angle, "status": raw.get("status")})
     except (EdgeNotConnectedError, EdgeCommandTimeoutError) as exc:
-        return ToolResult("pan_camera", ok=False, error="edge_unavailable", data={"angle": angle, "detail": str(exc)})
+        return ToolResult(tool, ok=False, error="edge_unavailable", data={"angle": angle, "detail": str(exc)})
 
 
 async def _get_live_snapshot(context: ToolContext) -> ToolResult:

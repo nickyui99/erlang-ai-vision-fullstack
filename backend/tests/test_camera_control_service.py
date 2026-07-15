@@ -35,8 +35,8 @@ class _FakeClient:
 # --------------------------------------------------------------------------- sanitize
 
 def test_sanitize_clamps_pan_and_tilt():
-    assert sanitize_action({"cmd": "pan", "angle": 999}) == {"cmd": "pan", "angle": 180}
-    assert sanitize_action({"cmd": "pan", "angle": -5}) == {"cmd": "pan", "angle": 0}
+    assert sanitize_action({"cmd": "pan", "angle": 999}) == {"cmd": "pan", "angle": 165}
+    assert sanitize_action({"cmd": "pan", "angle": -5}) == {"cmd": "pan", "angle": 15}
     assert sanitize_action({"cmd": "tilt", "angle": 999}) == {"cmd": "tilt", "angle": 140}
     assert sanitize_action({"cmd": "tilt", "angle": 0}) == {"cmd": "tilt", "angle": 60}
 

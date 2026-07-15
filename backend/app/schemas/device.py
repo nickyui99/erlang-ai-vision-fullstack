@@ -15,7 +15,8 @@ class DeviceCreate(BaseModel):
 
 class CameraPreset(BaseModel):
     label: str = Field(min_length=1, max_length=40)
-    pan: int = Field(ge=0, le=180)
+    # Safe servo travel (matches DevicePan/TiltCommand + firmware): pan 15-165, tilt 60-140.
+    pan: int = Field(ge=15, le=165)
     tilt: int = Field(ge=60, le=140)
 
 

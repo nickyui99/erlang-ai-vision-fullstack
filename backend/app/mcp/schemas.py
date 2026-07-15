@@ -57,15 +57,34 @@ def get_tool_specs() -> list[dict]:
             "type": "function",
             "function": {
                 "name": "pan_camera",
-                "description": "Pan the camera to a horizontal angle (0-180 degrees) for a better view.",
+                "description": "Pan the camera left/right to a horizontal angle (15-165 degrees) for a better view.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "angle": {
                             "type": "integer",
-                            "minimum": 0,
-                            "maximum": 180,
+                            "minimum": 15,
+                            "maximum": 165,
                             "description": "Target pan angle in degrees.",
+                        }
+                    },
+                    "required": ["angle"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "tilt_camera",
+                "description": "Tilt the camera up/down to a vertical angle (60-140 degrees) for a better view.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "angle": {
+                            "type": "integer",
+                            "minimum": 60,
+                            "maximum": 140,
+                            "description": "Target tilt angle in degrees.",
                         }
                     },
                     "required": ["angle"],

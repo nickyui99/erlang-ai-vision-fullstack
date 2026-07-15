@@ -23,7 +23,7 @@ from app.db.base import Base  # noqa: E402
 from app.db.session import async_session_factory, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.mcp import permissions  # noqa: E402
-from app.mcp.permissions import PanRateLimiter, clamp_angle  # noqa: E402
+from app.mcp.permissions import PanRateLimiter, clamp_pan, clamp_tilt  # noqa: E402
 from app.mcp.tools import ToolContext, execute_tool  # noqa: E402
 from app.models.agent import Agent  # noqa: E402
 from app.models.device import Device  # noqa: E402
@@ -325,10 +325,44 @@ def test_pan_rate_limiter_enforces_interval() -> None:
     assert limiter.check_and_register("evt", now=6.0)[0] is True
 
 
-def test_clamp_angle() -> None:
-    assert clamp_angle(200) == 180
-    assert clamp_angle(-5) == 0
-    assert clamp_angle("nonsense") == 90
+def test_clamp_pan() -> None:
+    assert clamp_pan(200) == 165
+    assert clamp_pan(-5) == 15
+    assert clamp_pan("nonsense") == 90
+
+
+def test_clamp_tilt() -> None:
+    assert clamp_tilt(200) == 140
+    assert clamp_tilt(-5) == 60
+    assert clamp_tilt("nonsense") == 90
+
+
+def test_tilt_camera_is_permitted_and_audited() -> None:
+    async def _run():
+        async with async_session_factory() as session:
+            await _insert_event(session, "evt_tilt")
+            ctx = ToolContext("evt_tilt", "usr_m9", "dev_m9", session)
+            result = await execute_tool(
+                QwenToolCall("c1", "tilt_camera", {"angle": 120}), ctx
+            )
+            audits = (
+                await session.execute(select(ToolAudit).where(ToolAudit.event_id == "evt_tilt"))
+            ).scalars().all()
+            return result, list(audits)
+
+    result, audits = asyncio.run(_run())
+    # No edge is connected in tests, so it reports edge_unavailable rather than
+    # tool_not_permitted — the point is the tool is permitted and audited.
+    assert result.error != "tool_not_permitted"
+    assert len(audits) == 1
+    assert audits[0].tool_name == "tilt_camera"
+
+
+def test_tool_specs_advertise_pan_and_tilt() -> None:
+    from app.mcp.schemas import get_tool_specs
+
+    names = {spec["function"]["name"] for spec in get_tool_specs()}
+    assert {"pan_camera", "tilt_camera"} <= names
 
 
 def test_denied_tool_is_refused_and_audited() -> None:

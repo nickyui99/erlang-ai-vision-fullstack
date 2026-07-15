@@ -4,8 +4,10 @@ from pydantic import BaseModel, Field
 
 
 class DevicePanCommand(BaseModel):
-    # Pan spans the full servo range (firmware SERVO_PAN_MIN/MAX_DEG = 0..180).
-    angle: int = Field(ge=0, le=180)
+    # Pan is limited to a safe range (firmware SERVO_PAN_MIN/MAX_DEG = 15..165) so the
+    # servo never stalls against its mechanical hard stops at 0/180. Match it here so the
+    # API never accepts a value the device will silently clamp.
+    angle: int = Field(ge=15, le=165)
 
 
 class DeviceTiltCommand(BaseModel):

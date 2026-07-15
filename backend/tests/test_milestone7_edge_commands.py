@@ -464,7 +464,7 @@ def test_agent_control_returns_clamped_candidate_offline_model() -> None:
     }
     response = client.post("/api/v1/edge/agent-control", headers=EDGE_HEADERS, json=situation)
     assert response.status_code == 200
-    assert response.json()["data"]["action"] == {"cmd": "pan", "angle": 180}  # clamped
+    assert response.json()["data"]["action"] == {"cmd": "pan", "angle": 165}  # clamped
 
     audits = asyncio.run(_audit_rows())
     assert len(audits) == 1

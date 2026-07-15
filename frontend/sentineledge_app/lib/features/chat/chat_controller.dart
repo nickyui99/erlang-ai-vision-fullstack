@@ -42,22 +42,18 @@ class ChatController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  /// Load the user's sessions and open the most recent one (or an empty state
-  /// when there are none). Called once when the screen mounts.
+  /// Load the user's session list for the drawer, but always open a fresh chat.
+  /// Called once when the screen mounts: prior conversations stay reachable via
+  /// the end drawer, yet opening the assistant lands on an empty new chat rather
+  /// than resurrecting the most recent conversation.
   Future<void> loadSessions() async {
     _loading = true;
     _error = null;
     _notify();
     try {
-      final sessions = await _api.listChatSessions();
-      _sessions = sessions;
-      if (sessions.isNotEmpty) {
-        _currentSessionId = sessions.first.sessionId;
-        _messages = await _api.getChatMessages(_currentSessionId!);
-      } else {
-        _currentSessionId = null;
-        _messages = const [];
-      }
+      _sessions = await _api.listChatSessions();
+      _currentSessionId = null;
+      _messages = const [];
     } catch (error) {
       _error = error.toString();
     } finally {

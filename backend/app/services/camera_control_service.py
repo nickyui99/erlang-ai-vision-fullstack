@@ -18,14 +18,15 @@ from app.services.qwen_client import BaseQwenClient, QwenError, get_qwen_client
 
 log = logging.getLogger("app.services.camera_control")
 
-# Firmware servo limits (SentinelEdge_IOT config.h) + per-move cap.
-_PAN_MIN, _PAN_MAX = 0, 180
+# Firmware servo limits (SentinelEdge_IOT config.h) + per-move cap. Pan is kept
+# off its mechanical hard stops at 0/180 to protect the servo.
+_PAN_MIN, _PAN_MAX = 15, 165
 _TILT_MIN, _TILT_MAX = 60, 140
 _STEP_CAP = 25
 
 _SYSTEM_PROMPT = (
     "You steer a home-security PTZ camera. Given a JSON scene, reply with ONLY a JSON object: "
-    '{"cmd": one of "pan"|"pan_delta"|"tilt"|"tilt_delta"|"hold", plus "angle" (pan 0-180, tilt '
+    '{"cmd": one of "pan"|"pan_delta"|"tilt"|"tilt_delta"|"hold", plus "angle" (pan 15-165, tilt '
     "60-140) for absolute moves or \"delta\" (-25..25) for relative moves}. Behavior meanings: "
     '"follow"=keep the target subject centered, "patrol"=sweep the view, "scan"=turn toward a new '
     "subject. Prefer the supplied candidate move unless the scene calls for a better one; reply "

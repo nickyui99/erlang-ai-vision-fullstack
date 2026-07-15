@@ -1,8 +1,9 @@
 """Milestone 9B — MCP tool permissions and actuation guardrails.
 
-Per the plan's safety rules: only read/low-risk tools and a tightly limited pan
-are auto-allowed; high-risk tools are denied. Pan is clamped to 0-180 and
-rate-limited per event (max count + minimum interval).
+Per the plan's safety rules: only read/low-risk tools and tightly limited camera
+movement are auto-allowed; high-risk tools are denied. Pan is clamped to the safe
+15-165 range and tilt to 60-140 (matching the firmware hard-stop guardrails), and
+movement is rate-limited per event (max count + minimum interval).
 """
 
 from __future__ import annotations
@@ -10,10 +11,18 @@ from __future__ import annotations
 from app.core.config import settings
 
 
+# Servo-safe travel ranges, kept in lockstep with the firmware SERVO_*_MIN/MAX_DEG
+# and the backend DevicePan/TiltCommand schemas so the model can never drive a
+# servo into its mechanical hard stops.
+PAN_MIN_DEG, PAN_MAX_DEG = 15, 165
+TILT_MIN_DEG, TILT_MAX_DEG = 60, 140
+
+
 # Autonomy table. Tools not listed are treated as denied.
 AUTONOMY: dict[str, str] = {
     "get_live_snapshot": "allow",
     "pan_camera": "allow",
+    "tilt_camera": "allow",
     "get_device_status": "allow",
     "query_recent_events": "allow",
     "get_event_clip": "allow",
@@ -29,14 +38,23 @@ def is_allowed(tool_name: str) -> bool:
     return AUTONOMY.get(tool_name) == "allow"
 
 
-def clamp_angle(angle: object) -> int:
-    """Clamp an arbitrary angle value into the servo's safe 0-180 range."""
-
+def _to_int(angle: object, default: int = 90) -> int:
     try:
-        value = int(angle)
+        return int(angle)
     except (TypeError, ValueError):
-        value = 90
-    return max(0, min(180, value))
+        return default
+
+
+def clamp_pan(angle: object) -> int:
+    """Clamp an arbitrary angle value into the servo's safe pan range (15-165)."""
+
+    return max(PAN_MIN_DEG, min(PAN_MAX_DEG, _to_int(angle)))
+
+
+def clamp_tilt(angle: object) -> int:
+    """Clamp an arbitrary angle value into the servo's safe tilt range (60-140)."""
+
+    return max(TILT_MIN_DEG, min(TILT_MAX_DEG, _to_int(angle)))
 
 
 class PanRateLimiter:
