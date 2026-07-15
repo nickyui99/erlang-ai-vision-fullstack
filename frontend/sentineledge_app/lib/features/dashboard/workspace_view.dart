@@ -1265,9 +1265,13 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   List<SurveillanceAgent> get _definitions =>
       _agents.where((agent) => agent.isDefinition).toList();
 
-  // Rules armed on a camera = sub-agents bound to that device.
+  // Rules armed on a camera = ARMED sub-agents bound to that device (unassigning
+  // disarms the sub-agent but keeps its row, so state must be checked).
   int _armedCountForDevice(String deviceId) => _agents
-      .where((agent) => !agent.isDefinition && agent.deviceId == deviceId)
+      .where((agent) =>
+          !agent.isDefinition &&
+          agent.deviceId == deviceId &&
+          agent.state == 'armed')
       .length;
 
   Future<void> _openQuickArm(EdgeDevice device) async {
@@ -1284,8 +1288,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
   }
 
-  Iterable<SurveillanceAgent> _subsForDefinition(String definitionId) =>
-      _agents.where((agent) => agent.parentAgentId == definitionId);
+  Iterable<SurveillanceAgent> _subsForDefinition(String definitionId) => _agents.where(
+    (agent) => agent.parentAgentId == definitionId && agent.state == 'armed',
+  );
 
   int _assignmentCount(String definitionId) =>
       _subsForDefinition(definitionId).length;
@@ -1977,7 +1982,8 @@ class _QuickArmSheetState extends State<_QuickArmSheet> {
   bool _armed(String definitionId) => _agents.any(
     (agent) =>
         agent.parentAgentId == definitionId &&
-        agent.deviceId == widget.device.deviceId,
+        agent.deviceId == widget.device.deviceId &&
+        agent.state == 'armed',
   );
 
   Set<String> _classesOf(SurveillanceAgent agent) {
@@ -1987,7 +1993,8 @@ class _QuickArmSheetState extends State<_QuickArmSheet> {
 
   // What this camera already watches, inferred from its armed sub-agents.
   Set<String> get _deviceClasses => _agents
-      .where((agent) => agent.deviceId == widget.device.deviceId)
+      .where((agent) =>
+          agent.deviceId == widget.device.deviceId && agent.state == 'armed')
       .expand(_classesOf)
       .toSet();
 

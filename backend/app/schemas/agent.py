@@ -57,5 +57,8 @@ class AgentRead(BaseModel):
 class EdgeAgentConfigRead(BaseModel):
     agent_id: str
     device_id: str
+    name: str
+    nl_rule: str
+    compiled_prompt: str
     state: AgentState
     compiled_edge_config: dict[str, Any]

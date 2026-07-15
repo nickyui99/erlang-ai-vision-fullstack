@@ -24,6 +24,7 @@ from app.models.alert import Alert  # noqa: E402
 from app.models.device import Device  # noqa: E402
 from app.models.push_token import PushToken  # noqa: E402
 from app.models.user import User  # noqa: E402
+from app.core.config import settings  # noqa: E402
 from app.services import notification_service  # noqa: E402
 
 
@@ -174,6 +175,9 @@ def test_high_severity_event_sends_push_alert(monkeypatch) -> None:
 
 def test_low_severity_event_does_not_alert(monkeypatch) -> None:
     _patch_send(monkeypatch)
+    # Pin the threshold: settings load the repo .env, so a dev box running with
+    # ALERT_MIN_SEVERITY=low would otherwise flip this test's premise.
+    monkeypatch.setattr(settings, "alert_min_severity", "high")
     client = _user_client()
     client.post("/api/v1/notifications/tokens", json={"token": "tok-1"})
 

@@ -116,19 +116,112 @@ def test_create_definition_assign_and_unassign() -> None:
     active_ids = [item["agent_id"] for item in active.json()["data"]]
     assert sub["agent_id"] in active_ids
 
-    # Unassigning deletes the sub-agent; the definition remains.
+    # Unassigning DISARMS the sub-agent but keeps the row: its events/alerts/clips
+    # cascade off this id, so deleting it would erase the camera's detection history.
     removed = client.post(
         f"/api/v1/agents/{definition_id}/unassign",
         json={"device_id": "dev_as"},
     )
     assert removed.status_code == 200
     remaining = client.get("/api/v1/agents").json()["data"]
-    assert len(remaining) == 1
-    assert remaining[0]["agent_id"] == definition_id
+    assert len(remaining) == 2
+    disarmed = next(a for a in remaining if a["agent_id"] == sub["agent_id"])
+    assert disarmed["state"] == "disarmed"
 
-    # Unassigning when nothing is assigned is a 404.
+    # The edge no longer sees the disarmed sub-agent.
+    active = client.get("/api/v1/edge/agents/active", headers=EDGE_HEADERS)
+    assert sub["agent_id"] not in [item["agent_id"] for item in active.json()["data"]]
+
+    # Unassigning an already-disarmed agent is still a 404 (not assigned).
     missing = client.post(
         f"/api/v1/agents/{definition_id}/unassign",
         json={"device_id": "dev_as"},
     )
     assert missing.status_code == 404
+
+    # Re-assigning re-arms the SAME sub-agent (identity, and thus history, preserved).
+    rearmed = client.post(
+        f"/api/v1/agents/{definition_id}/assign",
+        json={"device_id": "dev_as"},
+    )
+    assert rearmed.status_code == 200
+    assert rearmed.json()["data"]["agent_id"] == sub["agent_id"]
+    assert rearmed.json()["data"]["state"] == "armed"
+    assert len(client.get("/api/v1/agents").json()["data"]) == 2
+
+
+def test_assign_and_unassign_nudge_edge_refresh(monkeypatch) -> None:
+    """Toggling an agent must nudge the device's bridge (command.refresh_agents) so the
+    change takes effect immediately instead of on the next ~30s config poll."""
+    from app.services.edge_command_hub import edge_command_hub
+
+    calls: list[tuple[str, str]] = []
+
+    async def fake_send_command(device_id: str, message: dict) -> dict:
+        calls.append((device_id, message["type"]))
+        return {"request_id": message["request_id"], "status": "ok", "payload": {}}
+
+    monkeypatch.setattr(edge_command_hub, "send_command", fake_send_command)
+    client = _client()
+
+    definition_id = client.post(
+        "/api/v1/agents",
+        json={"name": "Nudge Watch", "nl_rule": "Alert me if a person appears."},
+    ).json()["data"]["agent_id"]
+
+    assert client.post(
+        f"/api/v1/agents/{definition_id}/assign", json={"device_id": "dev_as"}
+    ).status_code == 200
+    assert calls == [("dev_as", "command.refresh_agents")]
+
+    assert client.post(
+        f"/api/v1/agents/{definition_id}/unassign", json={"device_id": "dev_as"}
+    ).status_code == 200
+    assert calls == [("dev_as", "command.refresh_agents")] * 2
+
+    # Re-arming the retained sub-agent nudges too.
+    assert client.post(
+        f"/api/v1/agents/{definition_id}/assign", json={"device_id": "dev_as"}
+    ).status_code == 200
+    assert calls == [("dev_as", "command.refresh_agents")] * 3
+
+
+def test_unassign_preserves_event_history() -> None:
+    """Toggling an agent off a camera must not delete its events (the original bug:
+    unassign hard-deleted the sub-agent and events/alerts cascaded away with it)."""
+    client = _client()
+
+    definition_id = client.post(
+        "/api/v1/agents",
+        json={"name": "Person Watch", "nl_rule": "Alert me if a person appears."},
+    ).json()["data"]["agent_id"]
+    sub = client.post(
+        f"/api/v1/agents/{definition_id}/assign",
+        json={"device_id": "dev_as"},
+    ).json()["data"]
+
+    # The edge escalates an event for the armed sub-agent.
+    posted = client.post(
+        "/api/v1/edge/events",
+        headers=EDGE_HEADERS,
+        json={
+            "agent_id": sub["agent_id"],
+            "timestamp": datetime.now(UTC).isoformat(),
+            "event_type": "person",
+            "severity": "medium",
+            "confidence": 0.9,
+            "summary": "A person appeared.",
+            "idempotency_key": "evt-keep-1",
+        },
+    )
+    assert posted.status_code in (200, 201), posted.text
+    event_id = posted.json()["data"]["event_id"]
+
+    # Disable the agent on the camera, then check the event is still there.
+    removed = client.post(
+        f"/api/v1/agents/{definition_id}/unassign",
+        json={"device_id": "dev_as"},
+    )
+    assert removed.status_code == 200
+    listed = client.get("/api/v1/events").json()["data"]
+    assert event_id in [item["event_id"] for item in listed]

@@ -125,8 +125,11 @@ class _DeviceControlViewState extends State<DeviceControlView> {
   List<SurveillanceAgent> get _definitions =>
       _agents.where((agent) => agent.isDefinition).toList();
 
-  Iterable<SurveillanceAgent> _subsForDefinition(String definitionId) =>
-      _agents.where((agent) => agent.parentAgentId == definitionId);
+  // Unassigning disarms the sub-agent but keeps its row (so event history survives),
+  // so "assigned" means an ARMED sub-agent -- a disarmed leftover must read as off.
+  Iterable<SurveillanceAgent> _subsForDefinition(String definitionId) => _agents.where(
+    (agent) => agent.parentAgentId == definitionId && agent.state == 'armed',
+  );
 
   bool _isAssigned(String definitionId) => _subsForDefinition(
     definitionId,

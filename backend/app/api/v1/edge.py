@@ -178,6 +178,12 @@ async def active_agent_configs(
         EdgeAgentConfigRead(
             agent_id=agent.agent_id,
             device_id=agent.device_id,
+            name=agent.name,
+            # The edge triage/agent judges the keyframe against this rule text; without it
+            # the edge falls back to a generic "anything suspicious" prompt and drops
+            # legitimate events (see SentinelEdge_LaptopEdge pipeline/triage.py _prompt).
+            nl_rule=agent.nl_rule or "",
+            compiled_prompt=agent.compiled_prompt or "",
             state="armed",
             compiled_edge_config=agent.compiled_edge_config or {},
         ).model_dump(mode="json")
