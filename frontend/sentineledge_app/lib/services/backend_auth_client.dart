@@ -674,15 +674,17 @@ class CameraPreset {
 }
 
 class DeviceRegistration {
-  const DeviceRegistration({required this.device, required this.edgeToken});
+  const DeviceRegistration({required this.device, required this.edgeToken, required this.deviceLinkSecret});
 
   final EdgeDevice device;
   final String edgeToken;
+  final String deviceLinkSecret;
 
   factory DeviceRegistration.fromJson(Map<String, dynamic> json) {
     return DeviceRegistration(
       device: EdgeDevice.fromJson(json['device'] as Map<String, dynamic>),
       edgeToken: json['edge_token'].toString(),
+      deviceLinkSecret: json['device_link_secret'].toString(),
     );
   }
 }
@@ -1184,3 +1186,4 @@ Map<String, dynamic>? _tryMap(Object? value) {
   }
   return null;
 }
+

@@ -148,9 +148,11 @@ class _AddCameraWizardState extends State<AddCameraWizard> {
       's': _ssidController.text.trim(),
       'p': _passwordController.text,
       'h': _hostController.text.trim(),
-      if (_registration != null) 't': _registration!.edgeToken,
+      'v': 2,
+      'path': '/',
+      if (_registration != null) 'k': _registration!.deviceLinkSecret,
     };
-    if (port != 8765) payload['o'] = port; // firmware defaults to 8765
+    payload['o'] = port;
     return jsonEncode(payload);
   }
 
@@ -422,14 +424,18 @@ class _AddCameraWizardState extends State<AddCameraWizard> {
           const SizedBox(height: 4),
           Text(
             'Run edge_bridge.py on the laptop. After the camera scans this QR, '
-            'the bridge receives the camera token automatically.',
+            'the bridge authenticates the camera using a separate laptop-link secret.',
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.sm),
-          if (_registration != null) TokenBox(token: _registration!.edgeToken),
+          if (_registration != null) ...[
+            Text('Laptop bridge token', style: theme.textTheme.labelMedium),
+            const SizedBox(height: 4),
+            TokenBox(token: _registration!.deviceLinkSecret),
+          ],
           const SizedBox(height: AppSpacing.md),
           Text(
-            'The pairing code contains your Wi-Fi password and camera token ??? only show it to your camera.',
+            'The QR contains Wi-Fi details and a scoped laptop-link secret. Only scan it with your camera.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
