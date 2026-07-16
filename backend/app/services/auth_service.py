@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -92,6 +93,14 @@ async def upsert_firebase_user(session: AsyncSession, decoded_token: dict) -> Us
     result = await session.execute(select(User).where(User.google_sub == firebase_uid))
     user = result.scalar_one_or_none()
 
+    def _apply(u: User) -> None:
+        u.email = email
+        u.email_verified = email_verified
+        u.display_name = decoded_token.get("name")
+        u.avatar_url = decoded_token.get("picture")
+        u.last_login_at = now
+        u.updated_at = now
+
     if user is None:
         user = User(
             user_id=f"usr_{uuid4().hex}",
@@ -107,14 +116,21 @@ async def upsert_firebase_user(session: AsyncSession, decoded_token: dict) -> Us
         )
         session.add(user)
     else:
-        user.email = email
-        user.email_verified = email_verified
-        user.display_name = decoded_token.get("name")
-        user.avatar_url = decoded_token.get("picture")
-        user.last_login_at = now
-        user.updated_at = now
+        _apply(user)
 
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # A concurrent first-login for the same google_sub won the insert race
+        # (e.g. a double-fired sign-in). Load the row it created and update that
+        # one instead of failing this request with a 500.
+        await session.rollback()
+        result = await session.execute(select(User).where(User.google_sub == firebase_uid))
+        user = result.scalar_one_or_none()
+        if user is None:
+            raise
+        _apply(user)
+        await session.commit()
     await session.refresh(user)
     return user
 

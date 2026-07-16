@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db_session
@@ -48,7 +49,23 @@ async def register_push_token(
         token.updated_at = now
         token.last_used_at = now
 
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # Same token registered concurrently (two tabs / a double-fired login) won
+        # the insert race. Re-point the now-existing row to this user instead of 500.
+        await session.rollback()
+        result = await session.execute(
+            select(PushToken).where(PushToken.token == payload.token)
+        )
+        token = result.scalar_one_or_none()
+        if token is None:
+            raise
+        token.user_id = current_user.user_id
+        token.platform = payload.platform
+        token.updated_at = now
+        token.last_used_at = now
+        await session.commit()
     await session.refresh(token)
     return {"data": PushTokenRead.model_validate(token).model_dump(mode="json")}
 

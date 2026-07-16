@@ -78,10 +78,20 @@ def clamp_tilt(angle: object) -> int:
 
 
 class PanRateLimiter:
-    """In-memory per-event pan limiter: max pans and a minimum interval.
+    """In-memory pan limiter: a max count and a minimum interval, keyed by a caller
+    string.
 
     ``check_and_register`` is called with a monotonic ``now`` so the interval is
-    testable with injected timestamps. State is keyed by ``event_id``.
+    testable with injected timestamps. Two modes by key:
+
+    * Per-event verification keys by ``event_id`` with no window — a hard cap of
+      ``max_pans`` for the (short-lived) event.
+    * The user-facing chat keys by ``chat:{user_id}``, which lives for the whole
+      process; it passes ``window`` so the cap is a *rolling* one (max pans per
+      window) instead of a lifetime cap that would lock the user out forever.
+
+    A ``window`` also bounds memory: timestamps older than it are pruned, so a
+    long-lived key can't accumulate an unbounded list.
     """
 
     def __init__(self, max_pans: int | None = None, min_interval: float | None = None) -> None:
@@ -97,20 +107,29 @@ class PanRateLimiter:
     def min_interval(self) -> float:
         return self._min_interval if self._min_interval is not None else settings.mcp_min_seconds_between_pans
 
-    def check_and_register(self, event_id: str, now: float) -> tuple[bool, str | None]:
-        times = self._timestamps.setdefault(event_id, [])
+    def check_and_register(
+        self, key: str, now: float, *, window: float | None = None
+    ) -> tuple[bool, str | None]:
+        times = self._timestamps.setdefault(key, [])
+        if window is not None:
+            # Rolling window: forget pans older than it so a long-lived key
+            # (a chat session) is rate-limited, not capped for good.
+            cutoff = now - window
+            times = [t for t in times if t >= cutoff]
+            self._timestamps[key] = times
         if len(times) >= self.max_pans:
-            return False, f"pan limit reached ({self.max_pans} per event)"
+            unit = f"per {int(window)}s" if window is not None else "per event"
+            return False, f"pan limit reached ({self.max_pans} {unit})"
         if times and (now - times[-1]) < self.min_interval:
             return False, f"too soon since last pan (min {self.min_interval}s)"
         times.append(now)
         return True, None
 
-    def reset(self, event_id: str | None = None) -> None:
-        if event_id is None:
+    def reset(self, key: str | None = None) -> None:
+        if key is None:
             self._timestamps.clear()
         else:
-            self._timestamps.pop(event_id, None)
+            self._timestamps.pop(key, None)
 
 
 # Process-wide limiter shared across verification runs.

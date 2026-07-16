@@ -5,9 +5,11 @@ import secrets
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, Header, HTTPException, Response, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db_session, get_edge_device, get_edge_device_from_authorization
+from app.db.session import async_session_factory
 from app.models.agent import Agent
 from app.models.clip import Clip
 from app.models.device import Device
@@ -58,10 +60,13 @@ def _new_audit_id() -> str:
 async def edge_websocket(
     websocket: WebSocket,
     authorization: str | None = Header(default=None),
-    session: AsyncSession = Depends(get_db_session),
 ) -> None:
+    # Authenticate with a short-lived session, released immediately — a WS lives
+    # for hours, and holding the pooled connection open (idle-in-transaction) for
+    # that whole time would exhaust the small pool once a few cameras connect.
     try:
-        edge_device = await get_edge_device_from_authorization(session, authorization)
+        async with async_session_factory() as session:
+            edge_device = await get_edge_device_from_authorization(session, authorization)
     except HTTPException:
         await websocket.close(code=1008)
         return
@@ -74,25 +79,30 @@ async def edge_websocket(
             if message.get("type") == "response.command_result":
                 await edge_command_hub.handle_result(message)
     except WebSocketDisconnect:
-        await edge_command_hub.disconnect(edge_device.device_id, websocket)
+        pass
     except ValueError:
-        await edge_command_hub.disconnect(edge_device.device_id, websocket)
         await websocket.close(code=1003)
+    finally:
+        # Always drop the hub entry, even on an unexpected error, so a stale
+        # connection can't linger and misroute commands.
+        await edge_command_hub.disconnect(edge_device.device_id, websocket)
 
 
 @router.websocket("/stream")
 async def edge_stream_ingest(
     websocket: WebSocket,
     authorization: str | None = Header(default=None),
-    session: AsyncSession = Depends(get_db_session),
 ) -> None:
     """Receive a push video stream from an edge device as binary JPEG frames.
 
     Each WebSocket message is one full JPEG frame. The frames are fanned out to
     browser viewers as MJPEG by the device stream endpoint.
     """
+    # Short-lived auth session (see edge_websocket): a stream socket is long-lived,
+    # so it must not pin a pooled DB connection for its whole lifetime.
     try:
-        edge_device = await get_edge_device_from_authorization(session, authorization)
+        async with async_session_factory() as session:
+            edge_device = await get_edge_device_from_authorization(session, authorization)
     except HTTPException:
         await websocket.close(code=1008)
         return
@@ -265,7 +275,22 @@ async def create_edge_event(
         updated_at=now,
     )
     session.add(event)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # A concurrent request with the same (device_id, idempotency_key) won the
+        # race — e.g. the edge retried after a client-side timeout while the first
+        # insert was still in flight. Replay the persisted event as an idempotent
+        # 200 instead of surfacing a 500, which is exactly what idempotency exists
+        # to avoid.
+        await session.rollback()
+        existing = await _get_event_by_idempotency(
+            session, edge_device.device_id, payload.idempotency_key
+        )
+        if existing is not None:
+            response.status_code = status.HTTP_200_OK
+            return {"data": EventRead.model_validate(existing).model_dump(mode="json")}
+        raise
     await session.refresh(event)
     await realtime_bus.publish(
         event.user_id,

@@ -48,6 +48,10 @@ log = logging.getLogger("app.mcp.server")
 
 MCP_TOKEN_PURPOSE = "mcp_access"
 
+# Rolling window for the chat agent's camera-movement budget: at most
+# mcp_max_pans_per_event moves per this many seconds, per user.
+_CHAT_PAN_WINDOW_S = 60.0
+
 # Stateless HTTP: each tool call is an independent request (no server-side session
 # affinity), which suits an API-embedded server and keeps clients trivial.
 mcp_server = FastMCP(
@@ -194,9 +198,11 @@ async def _move_camera(ctx: Context, *, tool: str, command_type: str,
     async def impl(user_id: str, session):
         await agent_service.ensure_owned_device(session, user_id, device_id)
         # Pan and tilt share the per-user movement budget (same limiter as the
-        # verification agent, keyed by user instead of event).
+        # verification agent, keyed by user instead of event). A rolling window is
+        # used here — a chat session is long-lived, so a lifetime cap would lock
+        # the user out of camera control after max_pans moves until a restart.
         allowed, reason = permissions.pan_rate_limiter.check_and_register(
-            f"chat:{user_id}", time.monotonic()
+            f"chat:{user_id}", time.monotonic(), window=_CHAT_PAN_WINDOW_S
         )
         if not allowed:
             return {"ok": False, "error": reason}

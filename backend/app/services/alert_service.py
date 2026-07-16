@@ -6,6 +6,7 @@ through FCM, stores the result, and publishes the alert status over SSE.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -86,7 +87,11 @@ async def maybe_alert_for_event(session: AsyncSession, event: Event) -> Alert | 
 
     title = f"Erlang AI Vision · {(event.severity or 'alert').title()} alert"
     body = event.summary or f"{event.event_type} detected"
-    push = notification_service.send_push(
+    # send_push makes a synchronous Firebase HTTP call; run it off the event loop
+    # so an event ingested inline (edge.py) doesn't stall the loop — and with it
+    # MJPEG fan-out, device commands, and other heartbeats — for the FCM round-trip.
+    push = await asyncio.to_thread(
+        notification_service.send_push,
         tokens=[t.token for t in tokens],
         title=title,
         body=body,

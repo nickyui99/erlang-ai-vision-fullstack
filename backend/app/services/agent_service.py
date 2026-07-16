@@ -69,14 +69,21 @@ async def ensure_owned_device(session: AsyncSession, user_id: str, device_id: st
 async def get_sub_agent(
     session: AsyncSession, user_id: str, parent_agent_id: str, device_id: str
 ) -> Agent | None:
+    # Return the first (oldest) match rather than scalar_one_or_none: there is no
+    # DB unique constraint on (parent_agent_id, device_id), so a rare assign race
+    # could leave two sub-agents for the same pair. Tolerating that here keeps
+    # every later assign/unassign/lookup working instead of 500-ing with
+    # MultipleResultsFound until a row is manually deleted.
     result = await session.execute(
-        select(Agent).where(
+        select(Agent)
+        .where(
             Agent.parent_agent_id == parent_agent_id,
             Agent.device_id == device_id,
             Agent.user_id == user_id,
         )
+        .order_by(Agent.created_at.asc(), Agent.agent_id.asc())
     )
-    return result.scalar_one_or_none()
+    return result.scalars().first()
 
 
 async def nudge_edge_refresh(device_id: str | None) -> bool:

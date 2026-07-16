@@ -325,6 +325,21 @@ def test_pan_rate_limiter_enforces_interval() -> None:
     assert limiter.check_and_register("evt", now=6.0)[0] is True
 
 
+def test_pan_rate_limiter_window_does_not_lock_out_forever() -> None:
+    # The chat path keys by user and passes a window: after the cap is hit, moves
+    # older than the window are forgotten, so the user regains control instead of
+    # being locked out for the life of the process (the earlier bug).
+    limiter = PanRateLimiter(max_pans=3, min_interval=0)
+    key = "chat:usr_1"
+    for i in range(3):
+        assert limiter.check_and_register(key, now=float(i), window=60.0)[0] is True
+    # 4th within the window is capped...
+    capped_ok, reason = limiter.check_and_register(key, now=3.0, window=60.0)
+    assert capped_ok is False and "pan limit reached" in reason
+    # ...but once the window has rolled past the earliest moves, it allows again.
+    assert limiter.check_and_register(key, now=61.0, window=60.0)[0] is True
+
+
 def test_clamp_pan() -> None:
     assert clamp_pan(200) == 165
     assert clamp_pan(-5) == 15
