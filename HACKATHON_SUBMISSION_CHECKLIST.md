@@ -39,7 +39,7 @@
 - [x] Extract shared agent lifecycle logic into `agent_service` (REST API and MCP tools run identical code).
 - [x] Mention the MCP server in the README (features bullet + "MCP tool server" section with tools, auth, and guardrails).
 - [ ] Add a "generate MCP access token" endpoint/UI for external clients.
-- [x] Rate-limit the agentic chat: per-account daily message cap (`CHAT_DAILY_MESSAGE_LIMIT`, default 200/day, HTTP 429 `chat_daily_limit_reached`, 0 disables) on top of the existing per-turn tool budget (`QWEN_MAX_TOOL_TURNS`).
+- [x] Rate-limit the agentic chat: per-account daily message cap (`CHAT_DAILY_MESSAGE_LIMIT`, default 50/day, HTTP 429 `chat_daily_limit_reached`, 0 disables) on top of the existing per-turn tool budget (`QWEN_MAX_TOOL_TURNS`).
 - [ ] Optional: upload on-demand recordings to OSS for in-app playback (clips-style signed-URL flow).
 - [ ] Optional: manual event review action (dismiss/acknowledge) so low-severity events can leave "pending review".
 - [ ] Note: clips uploaded before July 15 are `mp4v` and remain download-only; new clips play in-app.

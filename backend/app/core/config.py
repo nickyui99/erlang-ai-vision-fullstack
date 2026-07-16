@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     # calls (tool loop) plus MCP tool executions, so cap user messages per UTC day
     # per account. 0 disables the cap.
     chat_daily_message_limit: int = Field(
-        default=200, validation_alias="CHAT_DAILY_MESSAGE_LIMIT"
+        default=50, validation_alias="CHAT_DAILY_MESSAGE_LIMIT"
     )
 
     # Milestone 9 — Qwen Cloud verification (DashScope OpenAI-compatible).
