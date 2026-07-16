@@ -156,3 +156,18 @@ async def unassign_agent(
             "state": "disarmed",
         }
     }
+
+
+@router.delete("/{agent_id}")
+async def delete_agent(
+    agent_id: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    # Deleting a definition cascades its sub-agents, and each removed agent's
+    # events/alerts/clips cascade with it (see agent_service.delete_agent).
+    try:
+        device_ids = await agent_service.delete_agent(session, current_user.user_id, agent_id)
+    except agent_service.AgentNotFoundError:
+        raise _not_found("Agent was not found")
+    return {"data": {"agent_id": agent_id, "deleted": True, "device_ids": device_ids}}

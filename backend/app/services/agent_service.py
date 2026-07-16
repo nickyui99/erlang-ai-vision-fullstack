@@ -208,6 +208,35 @@ async def assign_to_device(
     return sub_agent
 
 
+async def delete_agent(session: AsyncSession, user_id: str, agent_id: str) -> list[str]:
+    """Delete an owned agent outright, returning the device_ids that carried it.
+
+    Deleting a definition cascades its per-camera sub-agents (parent_agent_id FK),
+    and each removed agent's events/alerts/clips cascade off its id — so this
+    intentionally erases the agent's detection history. Unassign remains the
+    non-destructive way to take an agent off a camera.
+    """
+    agent = await get_owned_agent(session, user_id, agent_id)
+    result = await session.execute(
+        select(Agent.device_id).where(
+            (Agent.agent_id == agent_id) | (Agent.parent_agent_id == agent_id),
+            Agent.user_id == user_id,
+            Agent.device_id.is_not(None),
+        )
+    )
+    device_ids = sorted({row[0] for row in result})
+    await session.delete(agent)
+    await session.commit()
+    for device_id in device_ids:
+        await realtime_bus.publish(
+            user_id,
+            "agent.state_changed",
+            {"agent_id": agent_id, "device_id": device_id, "state": "deleted", "enabled": False},
+        )
+        await nudge_edge_refresh(device_id)
+    return device_ids
+
+
 async def unassign_from_device(
     session: AsyncSession, user_id: str, agent_id: str, device_id: str
 ) -> Agent:

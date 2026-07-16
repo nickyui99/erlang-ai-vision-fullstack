@@ -347,6 +347,12 @@ class ErlangVisionApiClient {
     });
   }
 
+  /// Deletes an agent definition outright. The backend cascade-deletes its
+  /// per-camera sub-agents and their recorded events/alerts/clips.
+  Future<void> deleteAgent(String agentId) async {
+    await _delete('/api/v1/agents/$agentId');
+  }
+
   Future<List<EdgeAgentConfig>> activeConfigs(String edgeToken) async {
     final body = await _getObject(
       '/api/v1/edge/agents/active',

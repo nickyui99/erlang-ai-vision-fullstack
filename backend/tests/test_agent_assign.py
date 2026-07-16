@@ -225,3 +225,45 @@ def test_unassign_preserves_event_history() -> None:
     assert removed.status_code == 200
     listed = client.get("/api/v1/events").json()["data"]
     assert event_id in [item["event_id"] for item in listed]
+
+
+def test_delete_definition_cascades_sub_agents_and_events() -> None:
+    client = _client()
+
+    definition_id = client.post(
+        "/api/v1/agents",
+        json={"name": "Door Watch", "nl_rule": "Alert if a person is at the door."},
+    ).json()["data"]["agent_id"]
+    sub = client.post(
+        f"/api/v1/agents/{definition_id}/assign",
+        json={"device_id": "dev_as"},
+    ).json()["data"]
+
+    # An event exists on the armed sub-agent; deleting the DEFINITION removes the
+    # sub-agent (parent FK cascade) and the event with it.
+    posted = client.post(
+        "/api/v1/edge/events",
+        headers=EDGE_HEADERS,
+        json={
+            "agent_id": sub["agent_id"],
+            "timestamp": datetime.now(UTC).isoformat(),
+            "event_type": "person",
+            "severity": "medium",
+            "confidence": 0.9,
+            "summary": "A person appeared.",
+            "idempotency_key": "evt-del-1",
+        },
+    )
+    assert posted.status_code in (200, 201), posted.text
+
+    deleted = client.delete(f"/api/v1/agents/{definition_id}")
+    assert deleted.status_code == 200
+    body = deleted.json()["data"]
+    assert body["deleted"] is True
+    assert body["device_ids"] == ["dev_as"]
+
+    assert client.get("/api/v1/agents").json()["data"] == []
+    assert client.get("/api/v1/events").json()["data"] == []
+
+    # Idempotence/ownership: a second delete (or a foreign agent id) is a 404.
+    assert client.delete(f"/api/v1/agents/{definition_id}").status_code == 404

@@ -521,6 +521,48 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
   }
 
+  /// Confirms, then deletes an agent definition. The backend cascades its
+  /// per-camera sub-agents and their recorded events/alerts/clips away with it.
+  Future<void> _confirmAndDeleteAgent(SurveillanceAgent agent) async {
+    final armedCount = _assignmentCount(agent.agentId);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete agent?'),
+        content: Text(
+          'This removes "${agent.name}" for good.'
+          '${armedCount > 0 ? ' It is armed on $armedCount ${armedCount == 1 ? 'camera' : 'cameras'}, and its' : ' Its'}'
+          ' recorded events will also be deleted. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _run(
+      successMessage: 'Agent "${agent.name}" deleted',
+      setBusy: (value) => _isCreatingAgent = value,
+      action: () async {
+        await widget.apiClient.deleteAgent(agent.agentId);
+        final agents = await widget.apiClient.listAgents();
+        if (!mounted) return;
+        setState(() {
+          _agents = agents;
+          if (_selectedAgentId == agent.agentId) _selectedAgentId = null;
+        });
+      },
+    );
+  }
+
   bool _shouldReturnToSignIn(Object error) {
     return error is BackendAuthException &&
         (error.code == 'not_authenticated' || error.code == 'invalid_session');
@@ -1362,10 +1404,23 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                       : 'unassigned',
                   tone: count > 0 ? StatusTone.success : StatusTone.neutral,
                 ),
-                trailing: Icon(
-                  Icons.edit_outlined,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.edit_outlined,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      tooltip: 'Delete agent',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _confirmAndDeleteAgent(agent),
+                    ),
+                  ],
                 ),
                 onTap: () => _openEditAgentDialog(agent),
               );
