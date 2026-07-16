@@ -124,12 +124,23 @@ class ChatController extends ChangeNotifier {
         _notify();
       }
       final reply = await _api.sendChatMessage(targetId, trimmed);
+      // The turn is now committed server-side. Clear the rollback marker so a
+      // later failure (e.g. the cosmetic drawer refresh below) can never delete
+      // this session and discard a conversation the user actually completed.
+      createdSessionId = null;
       // Only touch the visible transcript if we're still on that session.
       if (_currentSessionId == targetId) {
         _messages = [..._messages, reply];
       }
-      // Refresh so the drawer reflects the new title and updated ordering.
-      _sessions = await _api.listChatSessions();
+      // Refresh so the drawer reflects the new title and updated ordering. This
+      // is cosmetic — a transient failure must not lose the just-sent turn, so
+      // it is isolated from the rollback path.
+      try {
+        _sessions = await _api.listChatSessions();
+      } catch (_) {
+        // Keep the optimistic session list; the title/order refresh on the next
+        // successful load.
+      }
     } catch (error) {
       _error = error.toString();
       // Roll back an empty session we created in this call that never got a

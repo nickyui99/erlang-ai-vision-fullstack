@@ -157,6 +157,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
       final events = await widget.apiClient.listEvents();
       if (!mounted) return;
       setState(() {
+        _error = null; // clear any stale banner from a prior failed load
         _events = events
             .where((event) => event.deviceId == _device.deviceId)
             .toList();

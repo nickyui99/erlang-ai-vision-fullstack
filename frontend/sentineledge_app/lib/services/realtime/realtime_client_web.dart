@@ -56,6 +56,7 @@ class _WebRealtimeConnection implements RealtimeConnection {
     for (final type in const [
       'realtime.connected',
       'event.created',
+      'event.verified',
       'clip.available',
       'device.health_changed',
       'device.control_mode_changed',

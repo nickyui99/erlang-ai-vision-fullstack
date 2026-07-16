@@ -95,6 +95,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   final bool _isRegisteringDevice = false;
   bool _isCreatingAgent = false;
   bool _isLoadingEvents = false;
+  // Set when a realtime event arrives while the events list isn't on screen, so
+  // we skip the refetch+rebuild then and reload lazily on navigation instead.
+  bool _eventsDirty = false;
   bool _isLoadingClips = false;
   bool _isLoadingAudit = false;
   bool _isRequestingPlayback = false;
@@ -132,8 +135,14 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     _realtimeConnection = connectRealtime(
       onMessage: _handleRealtimeMessage,
       onStatus: (status) {
-        if (!mounted) return;
-        setState(() => _realtimeStatus = status);
+        // Providers can emit synchronously during initState (stub) or dispose
+        // (web offline), when `mounted` is still true but setState is illegal.
+        // Defer to a microtask so it lands outside the lifecycle-locked phase;
+        // by then an unmounted widget is correctly skipped.
+        Future.microtask(() {
+          if (!mounted) return;
+          setState(() => _realtimeStatus = status);
+        });
       },
     );
     // Deep-linked straight to an event on a phone: open its detail sheet once
@@ -158,7 +167,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     // route rather than from local taps.
     if (oldWidget.section != widget.section) {
       setState(() => _selectedTab = widget.section.tabIndex);
-      if (_sectionLoadsEvents && _events.isEmpty) {
+      // Load when first showing events, or when a realtime tick marked the cache
+      // dirty while we were on another tab.
+      if (_sectionLoadsEvents && (_events.isEmpty || _eventsDirty)) {
         _loadEvents(showSuccess: false);
       }
     }
@@ -281,6 +292,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       if (!mounted) return;
       setState(() {
         _devices = devices;
+        _error = null; // clear any stale banner from a prior failed refresh
         _selectedDeviceId = _chooseExisting(
           _selectedDeviceId,
           devices.map((device) => device.deviceId),
@@ -302,6 +314,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       if (!mounted) return;
       setState(() {
         _agents = agents;
+        _error = null; // clear any stale banner from a prior failed refresh
         _selectedAgentId = _chooseExisting(
           _selectedAgentId,
           agents.map((agent) => agent.agentId),
@@ -317,7 +330,21 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     }
   }
 
+  /// Refetch events on a realtime tick only when the list (or an open event
+  /// detail) is actually on screen. Otherwise just mark the cache dirty — a full
+  /// GET /events plus a whole-tree rebuild on every detection, for events the
+  /// user isn't looking at, is wasted work. The dirty cache reloads lazily when
+  /// they navigate to an events section.
+  void _refreshEventsIfVisible() {
+    if (_sectionLoadsEvents || _selectedEventId != null) {
+      _loadEvents(showSuccess: false);
+    } else {
+      _eventsDirty = true;
+    }
+  }
+
   Future<void> _loadEvents({bool showSuccess = true}) async {
+    _eventsDirty = false;
     await _run(
       successMessage: 'Events refreshed',
       setBusy: (value) => _isLoadingEvents = value,
@@ -578,7 +605,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     if (!mounted) return;
     switch (message.type) {
       case 'event.created':
-        _loadEvents(showSuccess: false);
+        _refreshEventsIfVisible();
         // Only the visible screen alerts (avoids double alerts when a camera
         // detail view is on top with its own realtime feed).
         if (ModalRoute.of(context)?.isCurrent ?? true) {
@@ -596,7 +623,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       case 'event.verified':
         // Verification finished: refresh so the verdict + agent trail update.
         final eventId = message.data['event_id']?.toString();
-        _loadEvents(showSuccess: false);
+        _refreshEventsIfVisible();
         if (eventId != null && eventId == _selectedEventId) {
           _loadEventAudit(eventId);
         }

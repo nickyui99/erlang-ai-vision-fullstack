@@ -121,7 +121,7 @@ class ErlangVisionApiClient {
 
   Future<List<EdgeDevice>> listDevices() async {
     final body = await _getObject('/api/v1/devices');
-    final items = body['data'] as List<dynamic>;
+    final items = (body['data'] as List<dynamic>?) ?? const <dynamic>[];
     return items
         .map((item) => EdgeDevice.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -269,7 +269,7 @@ class ErlangVisionApiClient {
   /// The signed-in user's chat sessions, newest activity first.
   Future<List<ChatSession>> listChatSessions() async {
     final body = await _getObject('/api/v1/chat/sessions');
-    final items = body['data'] as List<dynamic>;
+    final items = (body['data'] as List<dynamic>?) ?? const <dynamic>[];
     return items
         .map((item) => ChatSession.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -287,7 +287,7 @@ class ErlangVisionApiClient {
   /// Ordered message history (oldest first) for a session.
   Future<List<ChatMessage>> getChatMessages(String sessionId) async {
     final body = await _getObject('/api/v1/chat/sessions/$sessionId/messages');
-    final items = body['data'] as List<dynamic>;
+    final items = (body['data'] as List<dynamic>?) ?? const <dynamic>[];
     return items
         .map((item) => ChatMessage.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -322,7 +322,7 @@ class ErlangVisionApiClient {
 
   Future<List<SurveillanceAgent>> listAgents() async {
     final body = await _getObject('/api/v1/agents');
-    final items = body['data'] as List<dynamic>;
+    final items = (body['data'] as List<dynamic>?) ?? const <dynamic>[];
     return items
         .map((item) => SurveillanceAgent.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -358,7 +358,7 @@ class ErlangVisionApiClient {
       '/api/v1/edge/agents/active',
       headers: {'Authorization': 'Bearer $edgeToken'},
     );
-    final items = body['data'] as List<dynamic>;
+    final items = (body['data'] as List<dynamic>?) ?? const <dynamic>[];
     return items
         .map((item) => EdgeAgentConfig.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -366,7 +366,7 @@ class ErlangVisionApiClient {
 
   Future<List<SecurityEvent>> listEvents() async {
     final body = await _getObject('/api/v1/events');
-    final items = body['data'] as List<dynamic>;
+    final items = (body['data'] as List<dynamic>?) ?? const <dynamic>[];
     return items
         .map((item) => SecurityEvent.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -379,7 +379,7 @@ class ErlangVisionApiClient {
 
   Future<List<MediaClip>> listEventClips(String eventId) async {
     final body = await _getObject('/api/v1/events/$eventId/clips');
-    final items = body['data'] as List<dynamic>;
+    final items = (body['data'] as List<dynamic>?) ?? const <dynamic>[];
     return items
         .map((item) => MediaClip.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -401,7 +401,7 @@ class ErlangVisionApiClient {
       queryParameters: query,
     );
     final body = await _getObject(uri.toString());
-    final items = body['data'] as List<dynamic>;
+    final items = (body['data'] as List<dynamic>?) ?? const <dynamic>[];
     return items
         .map((item) => MediaClip.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -421,7 +421,7 @@ class ErlangVisionApiClient {
       queryParameters: query,
     );
     final body = await _getObject(uri.toString());
-    final items = body['data'] as List<dynamic>;
+    final items = (body['data'] as List<dynamic>?) ?? const <dynamic>[];
     return items
         .map((item) => MediaRecording.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -431,7 +431,7 @@ class ErlangVisionApiClient {
   /// during verification, oldest-first.
   Future<List<ToolAuditEntry>> listEventAudit(String eventId) async {
     final body = await _getObject('/api/v1/events/$eventId/audit');
-    final items = body['data'] as List<dynamic>;
+    final items = (body['data'] as List<dynamic>?) ?? const <dynamic>[];
     return items
         .map((item) => ToolAuditEntry.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -527,7 +527,16 @@ Map<String, dynamic> _decodeObject(http.Response response) {
   if (response.body.isEmpty) {
     return <String, dynamic>{};
   }
-  final decoded = jsonDecode(response.body);
+  Object? decoded;
+  try {
+    decoded = jsonDecode(response.body);
+  } on FormatException {
+    // Non-JSON body — e.g. an HTML 502/504 error page from Caddy/a proxy in
+    // front of the API. Return an empty map so the status-code branch throws a
+    // classifiable BackendAuthException (letting a proxied 401 still route to
+    // sign-in) instead of a raw FormatException.
+    return <String, dynamic>{};
+  }
   if (decoded is Map<String, dynamic>) {
     return decoded;
   }
@@ -552,10 +561,16 @@ class BackendAuthException implements Exception {
     Map<String, dynamic> body, {
     required String fallback,
   }) {
-    final error = body['error'] as Map<String, dynamic>?;
+    // `error` is normally a nested object, but a proxy or a terse handler may
+    // send a bare string (or omit it) — tolerate both instead of throwing a
+    // cast error from inside the exception constructor.
+    final rawError = body['error'];
+    final error = rawError is Map<String, dynamic> ? rawError : null;
     return BackendAuthException(
       error?['code']?.toString() ?? 'backend_error',
-      error?['message']?.toString() ?? fallback,
+      error?['message']?.toString() ??
+          (rawError is String ? rawError : null) ??
+          fallback,
     );
   }
 
