@@ -126,8 +126,20 @@ class BaseQwenClient(ABC):
         """Return the raw assistant message text for a single-shot verification."""
 
     @abstractmethod
-    async def chat(self, messages: list[dict], *, tools: list[dict] | None = None) -> QwenResponse:
-        """Run one chat turn with optional tool specs; return content + tool calls."""
+    async def chat(
+        self,
+        messages: list[dict],
+        *,
+        tools: list[dict] | None = None,
+        thinking: bool | None = None,
+    ) -> QwenResponse:
+        """Run one chat turn with optional tool specs; return content + tool calls.
+
+        ``thinking=False`` disables the model's hidden reasoning (DashScope
+        ``enable_thinking``) — use it for structured/low-latency calls (NL-rule
+        compiler, camera control) where reasoning multiplies latency and tokens
+        without improving the JSON. ``None`` keeps the provider default.
+        """
 
 
 class QwenClient(BaseQwenClient):
@@ -193,12 +205,15 @@ class QwenClient(BaseQwenClient):
         """Try each candidate model in turn, advancing on quota/transport failures.
 
         Advances to the next provider on a quota/rate-limit error, HTTP >=500, a
-        timeout, or a connection error; fails fast on other 4xx (a bad request or
-        auth error every provider would hit identically). Raises the last error once
-        the chain is exhausted so callers keep their existing degrade-on-QwenError paths.
+        timeout, a connection error, or — for image-carrying payloads — any HTTP
+        400 (a text-only model rejecting the image; the vision fallbacks may still
+        take it). Fails fast on other 4xx (a bad request or auth error every
+        provider would hit identically). Raises the last error once the chain is
+        exhausted so callers keep their existing degrade-on-QwenError paths.
         """
 
-        providers = self._candidate_providers(is_vision=_payload_has_image(payload))
+        has_image = _payload_has_image(payload)
+        providers = self._candidate_providers(is_vision=has_image)
         last_error: QwenError | None = None
         for index, provider in enumerate(providers):
             try:
@@ -206,7 +221,7 @@ class QwenClient(BaseQwenClient):
             except QwenTimeoutError as exc:
                 last_error = exc
             except QwenError as exc:
-                if not self._should_advance(exc):
+                if not self._should_advance(exc, payload_has_image=has_image):
                     raise
                 last_error = exc
             log.warning(
@@ -216,7 +231,7 @@ class QwenClient(BaseQwenClient):
         raise last_error or QwenError("no Qwen model providers configured")
 
     @staticmethod
-    def _should_advance(error: QwenError) -> bool:
+    def _should_advance(error: QwenError, *, payload_has_image: bool = False) -> bool:
         """Whether to try the next provider given a failed attempt's error."""
 
         message = str(error)
@@ -229,6 +244,12 @@ class QwenClient(BaseQwenClient):
         status = int(match.group(1))
         if status >= 500:
             return True
+        if payload_has_image and status == 400:
+            # A 400 on an image-carrying payload usually means this model is
+            # text-only (DashScope: "Unexpected item type in content.") — e.g.
+            # the chat primary seeing a tool snapshot. The vision-matched
+            # fallbacks may still take it, so keep walking the chain.
+            return True
         return _is_quota_error(status, message)
 
     async def verify(self, request: VerificationRequest, *, repair: bool = False) -> str:
@@ -240,11 +261,21 @@ class QwenClient(BaseQwenClient):
         except (KeyError, IndexError, TypeError) as exc:
             raise QwenError("Qwen response was not in the expected shape") from exc
 
-    async def chat(self, messages: list[dict], *, tools: list[dict] | None = None) -> QwenResponse:
+    async def chat(
+        self,
+        messages: list[dict],
+        *,
+        tools: list[dict] | None = None,
+        thinking: bool | None = None,
+    ) -> QwenResponse:
         payload: dict = {"messages": messages, "temperature": 0}
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
+        if thinking is not None:
+            # Top-level flag (DashScope compatible-mode); non-DashScope fallback
+            # endpoints (Ollama) ignore unknown fields.
+            payload["enable_thinking"] = thinking
         data = await self._post_chat(payload)
         try:
             message = data["choices"][0]["message"]
@@ -290,9 +321,15 @@ class MockQwenClient(BaseQwenClient):
     async def verify(self, request: VerificationRequest, *, repair: bool = False) -> str:
         return self._verdict_for(request.severity, request.summary, request.event_type)
 
-    async def chat(self, messages: list[dict], *, tools: list[dict] | None = None) -> QwenResponse:
+    async def chat(
+        self,
+        messages: list[dict],
+        *,
+        tools: list[dict] | None = None,
+        thinking: bool | None = None,
+    ) -> QwenResponse:
         # The mock inspects the seeded prompt to stay consistent with its caller,
-        # but never requests tools.
+        # but never requests tools (and has no thinking to disable).
         text = "\n".join(
             m.get("content", "") for m in messages if isinstance(m.get("content"), str)
         )

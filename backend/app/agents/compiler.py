@@ -127,7 +127,9 @@ def _compiler_messages(nl_rule: str) -> list[dict]:
 
 async def _llm_compile(nl_rule: str) -> dict:
     client = QwenClient(model=settings.qwen_text_model)
-    response = await client.chat(_compiler_messages(nl_rule))
+    # thinking=False: hidden reasoning turns a ~3s structured-JSON compile into a
+    # 20-30s call that blows the client timeout and degrades to the keyword compiler.
+    response = await client.chat(_compiler_messages(nl_rule), thinking=False)
     obj = _extract_json(response.content)
     if obj is None:
         raise ValueError("compiler model did not return a JSON object")

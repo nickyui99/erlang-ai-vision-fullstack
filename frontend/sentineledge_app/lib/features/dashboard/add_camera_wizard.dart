@@ -423,15 +423,16 @@ class _AddCameraWizardState extends State<AddCameraWizard> {
           Text('Start the bridge on your laptop', style: theme.textTheme.labelLarge),
           const SizedBox(height: 4),
           Text(
-            'Run edge_bridge.py on the laptop. After the camera scans this QR, '
-            'the bridge authenticates the camera using a separate laptop-link secret.',
+            'Run edge_bridge.py on the laptop with this edge token '
+            '(--edge-token, or paste it into the edge console). The camera '
+            'itself authenticates via the scoped secret inside the QR.',
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.sm),
           if (_registration != null) ...[
             Text('Laptop bridge token', style: theme.textTheme.labelMedium),
             const SizedBox(height: 4),
-            TokenBox(token: _registration!.deviceLinkSecret),
+            TokenBox(token: _registration!.edgeToken),
           ],
           const SizedBox(height: AppSpacing.md),
           Text(

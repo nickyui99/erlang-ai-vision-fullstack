@@ -161,6 +161,49 @@ def test_text_chain_ignored_for_vision_and_vice_versa(monkeypatch) -> None:
     assert calls == ["primary", "text-fb"]  # never touched vision-fb
 
 
+def test_vision_400_advances_past_text_only_primary(monkeypatch) -> None:
+    # The agentic chat runs on the TEXT primary; when a tool returns a snapshot
+    # the payload gains an image_url part and DashScope 400s ("Unexpected item
+    # type in content."). That must walk the vision chain, not fail fast — a
+    # fail-fast here surfaced as 502 agent_unavailable in the chat API.
+    monkeypatch.setattr(qwen_client.settings, "qwen_vision_fallback_models", "vision-fb")
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        model = json.loads(request.content)["model"]
+        calls.append(model)
+        if model == "primary-text":
+            return httpx.Response(
+                400,
+                json={
+                    "error": {
+                        "message": (
+                            "<400> InternalError.Algo.InvalidParameter: The provided "
+                            "messages input is invalid. The error info is "
+                            "[Unexpected item type in content.]."
+                        )
+                    }
+                },
+            )
+        return _ok(model)
+
+    _install_transport(monkeypatch, handler)
+    client = QwenClient(api_key="KEY", base_url="https://dash.example/v1", model="primary-text")
+    image_msg = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "describe the snapshot"},
+                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,AA"}},
+            ],
+        }
+    ]
+    response = asyncio.run(client.chat(image_msg))
+
+    assert response.content == "ok:vision-fb"
+    assert calls == ["primary-text", "vision-fb"]
+
+
 def test_non_quota_4xx_fails_fast(monkeypatch) -> None:
     monkeypatch.setattr(qwen_client.settings, "qwen_text_fallback_models", "free-2")
     calls: list[str] = []
@@ -174,6 +217,26 @@ def test_non_quota_4xx_fails_fast(monkeypatch) -> None:
     with pytest.raises(QwenError):
         asyncio.run(client.chat([{"role": "user", "content": "hi"}]))
     assert calls == ["primary-text"]  # did NOT waste the fallback on a real bad request
+
+
+def test_thinking_flag_in_payload(monkeypatch) -> None:
+    # thinking=False must land as a top-level enable_thinking:false (DashScope
+    # compatible-mode shape); omitting the arg must leave the payload untouched
+    # so providers keep their default behavior.
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        bodies.append(body)
+        return _ok(body["model"])
+
+    _install_transport(monkeypatch, handler)
+    client = QwenClient(api_key="KEY", base_url="https://dash.example/v1", model="primary-text")
+    asyncio.run(client.chat([{"role": "user", "content": "hi"}], thinking=False))
+    asyncio.run(client.chat([{"role": "user", "content": "hi"}]))
+
+    assert bodies[0]["enable_thinking"] is False
+    assert "enable_thinking" not in bodies[1]
 
 
 def test_server_error_advances(monkeypatch) -> None:
