@@ -133,10 +133,15 @@ class Settings(BaseSettings):
     # (local dev). The Docker image sets this to the path it copies frames into.
     demo_frames_dir: str = Field(default="", validation_alias="DEMO_FRAMES_DIR")
     demo_sim_fps: float = Field(default=10.0, validation_alias="DEMO_SIM_FPS")
-    demo_sim_triage_interval_seconds: float = Field(default=15.0, validation_alias="DEMO_SIM_TRIAGE_INTERVAL_SECONDS")
+    demo_sim_triage_interval_seconds: float = Field(default=60.0, validation_alias="DEMO_SIM_TRIAGE_INTERVAL_SECONDS")
     # Faster cadence until the first detection lands, so opening a camera surfaces
     # an event quickly; then it settles to the slower steady-state interval above.
-    demo_sim_first_triage_interval_seconds: float = Field(default=3.0, validation_alias="DEMO_SIM_FIRST_TRIAGE_INTERVAL_SECONDS")
+    demo_sim_first_triage_interval_seconds: float = Field(default=4.0, validation_alias="DEMO_SIM_FIRST_TRIAGE_INTERVAL_SECONDS")
+    # Default judge mode is deterministic and free; enable only for an explicitly live-AI demo.
+    demo_sim_use_vlm: bool = Field(default=True, validation_alias="DEMO_SIM_USE_VLM")
+
+    # Judge demos mirror edge dwell semantics: a rule must match for this long before an event exists.
+    demo_sim_min_dwell_seconds: float = Field(default=10.0, validation_alias="DEMO_SIM_MIN_DWELL_SECONDS")
     demo_sim_event_cooldown_seconds: float = Field(default=45.0, validation_alias="DEMO_SIM_EVENT_COOLDOWN_SECONDS")
     demo_sim_idle_timeout_seconds: float = Field(default=30.0, validation_alias="DEMO_SIM_IDLE_TIMEOUT_SECONDS")
 

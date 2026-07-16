@@ -84,15 +84,37 @@ def _extract_json(raw: str | None) -> dict | None:
     return obj if isinstance(obj, dict) else None
 
 
+def _positive_seconds(value: object, default: float) -> float:
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return default
+    return seconds if seconds > 0 else default
+
+
+def _dwell_seconds(agent: Agent) -> float:
+    cfg = agent.compiled_edge_config or {}
+    return max(settings.demo_sim_min_dwell_seconds, _positive_seconds(cfg.get("dwell_s"), 0.0))
+
+
+def _cooldown_seconds(agent: Agent) -> float:
+    cfg = agent.compiled_edge_config or {}
+    return max(settings.demo_sim_event_cooldown_seconds, _positive_seconds(cfg.get("cooldown_s"), 0.0))
+
+
+
+
 @dataclass
 class _CameraSim:
     device_id: str
     user_id: str
     frames: list[Path]
     last_activity: float
+    started_at_monotonic: float = field(default=0.0)
     task: asyncio.Task | None = None
     last_event_monotonic: float = field(default=0.0)
     triage_in_flight: bool = False
+    rule_match_since_monotonic: float | None = None
 
 
 class DemoSimulator:
@@ -135,7 +157,7 @@ class DemoSimulator:
             frames = self._list_frames(device_id)
             if not frames:
                 return
-            sim = _CameraSim(device_id=device_id, user_id=user_id, frames=frames, last_activity=now)
+            sim = _CameraSim(device_id=device_id, user_id=user_id, frames=frames, last_activity=now, started_at_monotonic=now)
             sim.task = asyncio.create_task(self._run(sim))
             self._sims[device_id] = sim
             _logger.info("demo_sim: started camera %s (%d frames)", device_id, len(frames))
@@ -164,17 +186,16 @@ class DemoSimulator:
                 idx += 1
                 if frame_bytes:
                     await video_stream_broker.publish(sim.device_id, frame_bytes)
-                    # Until the first event lands, retry quickly so opening a
-                    # camera surfaces a detection fast; then use the slow cadence.
-                    interval = (
-                        settings.demo_sim_first_triage_interval_seconds
-                        if sim.last_event_monotonic == 0.0
-                        else settings.demo_sim_triage_interval_seconds
-                    )
-                    if now - last_triage >= interval:
-                        last_triage = now
-                        # Fire-and-forget so a slow LLM call never stalls playback.
-                        asyncio.create_task(self._maybe_triage(sim, frame_bytes))
+                    if settings.demo_sim_use_vlm:
+                        # First frame at +4s; every later VLM check is one minute apart.
+                        due = (
+                            now - sim.started_at_monotonic >= settings.demo_sim_first_triage_interval_seconds
+                            if last_triage == 0.0
+                            else now - last_triage >= settings.demo_sim_triage_interval_seconds
+                        )
+                        if due:
+                            last_triage = now
+                            asyncio.create_task(self._maybe_triage(sim, frame_bytes))
                 await asyncio.sleep(frame_interval)
         except asyncio.CancelledError:
             raise
@@ -189,11 +210,9 @@ class DemoSimulator:
 
     # --- triage + event creation -----------------------------------------
     async def _maybe_triage(self, sim: _CameraSim, frame_bytes: bytes) -> None:
-        # Cooldown: don't spend API calls or spawn events back-to-back.
-        if time.monotonic() - sim.last_event_monotonic < settings.demo_sim_event_cooldown_seconds:
-            return
         # Single-flight: with the fast first-detection cadence, calls could
         # otherwise overlap and create duplicate events on open.
+
         if sim.triage_in_flight:
             return
         sim.triage_in_flight = True
@@ -202,15 +221,22 @@ class DemoSimulator:
                 agent = await self._armed_agent(session, sim.device_id, sim.user_id)
                 if agent is None:
                     return
+                now = time.monotonic()
+                # Mirror EventFilter: suppress a repeated activity while the rule is cooling down.
+                if now - sim.last_event_monotonic < _cooldown_seconds(agent):
+                    return
                 device = await session.get(Device, sim.device_id)
                 verdict = await self._triage_frame(frame_bytes, agent, device)
-                if verdict and bool(verdict.get("triggered")):
-                    sim.last_event_monotonic = time.monotonic()
-                    await self._create_event(session, sim, agent, device, verdict)
+                if not verdict or not bool(verdict.get("triggered")):
+                    return
+                now = time.monotonic()
+                sim.last_event_monotonic = now
+                await self._create_event(session, sim, agent, device, verdict)
         except Exception:  # noqa: BLE001 - triage is best-effort
             _logger.exception("demo_sim: triage failed for %s", sim.device_id)
         finally:
             sim.triage_in_flight = False
+
 
     async def _armed_agent(self, session: AsyncSession, device_id: str, user_id: str) -> Agent | None:
         result = await session.execute(
@@ -249,7 +275,8 @@ class DemoSimulator:
             },
         ]
         try:
-            response = await client.chat(messages)
+            # Structured classification does not need hidden model reasoning.
+            response = await client.chat(messages, thinking=False)
         except QwenError:
             return None
         return _extract_json(response.content)
@@ -261,6 +288,7 @@ class DemoSimulator:
         agent: Agent,
         device: Device | None,
         verdict: dict,
+        source: str = "demo_sim_vlm",
     ) -> None:
         now = datetime.now(UTC)
         severity = str(verdict.get("severity", "")).lower()
@@ -281,11 +309,11 @@ class DemoSimulator:
             idempotency_key=f"{sim.device_id}-sim-{int(now.timestamp() * 1000)}",
             timestamp=now,
             event_type=event_type,
-            stage1_result={"source": "demo_sim", "detector": (agent.compiled_edge_config or {}).get("classes")},
-            stage2_verdict={"matched_rule": True, "source": "demo_sim"},
+            stage1_result={"source": source, "detector": (agent.compiled_edge_config or {}).get("classes")},
+            stage2_verdict={"matched_rule": True, "source": source},
             stage3_verdict={
                 "verified": True,
-                "source": "demo_sim_vlm",
+                "source": source,
                 "confidence": confidence,
                 "summary": summary,
             },

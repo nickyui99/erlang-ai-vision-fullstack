@@ -209,8 +209,9 @@ $env:PYTHONPATH="backend"
 python scripts\create_judge_account.py     # seed demo login + cameras + agents
 ```
 
-Set `DEMO_SIMULATION_ENABLED=true` and a `qwen-vl-*` model in `.env`, open a demo
-camera's live view, and watch real events fire.
+Set `DEMO_SIMULATION_ENABLED=true` and a Qwen vision model in `.env`, then open a
+demo camera's live view. The backend sends its first frame to Qwen after four
+seconds and sends at most one more frame per minute.
 
 Full setup → [Backend setup](docs/backend/backend_setup.md) · [Frontend setup](docs/frontend/frontend_setup.md)
 
