@@ -292,7 +292,10 @@ class _AiAgentChatScreenState extends State<AiAgentChatScreen> {
                   enabled: !busy,
                   onTap: () {
                     _controller.startNewSession();
-                    Navigator.of(context).pop();
+                    // In the wide layout this is an inline sidebar, not a
+                    // modal drawer. Popping there dismisses the entire AI
+                    // Agent route and returns the user to the main page.
+                    if (!inline) Navigator.of(context).pop();
                   },
                 ),
                 const Divider(height: 1),

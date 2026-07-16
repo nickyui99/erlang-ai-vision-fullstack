@@ -10,6 +10,7 @@ class ToolAudit(Base):
     __tablename__ = "tool_audit"
     __table_args__ = (
         Index("idx_tool_audit_user_timestamp", "user_id", "timestamp"),
+        Index("idx_tool_audit_event_user_timestamp", "event_id", "user_id", "timestamp"),
     )
 
     audit_id: Mapped[str] = mapped_column(String(64), primary_key=True)

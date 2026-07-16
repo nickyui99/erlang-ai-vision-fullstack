@@ -55,6 +55,7 @@ async def get_event(
 @router.get("/{event_id}/clips")
 async def list_event_clips(
     event_id: str,
+    limit: int = Query(default=100, ge=1, le=250),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
@@ -62,7 +63,7 @@ async def list_event_clips(
     result = await session.execute(
         select(Clip)
         .where(Clip.event_id == event_id, Clip.user_id == current_user.user_id, Clip.deleted_at.is_(None))
-        .order_by(Clip.created_at.desc())
+        .order_by(Clip.created_at.desc()).limit(limit)
     )
     clips = [ClipRead.model_validate(clip).model_dump(mode="json") for clip in result.scalars()]
     return {"data": clips}
@@ -71,6 +72,7 @@ async def list_event_clips(
 @router.get("/{event_id}/audit")
 async def list_event_audit(
     event_id: str,
+    limit: int = Query(default=100, ge=1, le=250),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
@@ -80,7 +82,7 @@ async def list_event_audit(
     result = await session.execute(
         select(ToolAudit)
         .where(ToolAudit.event_id == event_id, ToolAudit.user_id == current_user.user_id)
-        .order_by(ToolAudit.timestamp.asc())
+        .order_by(ToolAudit.timestamp.asc()).limit(limit)
     )
     audits = [ToolAuditRead.model_validate(audit).model_dump(mode="json") for audit in result.scalars()]
     return {"data": audits}

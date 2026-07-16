@@ -11,7 +11,8 @@ class Clip(Base):
     __table_args__ = (
         UniqueConstraint("device_id", "idempotency_key", name="uq_clips_device_idempotency_key"),
         Index("idx_clips_event_id", "event_id"),
-        Index("idx_clips_user_id", "user_id"),
+        Index("idx_clips_event_user_created", "event_id", "user_id", "created_at"),
+        Index("idx_clips_device_user_created", "device_id", "user_id", "created_at"),
         Index("idx_clips_expires_at", "expires_at"),
     )
 

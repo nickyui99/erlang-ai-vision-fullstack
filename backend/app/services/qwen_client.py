@@ -163,6 +163,12 @@ class QwenClient(BaseQwenClient):
         self._default_base = default_base
         self._default_key = default_key
         self._timeout = timeout_seconds if timeout_seconds is not None else settings.qwen_timeout_seconds
+        # Keep connections alive across model turns: an agentic chat may make
+        # several calls, and recreating the client repeats TCP/TLS setup.
+        self._http_client = _async_client(self._timeout)
+
+    async def aclose(self) -> None:
+        await self._http_client.aclose()
 
     def _candidate_providers(self, *, is_vision: bool) -> list[ModelProvider]:
         """Primary first, then the modality-matched fallback chain, de-duped by model."""
@@ -183,12 +189,11 @@ class QwenClient(BaseQwenClient):
         headers = {"Authorization": f"Bearer {provider.api_key}"}
         body = {**payload, "model": provider.model}
         try:
-            async with _async_client(self._timeout) as client:
-                response = await client.post(
-                    f"{provider.base_url}/chat/completions",
-                    headers=headers,
-                    json=body,
-                )
+            response = await self._http_client.post(
+                f"{provider.base_url}/chat/completions",
+                headers=headers,
+                json=body,
+            )
         except httpx.TimeoutException as exc:
             raise QwenTimeoutError("Qwen request timed out") from exc
         except httpx.HTTPError as exc:
@@ -361,6 +366,17 @@ class MockQwenClient(BaseQwenClient):
         )
 
 
+_cached_qwen_clients: dict[str, QwenClient] = {}
+
+
+async def close_qwen_clients() -> None:
+    """Close pooled HTTP connections during application shutdown."""
+    clients = list(_cached_qwen_clients.values())
+    _cached_qwen_clients.clear()
+    for client in clients:
+        await client.aclose()
+
+
 def get_qwen_client(model: str | None = None) -> BaseQwenClient:
     """Pick the client for the current environment.
 
@@ -372,4 +388,9 @@ def get_qwen_client(model: str | None = None) -> BaseQwenClient:
 
     if settings.app_env == "test" or not settings.qwen_api_key:
         return MockQwenClient()
-    return QwenClient(model=model)
+    key = model or settings.qwen_model
+    client = _cached_qwen_clients.get(key)
+    if client is None:
+        client = QwenClient(model=model)
+        _cached_qwen_clients[key] = client
+    return client

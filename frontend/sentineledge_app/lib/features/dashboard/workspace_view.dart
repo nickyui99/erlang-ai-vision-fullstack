@@ -101,6 +101,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   bool _isLoadingClips = false;
   bool _isLoadingAudit = false;
   bool _isRequestingPlayback = false;
+  bool _eventsRefreshQueued = false;
+  int _eventDetailGeneration = 0;
 
   bool get _isBusy =>
       _isRefreshing ||
@@ -179,6 +181,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   }
 
   void _applySelectedEvent(String? eventId) {
+    _eventDetailGeneration++;
     setState(() {
       _selectedEventId = eventId;
       _lastPlaybackUrl = null;
@@ -253,10 +256,16 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       setBusy: (value) => _isRefreshing = value,
       showSuccess: showSuccess,
       action: () async {
-        final devices = await widget.apiClient.listDevices();
-        final agents = await widget.apiClient.listAgents();
-        final events = await widget.apiClient.listEvents();
+        final resources = await Future.wait<Object>([
+          widget.apiClient.listDevices(),
+          widget.apiClient.listAgents(),
+          widget.apiClient.listEvents(),
+        ]);
+        final devices = resources[0] as List<EdgeDevice>;
+        final agents = resources[1] as List<SurveillanceAgent>;
+        final events = resources[2] as List<SecurityEvent>;
         if (!mounted) return;
+        _eventDetailGeneration++;
         setState(() {
           _devices = devices;
           _agents = agents;
@@ -279,8 +288,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         // Re-hydrate the selected event's media/audit (cleared above).
         final selected = _selectedEventId;
         if (selected != null) {
-          await _loadEventClips(selected, showSuccess: false);
-          await _loadEventAudit(selected, showSuccess: false);
+          await Future.wait([
+            _loadEventClips(selected, showSuccess: false),
+            _loadEventAudit(selected, showSuccess: false),
+          ]);
         }
       },
     );
@@ -344,6 +355,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   }
 
   Future<void> _loadEvents({bool showSuccess = true}) async {
+    if (_isLoadingEvents) {
+      _eventsRefreshQueued = true;
+      return;
+    }
     _eventsDirty = false;
     await _run(
       successMessage: 'Events refreshed',
@@ -352,6 +367,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       action: () async {
         final events = await widget.apiClient.listEvents();
         if (!mounted) return;
+        _eventDetailGeneration++;
         setState(() {
           _events = events;
           _selectedEventId = _chooseExisting(
@@ -364,24 +380,35 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         });
         final selected = _selectedEventId;
         if (selected != null) {
-          await _loadEventClips(selected, showSuccess: false);
-          await _loadEventAudit(selected, showSuccess: false);
+          await Future.wait([
+            _loadEventClips(selected, showSuccess: false),
+            _loadEventAudit(selected, showSuccess: false),
+          ]);
         }
       },
     );
+    if (_eventsRefreshQueued) {
+      _eventsRefreshQueued = false;
+      await _loadEvents(showSuccess: false);
+    }
   }
 
   Future<void> _loadEventClips(
     String eventId, {
     bool showSuccess = false,
   }) async {
+    final generation = _eventDetailGeneration;
     await _run(
       successMessage: 'Event media refreshed',
       setBusy: (value) => _isLoadingClips = value,
       showSuccess: showSuccess,
       action: () async {
         final clips = await widget.apiClient.listEventClips(eventId);
-        if (!mounted) return;
+        if (!mounted ||
+            generation != _eventDetailGeneration ||
+            eventId != _selectedEventId) {
+          return;
+        }
         setState(() {
           _eventClips = clips;
           _lastPlaybackUrl = null;
@@ -394,13 +421,18 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     String eventId, {
     bool showSuccess = false,
   }) async {
+    final generation = _eventDetailGeneration;
     await _run(
       successMessage: 'Agent activity refreshed',
       setBusy: (value) => _isLoadingAudit = value,
       showSuccess: showSuccess,
       action: () async {
         final audit = await widget.apiClient.listEventAudit(eventId);
-        if (!mounted) return;
+        if (!mounted ||
+            generation != _eventDetailGeneration ||
+            eventId != _selectedEventId) {
+          return;
+        }
         setState(() => _eventAudit = audit);
       },
     );
@@ -1337,10 +1369,12 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   // Rules armed on a camera = ARMED sub-agents bound to that device (unassigning
   // disarms the sub-agent but keeps its row, so state must be checked).
   int _armedCountForDevice(String deviceId) => _agents
-      .where((agent) =>
-          !agent.isDefinition &&
-          agent.deviceId == deviceId &&
-          agent.state == 'armed')
+      .where(
+        (agent) =>
+            !agent.isDefinition &&
+            agent.deviceId == deviceId &&
+            agent.state == 'armed',
+      )
       .length;
 
   Future<void> _openQuickArm(EdgeDevice device) async {
@@ -1357,9 +1391,11 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
   }
 
-  Iterable<SurveillanceAgent> _subsForDefinition(String definitionId) => _agents.where(
-    (agent) => agent.parentAgentId == definitionId && agent.state == 'armed',
-  );
+  Iterable<SurveillanceAgent> _subsForDefinition(String definitionId) =>
+      _agents.where(
+        (agent) =>
+            agent.parentAgentId == definitionId && agent.state == 'armed',
+      );
 
   int _assignmentCount(String definitionId) =>
       _subsForDefinition(definitionId).length;
@@ -2075,8 +2111,10 @@ class _QuickArmSheetState extends State<_QuickArmSheet> {
 
   // What this camera already watches, inferred from its armed sub-agents.
   Set<String> get _deviceClasses => _agents
-      .where((agent) =>
-          agent.deviceId == widget.device.deviceId && agent.state == 'armed')
+      .where(
+        (agent) =>
+            agent.deviceId == widget.device.deviceId && agent.state == 'armed',
+      )
       .expand(_classesOf)
       .toSet();
 

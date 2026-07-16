@@ -10,6 +10,7 @@ class Recording(Base):
     __tablename__ = "recordings"
     __table_args__ = (
         Index("idx_recordings_user_start", "user_id", "start_time"),
+        Index("idx_recordings_device_user_start", "device_id", "user_id", "start_time"),
         Index("idx_recordings_retention_until", "retention_until"),
     )
 

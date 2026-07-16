@@ -15,7 +15,7 @@ class ChatSession(Base):
     """
 
     __tablename__ = "chat_sessions"
-    __table_args__ = (Index("idx_chat_sessions_user_id", "user_id"),)
+    __table_args__ = (Index("idx_chat_sessions_user_updated", "user_id", "updated_at"),)
 
     session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[str] = mapped_column(
@@ -39,7 +39,9 @@ class ChatMessage(Base):
     """
 
     __tablename__ = "chat_messages"
-    __table_args__ = (Index("idx_chat_messages_session_id", "session_id"),)
+    __table_args__ = (
+        Index("idx_chat_messages_session_created", "session_id", "created_at", "message_id"),
+    )
 
     message_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     session_id: Mapped[str] = mapped_column(

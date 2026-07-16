@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.errors import register_exception_handlers
 from app.core.middleware import RequestIdMiddleware
 from app.services import media_retention_service
+from app.services.qwen_client import close_qwen_clients
 
 
 def _mcp_mount_enabled() -> bool:
@@ -39,6 +40,7 @@ async def _lifespan(app: FastAPI):
                 sweep_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await sweep_task
+            await close_qwen_clients()
 
 
 def create_app() -> FastAPI:
