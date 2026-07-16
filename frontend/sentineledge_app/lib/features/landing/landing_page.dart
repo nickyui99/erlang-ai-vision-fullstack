@@ -9,6 +9,7 @@ const _logoAsset = 'assets/brand/erlang-ai-vision-logo-long-white.png';
 const _cameraIconAsset = 'assets/brand/erlang-ai-camera-tile-icon.png';
 const _agentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
 const _scenarioAsset = 'assets/landing/edge-ai-scenario.png';
+const _eventTriageAsset = 'assets/landing/event-triage-console.png';
 const _xiaoEsp32Asset = 'assets/landing/pipeline/xiao-esp32-s3.png';
 const _ultralyticsAsset = 'assets/landing/pipeline/ultralytics-yolo26.png';
 const _qwenAsset = 'assets/landing/pipeline/qwen.png';
@@ -1833,11 +1834,7 @@ class _AgenticInvestigationSection extends StatelessWidget {
     final right = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: const [
-        _ImagePlaceholder(
-          dark: true,
-          label: 'Screenshot: event verdict & tool-call trail',
-          aspectRatio: 16 / 10,
-        ),
+        _EventTriageImage(),
         SizedBox(height: AppSpacing.lg),
         _VerdictCard(),
       ],
@@ -2187,6 +2184,44 @@ class _ImagePlaceholder extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EventTriageImage extends StatelessWidget {
+  const _EventTriageImage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('event-triage-image'),
+      decoration: BoxDecoration(
+        color: AppColors.neutral900,
+        borderRadius: AppRadius.lgAll,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.28),
+            blurRadius: 28,
+            offset: const Offset(0, 18),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(
+        _eventTriageAsset,
+        width: double.infinity,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        semanticLabel:
+            'Erlang AI Vision local event triage with protection rules, '
+            'recent detections, and a high-priority alert',
+        errorBuilder: (context, error, stackTrace) => const _ImagePlaceholder(
+          dark: true,
+          label: 'Event triage and detection review',
+          aspectRatio: 1911 / 823,
         ),
       ),
     );

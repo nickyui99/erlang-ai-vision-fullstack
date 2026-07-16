@@ -72,6 +72,7 @@ void main() {
       find.byKey(const ValueKey('stage-visual-cloud-qwen')),
       findsOneWidget,
     );
+    expect(find.byKey(const ValueKey('event-triage-image')), findsOneWidget);
   });
   testWidgets('native root route opens login instead of landing page', (
     WidgetTester tester,

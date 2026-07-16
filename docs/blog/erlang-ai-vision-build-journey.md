@@ -118,6 +118,8 @@ But none of this happens without control:
 - Commands are relayed to the edge bridge over WebSocket, executed, and written to a **tool audit log** — request and result.
 - Camera movement is **clamped to safe mechanical ranges** (pan 15–165°, tilt 60–140°, matching the firmware's hard stops), enforced server-side, so no model output can drive the servos past their limits.
 
+And these tools aren't bespoke plumbing: the backend exposes them through a **Model Context Protocol (MCP) server** — camera control, agents, events, and clips as standard MCP tools behind short-lived signed tokens. The in-app Erlang AI Agent connects to it as an ordinary MCP client, and so can any external one (Claude, an IDE, your own scripts) — with the same per-user scoping, permission checks, servo clamps, and audit trail applied to every call, no matter who is calling.
+
 The result is an investigation loop:
 
 > **Observe → reason → gather evidence → verify → alert**

@@ -85,6 +85,7 @@ flutter:
     - assets/brand/erlang-ai-camera-tile-icon.png
     - assets/brand/erlang-ai-agent-icon.png
     - assets/landing/edge-ai-scenario.png
+    - assets/landing/event-triage-console.png
     - assets/landing/frontdoor-cctv.gif
     - assets/landing/laptop-frame.png
     - assets/landing/mobile-agent-frame.png
