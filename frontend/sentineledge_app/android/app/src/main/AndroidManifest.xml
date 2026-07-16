@@ -1,8 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="Erlang AI Vision"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Route background/killed-app FCM notifications to the high-importance
+             "Security alerts" channel created in PushNotificationService, so they
+             pop with sound like the foreground ones. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="security_alerts" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
