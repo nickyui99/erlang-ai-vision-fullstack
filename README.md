@@ -1,6 +1,6 @@
 <div align="center">
 
-![Erlang AI Vision — Qwen-powered agent cameras you configure in plain language](docs/assets/banner.png)
+![Erlang AI Vision — AI-powered security monitoring: real-time detection, smart alerts, camera automation](docs/assets/banner.png)
 
 ### Qwen-powered agent cameras you configure in plain language.
 
@@ -183,7 +183,7 @@ protocol layer.
 table (emergency escalation is denied), camera movement is clamped to
 servo-safe ranges and rate-limited, every tool call is audited to `tool_audit`,
 and chat turns are capped per account per day (`CHAT_DAILY_MESSAGE_LIMIT`,
-default 200/day) since one agentic turn can spend several Qwen calls. If the
+default 50/day) since one agentic turn can spend several Qwen calls. If the
 MCP server is unreachable, the chat degrades gracefully to text-only answers.
 
 ## 🚀 Quickstart
