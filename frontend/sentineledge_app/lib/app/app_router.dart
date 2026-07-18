@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/auth/login_page.dart';
-import '../features/dashboard/console_page.dart';
-import '../features/dashboard/workspace_view.dart';
+import '../features/dashboard/workspace_section.dart';
 import '../features/landing/landing_page.dart';
 import '../shared/not_found_page.dart';
+import 'deferred_console_page.dart';
 import 'session_controller.dart';
 
 /// Declarative URL map for the app. Every page — the landing sections, login,
@@ -50,10 +50,7 @@ abstract final class AppRouter {
           pageBuilder: (context, state) =>
               _landing(context, LandingSection.github),
         ),
-        GoRoute(
-          path: '/login',
-          builder: (context, state) => const LoginPage(),
-        ),
+        GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
         GoRoute(
           path: '/console',
           redirect: (context, state) =>
@@ -62,8 +59,7 @@ abstract final class AppRouter {
         // Cameras tab, with the full-screen device detail stacked on top.
         GoRoute(
           path: '/console/cameras',
-          pageBuilder: (context, state) =>
-              _console(WorkspaceSection.cameras),
+          pageBuilder: (context, state) => _console(WorkspaceSection.cameras),
           routes: [
             GoRoute(
               path: ':deviceId',
@@ -71,7 +67,7 @@ abstract final class AppRouter {
                 final deviceId = state.pathParameters['deviceId']!;
                 return MaterialPage(
                   key: ValueKey('camera-$deviceId'),
-                  child: DeviceControlPage(deviceId: deviceId),
+                  child: DeferredDeviceControlPage(deviceId: deviceId),
                 );
               },
             ),
@@ -79,8 +75,7 @@ abstract final class AppRouter {
         ),
         GoRoute(
           path: '/console/overview',
-          pageBuilder: (context, state) =>
-              _console(WorkspaceSection.overview),
+          pageBuilder: (context, state) => _console(WorkspaceSection.overview),
         ),
         GoRoute(
           path: '/console/agents',
@@ -101,8 +96,7 @@ abstract final class AppRouter {
         ),
         GoRoute(
           path: '/console/settings',
-          pageBuilder: (context, state) =>
-              _console(WorkspaceSection.settings),
+          pageBuilder: (context, state) => _console(WorkspaceSection.settings),
         ),
       ],
     );
@@ -112,8 +106,10 @@ abstract final class AppRouter {
     final status = session.status;
     final location = state.matchedLocation;
     final atLogin = location == '/login';
-    final atConsole = location == '/console' || location.startsWith('/console/');
-    final atLanding = location == '/' ||
+    final atConsole =
+        location == '/console' || location.startsWith('/console/');
+    final atLanding =
+        location == '/' ||
         location == '/architecture' ||
         location == '/qwen' ||
         location == '/github';
@@ -162,11 +158,10 @@ abstract final class AppRouter {
   }) {
     return MaterialPage<void>(
       key: _consolePageKey,
-      child: ConsolePage(
+      child: DeferredConsolePage(
         section: section,
         selectedEventId: selectedEventId,
       ),
     );
   }
 }
-

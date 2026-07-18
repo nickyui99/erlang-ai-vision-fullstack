@@ -242,8 +242,9 @@ class SignInView extends StatelessWidget {
                           borderRadius: AppRadius.lgAll,
                           child: wide
                               ? ConstrainedBox(
-                                  constraints:
-                                      const BoxConstraints(minHeight: 560),
+                                  constraints: const BoxConstraints(
+                                    minHeight: 560,
+                                  ),
                                   child: IntrinsicHeight(
                                     child: Row(
                                       crossAxisAlignment:
@@ -887,12 +888,14 @@ class _LoginPanelState extends State<_LoginPanel> {
               SizedBox(height: mobileCompact ? AppSpacing.sm : AppSpacing.md),
               AppBanner(text: widget.error!),
             ],
-            SizedBox(height: mobileCompact ? AppSpacing.sm : AppSpacing.lg),
-            Text(
-              'Backend: ${BackendAuthClient.baseUrl}',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall,
-            ),
+            if (kDebugMode) ...[
+              SizedBox(height: mobileCompact ? AppSpacing.sm : AppSpacing.lg),
+              Text(
+                'Backend: ${BackendAuthClient.baseUrl}',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
           ],
         ),
       ),

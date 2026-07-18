@@ -44,13 +44,11 @@ dependencies:
   google_fonts: ^6.2.1
   qr_flutter: ^4.1.0
   shared_preferences: ^2.5.3
-  shadcn_ui: ^0.30.1
-  lucide_icons_flutter: ^3.1.0
   flutter_animate: ^4.5.2
 
   cupertino_icons: ^1.0.8
   go_router: ^17.3.0
-  gpt_markdown: ^1.1.7
+  flutter_markdown_plus: ^1.0.12
 
 dev_dependencies:
   flutter_test:
@@ -85,17 +83,17 @@ flutter:
     - assets/brand/google-g.png
     - assets/brand/erlang-ai-camera-tile-icon.png
     - assets/brand/erlang-ai-agent-icon.png
-    - assets/landing/edge-ai-scenario.png
-    - assets/landing/event-triage-console.png
+    - assets/landing/edge-ai-scenario.webp
+    - assets/landing/event-triage-console.webp
     - assets/landing/frontdoor-cctv.gif
-    - assets/landing/laptop-frame.png
-    - assets/landing/mobile-agent-frame.png
-    - assets/landing/erlang-ai-vision-architecture-flow.png
-    - assets/landing/erlang-cloud-architecture.png
-    - assets/landing/pipeline/xiao-esp32-s3.png
-    - assets/landing/pipeline/ultralytics-yolo26.png
-    - assets/landing/pipeline/qwen.png
-    - assets/landing/pipeline/alibaba-cloud.png
+    - assets/landing/laptop-frame.webp
+    - assets/landing/mobile-agent-frame.webp
+    - assets/landing/erlang-ai-vision-architecture-flow.webp
+    - assets/landing/erlang-cloud-architecture.webp
+    - assets/landing/pipeline/xiao-esp32-s3.webp
+    - assets/landing/pipeline/ultralytics-yolo26.webp
+    - assets/landing/pipeline/qwen.webp
+    - assets/landing/pipeline/alibaba-cloud.webp
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

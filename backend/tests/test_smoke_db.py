@@ -55,7 +55,7 @@ from app.models.event import Event  # noqa: E402
 from app.models.user import User  # noqa: E402
 
 
-ALEMBIC_HEAD = "20260623_0005"
+ALEMBIC_HEAD = "20260716_0010"
 APP_TABLES = {
     "users",
     "devices",
@@ -66,6 +66,8 @@ APP_TABLES = {
     "alerts",
     "push_tokens",
     "tool_audit",
+    "chat_sessions",
+    "chat_messages",
 }
 
 IS_SQLITE = engine.url.get_backend_name() == "sqlite"
@@ -178,13 +180,13 @@ def _as_utc(value) -> datetime:
 
 
 def test_healthz() -> None:
-    response = TestClient(app).get("/api/v1/healthz")
+    response = TestClient(app).get("/healthz")
     assert response.status_code == 200
     assert response.json()["data"]["status"] == "ok"
 
 
 def test_readyz_database_connectivity() -> None:
-    response = TestClient(app).get("/api/v1/readyz")
+    response = TestClient(app).get("/readyz")
     assert response.status_code == 200
     assert response.json()["data"]["database"] == "ok"
 

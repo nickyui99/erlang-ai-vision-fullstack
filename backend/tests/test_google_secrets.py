@@ -26,6 +26,12 @@ def clean_secret_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         "GOOGLE_SECRET_MANAGER_CREDENTIALS_FILE",
         "QWEN_API_KEY",
         "SESSION_SECRET_KEY",
+        "FIREBASE_PROJECT_ID",
+        "ALIBABA_CLOUD_ACCESS_KEY_ID",
+        "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
+        "ALICLOUD_OSS_ENDPOINT",
+        "ALICLOUD_OSS_BUCKET",
+        "ALICLOUD_OSS_SECURE",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -118,7 +124,16 @@ def test_loads_two_secrets_in_order_and_later_values_win(
     client = FakeClient(
         {
             "erlang-prod-secrets": json.dumps(
-                {"SESSION_SECRET_KEY": "prod-session", "QWEN_API_KEY": "old-qwen"}
+                {
+                    "SESSION_SECRET_KEY": "prod-session",
+                    "QWEN_API_KEY": "old-qwen",
+                    "FIREBASE_PROJECT_ID": "sentineledge-e069b",
+                    "ALIBABA_CLOUD_ACCESS_KEY_ID": "oss-key-id",
+                    "ALIBABA_CLOUD_ACCESS_KEY_SECRET": "oss-key-secret",
+                    "ALICLOUD_OSS_ENDPOINT": "oss-ap-southeast-3.aliyuncs.com",
+                    "ALICLOUD_OSS_BUCKET": "erlang-vision",
+                    "ALICLOUD_OSS_SECURE": "true",
+                }
             ),
             "erlang-db-secrets": json.dumps(
                 {
@@ -141,6 +156,12 @@ def test_loads_two_secrets_in_order_and_later_values_win(
     ]
     assert os.environ["SESSION_SECRET_KEY"] == "prod-session"
     assert os.environ["QWEN_API_KEY"] == "new-qwen"
+    assert os.environ["FIREBASE_PROJECT_ID"] == "sentineledge-e069b"
+    assert os.environ["ALIBABA_CLOUD_ACCESS_KEY_ID"] == "oss-key-id"
+    assert os.environ["ALIBABA_CLOUD_ACCESS_KEY_SECRET"] == "oss-key-secret"
+    assert os.environ["ALICLOUD_OSS_ENDPOINT"] == "oss-ap-southeast-3.aliyuncs.com"
+    assert os.environ["ALICLOUD_OSS_BUCKET"] == "erlang-vision"
+    assert os.environ["ALICLOUD_OSS_SECURE"] == "true"
     assert os.environ["DATABASE_URL"] == (
         "postgresql+asyncpg://app+user:p%40ss%2Fword@db.internal:5432/erlang"
     )

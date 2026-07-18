@@ -37,7 +37,9 @@ from app.core.config import settings  # noqa: E402  (import loads KMS secret -> 
 from app.db.base import Base  # noqa: E402
 import app.models  # noqa: E402,F401
 
-ALEMBIC_HEAD = "20260623_0005"
+# Keep this guard aligned with the latest checked-in Alembic migration. The
+# reset utility must never copy data into an older RDS schema.
+ALEMBIC_HEAD = "20260716_0010"
 EXPECTED_TABLES = {
     "users",
     "devices",
@@ -48,6 +50,8 @@ EXPECTED_TABLES = {
     "alerts",
     "push_tokens",
     "tool_audit",
+    "chat_sessions",
+    "chat_messages",
 }
 
 

@@ -8,7 +8,7 @@ from app.api.v1 import health
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.errors import register_exception_handlers
-from app.core.middleware import RequestIdMiddleware
+from app.core.middleware import CsrfOriginMiddleware, RequestIdMiddleware
 from app.services import media_retention_service
 from app.services.qwen_client import close_qwen_clients
 
@@ -60,6 +60,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(CsrfOriginMiddleware)
     app.add_middleware(RequestIdMiddleware)
     register_exception_handlers(app)
 

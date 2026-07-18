@@ -11,11 +11,17 @@ import 'app/session_controller.dart';
 export 'app/sentineledge_app.dart';
 import 'firebase_options.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   if (kIsWeb) {
     usePathUrlStrategy();
   }
+  final session = SessionController();
+  runApp(ErlangVisionApp(session: session));
+  unawaited(_initializeStartup(session));
+}
+
+Future<void> _initializeStartup(SessionController session) async {
   if (DefaultFirebaseOptions.isConfigured) {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -28,12 +34,5 @@ Future<void> main() async {
       );
     }
   }
-
-  final session = SessionController();
-  // Fire-and-forget: the router shows a splash while status == restoring and
-  // reacts (via refreshListenable) once the session resolves.
-  unawaited(session.restore());
-
-  runApp(ErlangVisionApp(session: session));
+  await session.restore();
 }
-

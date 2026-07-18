@@ -8,17 +8,17 @@ import '../../shared/external_link.dart';
 const _logoAsset = 'assets/brand/erlang-ai-vision-logo-long-white.png';
 const _cameraIconAsset = 'assets/brand/erlang-ai-camera-tile-icon.png';
 const _agentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
-const _scenarioAsset = 'assets/landing/edge-ai-scenario.png';
-const _eventTriageAsset = 'assets/landing/event-triage-console.png';
-const _xiaoEsp32Asset = 'assets/landing/pipeline/xiao-esp32-s3.png';
-const _ultralyticsAsset = 'assets/landing/pipeline/ultralytics-yolo26.png';
-const _qwenAsset = 'assets/landing/pipeline/qwen.png';
-const _alibabaCloudAsset = 'assets/landing/pipeline/alibaba-cloud.png';
+const _scenarioAsset = 'assets/landing/edge-ai-scenario.webp';
+const _eventTriageAsset = 'assets/landing/event-triage-console.webp';
+const _xiaoEsp32Asset = 'assets/landing/pipeline/xiao-esp32-s3.webp';
+const _ultralyticsAsset = 'assets/landing/pipeline/ultralytics-yolo26.webp';
+const _qwenAsset = 'assets/landing/pipeline/qwen.webp';
+const _alibabaCloudAsset = 'assets/landing/pipeline/alibaba-cloud.webp';
 // Add the public watch URL after the hackathon demo is uploaded.
 const _youtubeDemoUrl = '';
 const _architectureFlowAsset =
-    'assets/landing/erlang-ai-vision-architecture-flow.png';
-const _cloudArchitectureAsset = 'assets/landing/erlang-cloud-architecture.png';
+    'assets/landing/erlang-ai-vision-architecture-flow.webp';
+const _cloudArchitectureAsset = 'assets/landing/erlang-cloud-architecture.webp';
 const _githubUrl = 'https://github.com/nickyui99/erlang-ai-vision-fullstack';
 const _iotRepoUrl = 'https://github.com/KennethChua1998/SentinelEdge_IOT';
 const _laptopEdgeRepoUrl =
@@ -565,7 +565,7 @@ class _ConsolePreview extends StatelessWidget {
                 width: width * 0.27,
                 child: IgnorePointer(
                   child: Image.asset(
-                    'assets/landing/mobile-agent-frame.png',
+                    'assets/landing/mobile-agent-frame.webp',
                     fit: BoxFit.contain,
                     filterQuality: FilterQuality.high,
                   ),
@@ -612,7 +612,7 @@ class _LaptopConsolePreview extends StatelessWidget {
               Positioned.fill(
                 child: IgnorePointer(
                   child: Image.asset(
-                    'assets/landing/laptop-frame.png',
+                    'assets/landing/laptop-frame.webp',
                     fit: BoxFit.fill,
                     filterQuality: FilterQuality.high,
                   ),

@@ -15,25 +15,7 @@ import '../chat/ai_agent_icon.dart';
 import 'add_camera_wizard.dart';
 import 'agent_templates.dart';
 
-/// The console tabs, in sidebar/nav-bar order, each with the URL path segment
-/// it maps to (`/console/<path>`). The ordinal is the tab index used by the
-/// navigation widgets and the body switch.
-enum WorkspaceSection {
-  cameras('cameras'),
-  overview('overview'),
-  agents('agents'),
-  events('events'),
-  settings('settings');
-
-  const WorkspaceSection(this.path);
-
-  final String path;
-
-  int get tabIndex => index;
-
-  static WorkspaceSection fromIndex(int index) =>
-      values[index.clamp(0, values.length - 1)];
-}
+import 'workspace_section.dart';
 
 class WorkspaceView extends StatefulWidget {
   const WorkspaceView({

@@ -121,7 +121,16 @@ def _database_url_from_rds_parts(secret_values: dict[str, Any]) -> str | None:
 
 
 def _apply_secret_values(secret_values: dict[str, Any]) -> None:
-    for key in ("SESSION_SECRET_KEY", "QWEN_API_KEY"):
+    for key in (
+        "SESSION_SECRET_KEY",
+        "QWEN_API_KEY",
+        "FIREBASE_PROJECT_ID",
+        "ALIBABA_CLOUD_ACCESS_KEY_ID",
+        "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
+        "ALICLOUD_OSS_ENDPOINT",
+        "ALICLOUD_OSS_BUCKET",
+        "ALICLOUD_OSS_SECURE",
+    ):
         value = secret_values.get(key)
         if value:
             os.environ[key] = str(value)

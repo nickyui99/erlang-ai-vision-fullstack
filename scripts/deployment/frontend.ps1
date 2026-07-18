@@ -94,6 +94,15 @@ try {
     }
     flutter @BuildArgs
     if ($LASTEXITCODE -ne 0) { Write-Error "flutter build web failed." }
+
+    # Keep the Wasm renderer on our existing OSS origin. Flutter otherwise
+    # retrieves skwasm from a public Google host on every cold load.
+    $BootstrapPath = Join-Path $FrontendDir "build/web/flutter_bootstrap.js"
+    $Bootstrap = Get-Content -Raw $BootstrapPath
+    $LoaderCall = "_flutter.loader.load({"
+    if (-not $Bootstrap.Contains($LoaderCall)) { Write-Error "Flutter bootstrap loader call was not found." }
+    $Bootstrap = $Bootstrap.Replace($LoaderCall, "_flutter.loader.load({`n  config: { useLocalCanvasKit: true },")
+    [System.IO.File]::WriteAllText($BootstrapPath, $Bootstrap, [System.Text.UTF8Encoding]::new($false))
 }
 finally {
     Pop-Location
@@ -118,7 +127,7 @@ $env:ERLANG_REPO_ROOT = $RepoRoot
 
 Write-Host "Uploading to OSS bucket $Bucket ($Region)..." -ForegroundColor Cyan
 @'
-import mimetypes, os, sys
+import brotli, mimetypes, os, sys
 from pathlib import Path
 import oss2
 
@@ -148,10 +157,16 @@ CONTENT_TYPES = {
     ".woff2": "font/woff2",
     ".otf": "font/otf",
     ".frag": "application/octet-stream",
+    ".webp": "image/webp",
 }
 # Entry/manifest files the browser must revalidate so deploys take effect
 # immediately; everything else is version-gated by the service worker.
 NO_CACHE = {"index.html", "flutter_service_worker.js", "version.json", "flutter_bootstrap.js"}
+# Flutter's WebAssembly and CanvasKit binaries are several megabytes each. OSS
+# does not compress proxied objects automatically, so upload Brotli-encoded
+# variants with the original object names; browsers transparently decompress
+# them before the Flutter loader sees the bytes.
+BROTLI_SUFFIXES = {".js", ".mjs", ".wasm", ".json", ".frag"}
 
 auth = oss2.Auth(key_id, key_secret)
 bucket = oss2.Bucket(auth, f"https://oss-{region}.aliyuncs.com", bucket_name)
@@ -176,7 +191,14 @@ for file in sorted(build_dir.rglob("*")):
     key = file.relative_to(build_dir).as_posix()
     content_type = CONTENT_TYPES.get(file.suffix) or mimetypes.guess_type(file.name)[0] or "application/octet-stream"
     cache = "no-cache" if key in NO_CACHE else "public, max-age=3600"
-    bucket.put_object_from_file(key, str(file), headers={"Content-Type": content_type, "Cache-Control": cache})
+    headers = {"Content-Type": content_type, "Cache-Control": cache}
+    if file.suffix in BROTLI_SUFFIXES:
+        headers["Content-Encoding"] = "br"
+        headers["Vary"] = "Accept-Encoding"
+        with file.open("rb") as source:
+            bucket.put_object(key, brotli.compress(source.read(), quality=6), headers=headers)
+    else:
+        bucket.put_object_from_file(key, str(file), headers=headers)
     uploaded += 1
 
 print(f"Uploaded {uploaded} files to {bucket_name}.")

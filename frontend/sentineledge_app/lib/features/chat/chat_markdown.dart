@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../../design/app_spacing.dart';
 import 'ai_agent_icon.dart';
@@ -20,14 +20,6 @@ String normalizeAssistantMarkdown(String content) {
 }
 
 Color userMessageForeground(Color background) => Colors.white;
-
-String normalizeLatexExpression(String expression) {
-  return expression
-      .replaceAll(r'\displaystyle ', '')
-      .replaceAll(r'\textstyle ', '')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
-}
 
 class AssistantMessageView extends StatelessWidget {
   const AssistantMessageView({required this.content, super.key});
@@ -56,16 +48,15 @@ class AssistantMessageView extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.xs),
-        GptMarkdown(
-          normalizeAssistantMarkdown(content),
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: scheme.onSurface,
-            height: 1.45,
+        MarkdownBody(
+          data: normalizeAssistantMarkdown(content),
+          selectable: true,
+          styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+            p: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurface,
+              height: 1.45,
+            ),
           ),
-          textAlign: TextAlign.left,
-          useDollarSignsForLatex: true,
-          latexWorkaround: normalizeLatexExpression,
-          followLinkColor: true,
         ),
       ],
     );

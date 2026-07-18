@@ -24,7 +24,15 @@
 - [ ] Record a public demonstration video under three minutes.
 - [ ] Upload the video to YouTube, Vimeo, or Youku.
 - [ ] Add the video URL to Devpost.
-- [ ] Create `docs/assets/demo.gif` or remove its broken README reference.
+
+## Judge-demo updates - July 17
+
+- [x] Add a Qwen-based no-hardware judge camera loop using pre-extracted JPEG frames.
+- [x] Limit judge-demo inference: send the first camera frame to Qwen after 4 seconds, then at most once per minute.
+- [x] Disable Qwen hidden thinking for the judge demo's structured vision response.
+- [x] Refresh local Baby-camera demo frames from `data/demo_videos/baby.mp4`.
+- [ ] Deploy the refreshed Baby-camera frames and judge-demo timing configuration.
+- [ ] Verify in a fresh browser that a judge camera produces a Qwen event after the first 4-second sample.
 
 ## Shipped July 15 (document in README, Devpost, and the demo video)
 
@@ -38,11 +46,7 @@
 - [x] Make the Erlang AI Agent chat agentic: it connects to the MCP server as an MCP client and can control cameras, create/arm/disarm agents, query events, and fetch clips/recordings live (falls back to text-only chat if MCP is down).
 - [x] Extract shared agent lifecycle logic into `agent_service` (REST API and MCP tools run identical code).
 - [x] Mention the MCP server in the README (features bullet + "MCP tool server" section with tools, auth, and guardrails).
-- [ ] Add a "generate MCP access token" endpoint/UI for external clients.
 - [x] Rate-limit the agentic chat: per-account daily message cap (`CHAT_DAILY_MESSAGE_LIMIT`, default 50/day, HTTP 429 `chat_daily_limit_reached`, 0 disables) on top of the existing per-turn tool budget (`QWEN_MAX_TOOL_TURNS`).
-- [ ] Optional: upload on-demand recordings to OSS for in-app playback (clips-style signed-URL flow).
-- [ ] Optional: manual event review action (dismiss/acknowledge) so low-severity events can leave "pending review".
-- [ ] Note: clips uploaded before July 15 are `mp4v` and remain download-only; new clips play in-app.
 
 ## README and repository presentation
 
@@ -71,12 +75,12 @@
 
 - [ ] Replace the visible “Image placeholder.”
 - [ ] Replace the “Cloud architecture image placeholder.”
-- [ ] Show the real architecture image.
+- [x] Show the real architecture image.
 - [ ] Add screenshots of natural-language agent creation.
 - [ ] Show the compiled detector configuration.
-- [ ] Show Qwen-VL verification output.
-- [ ] Show audited Qwen tool calls.
-- [ ] Show camera pan/tilt actions.
+- [x] Show Qwen-VL verification output.
+- [x] Show audited Qwen tool calls.
+- [x] Show camera pan/tilt actions.
 - [ ] Show realtime alerts.
 - [ ] Show event playback.
 - [ ] Test the landing page on desktop.

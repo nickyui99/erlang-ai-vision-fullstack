@@ -2,7 +2,7 @@ from functools import lru_cache
 import os
 from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.google_secrets import load_google_secret_manager_secrets
@@ -156,10 +156,42 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    @field_validator("app_env", mode="before")
+    @classmethod
+    def normalize_app_env(cls, value: str) -> str:
+        return str(value).strip().lower()
+
+    @model_validator(mode="after")
+    def validate_production_configuration(self) -> "Settings":
+        """Reject unsafe defaults before the application starts serving traffic."""
+        if self.app_env != "production":
+            return self
+
+        errors: list[str] = []
+        if not self.database_url.startswith("postgresql+asyncpg://"):
+            errors.append("DATABASE_URL must use postgresql+asyncpg in production")
+        if self.session_secret_key == "change-me" or len(self.session_secret_key) < 32:
+            errors.append("SESSION_SECRET_KEY must be at least 32 characters and not the default")
+        if not self.firebase_project_id or self.firebase_project_id == "change-me":
+            errors.append("FIREBASE_PROJECT_ID is required")
+        if not self.google_application_credentials:
+            errors.append("Firebase service-account credentials are required")
+        if not self.alicloud_oss_endpoint or not self.alicloud_oss_bucket:
+            errors.append("ALICLOUD_OSS_ENDPOINT and ALICLOUD_OSS_BUCKET are required")
+        if not self.alibaba_cloud_access_key_id or not self.alibaba_cloud_access_key_secret:
+            errors.append("Alibaba OSS credentials are required")
+        if not self.cors_origins or any(not origin.startswith("https://") for origin in self.cors_origins):
+            errors.append("CORS_ALLOWED_ORIGINS must contain explicit HTTPS origins")
+        if self.cors_allowed_origin_regex:
+            errors.append("CORS_ALLOWED_ORIGIN_REGEX must be empty in production")
+
+        if errors:
+            raise ValueError("Invalid production configuration: " + "; ".join(errors))
+        return self
+
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
-
 
 @lru_cache
 def get_settings() -> Settings:

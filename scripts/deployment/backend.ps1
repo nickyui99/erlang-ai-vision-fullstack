@@ -28,6 +28,10 @@ param(
     # survives group recreates. Empty string falls back to a throwaway auto-EIP.
     [string]$EipId = "eip-8pshynfdz57al5mjunni6",
     [string]$Bucket = "erlang-vision",
+    # Public DNS name pointing at the standing EIP. Required for production TLS.
+    [string]$Domain,
+    # Temporary health-check deployment only; browser auth remains unusable until TLS is enabled.
+    [switch]$AllowInsecureHttp,
     [string]$GroupName = "erlang-backend"
 )
 
@@ -127,21 +131,24 @@ Write-Host "Built and verified $Image (also tagged $Name`:local)." -ForegroundCo
 
 # --- Deploy: push to ACR, run on ECI behind a Caddy sidecar -----------------
 # Topology: one ECI container group (FastAPI + Caddy) on the RDS vSwitch with
-# an auto-created EIP. Caddy routes /api + /healthz to FastAPI and reverse-
+# a standing EIP. Caddy terminates HTTPS and routes /api + /healthz + /readyz to FastAPI, then reverse-
 # proxies everything else to the OSS web bucket over the region-internal
 # endpoint, stripping the forced-download headers so browsers render the SPA.
 # Registry: ACR Personal Edition (activate once from the ROOT account in the
 # console; RAM users cannot). Login uses a temporary API-minted token that
 # lives only inside this process — no registry password needed here.
 if (-not $Deploy) { return }
+if (-not $Domain -and -not $AllowInsecureHttp) {
+    Write-Error "-Domain is required for deployment. Create an A record to the standing EIP before deploying."
+}
 
 if (-not (Get-Command "python" -ErrorAction SilentlyContinue)) {
     Write-Error "python was not found on PATH (needed for the ACR/ECI API calls)."
 }
-python -c "import alibabacloud_eci20180808, alibabacloud_rds20140815, alibabacloud_ecs20140526, alibabacloud_cr20160607" 2>$null
+python -c "import alibabacloud_eci20180808, alibabacloud_rds20140815, alibabacloud_ecs20140526" 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Installing Alibaba Cloud SDKs..." -ForegroundColor Cyan
-    python -m pip install --quiet alibabacloud_eci20180808 alibabacloud_rds20140815 alibabacloud_ecs20140526 alibabacloud_cr20160607 alibabacloud_tea_openapi
+    python -m pip install --quiet alibabacloud_eci20180808 alibabacloud_rds20140815 alibabacloud_ecs20140526 alibabacloud_tea_openapi
     if ($LASTEXITCODE -ne 0) { Write-Error "pip install of Alibaba Cloud SDKs failed." }
 }
 
@@ -151,6 +158,8 @@ $env:SE_IMAGE_NAME = $Name
 $env:SE_IMAGE_TAG = $Tag
 $env:SE_BUCKET = $Bucket
 $env:SE_GROUP_NAME = $GroupName
+$env:SE_DOMAIN = $Domain
+$env:SE_ALLOW_INSECURE_HTTP = $AllowInsecureHttp.IsPresent.ToString().ToLowerInvariant()
 $env:SE_ACR_NAMESPACE = $AcrNamespace
 $env:SE_ACR_DOMAIN = $AcrDomain
 $env:SE_EIP_ID = $EipId
@@ -159,7 +168,7 @@ $env:SE_EIP_ID = $EipId
 # python process so the token never crosses a process boundary or hits disk.
 Write-Host "Pushing to ACR and provisioning ECI ($GroupName)..." -ForegroundColor Cyan
 @'
-import base64, json, os, subprocess, sys, time
+import base64, json, os, re, socket, subprocess, sys, time
 from pathlib import Path
 from alibabacloud_tea_openapi import models as om
 from alibabacloud_tea_util import models as util_models
@@ -168,6 +177,17 @@ repo_root = Path(os.environ["SE_REPO_ROOT"])
 region = os.environ["SE_REGION"]
 bucket = os.environ["SE_BUCKET"]
 group_name = os.environ["SE_GROUP_NAME"]
+allow_insecure_http = os.environ.get("SE_ALLOW_INSECURE_HTTP", "false").lower() == "true"
+domain = os.environ["SE_DOMAIN"].strip().lower().rstrip(".")
+if allow_insecure_http and domain:
+    sys.exit("Use either -Domain for TLS or -AllowInsecureHttp for a temporary HTTP-only deployment, not both")
+if not allow_insecure_http:
+    if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+", domain):
+        sys.exit("-Domain must be a valid public hostname, without http:// or a path")
+    try:
+        socket.gethostbyname(domain)
+    except OSError:
+        sys.exit(f"DNS for {domain} is not resolvable. Create its A record to the standing EIP before deploying.")
 acr_namespace = os.environ["SE_ACR_NAMESPACE"]
 image_name = os.environ["SE_IMAGE_NAME"]
 image_tag = os.environ["SE_IMAGE_TAG"]
@@ -223,49 +243,20 @@ SK = os.environ["ALIBABA_CLOUD_ACCESS_KEY_SECRET"]
 def cfg(endpoint):
     return om.Config(access_key_id=AK, access_key_secret=SK, endpoint=endpoint, region_id=region)
 
-# --- ACR: ensure namespace/repo, mint temp token, docker push ---------------
-# The 2016-06-07 SDK declares body_type='none' on most calls and silently
-# drops response bodies, so talk to the ROA API through call_api directly.
-from alibabacloud_cr20160607.client import Client as Cr
-cr = Cr(cfg(f"cr.{region}.aliyuncs.com"))
-
-def roa(action, method, pathname, body=None):
-    req = om.OpenApiRequest(headers={}, body=json.dumps(body) if body else None)
-    params = om.Params(action=action, version="2016-06-07", protocol="HTTPS",
-                       pathname=pathname, method=method, auth_type="AK", style="ROA",
-                       req_body_type="json", body_type="json")
-    return cr.call_api(params, req, util_models.RuntimeOptions())
-
-try:
-    roa("GetNamespace", "GET", f"/namespace/{acr_namespace}")
-except Exception as exc:
-    if "USER_NOT_REGISTERED" in str(exc):
-        sys.exit("Container Registry Personal Edition is not activated. One-time step "
-                 "from the ROOT account: console > Container Registry > Personal Edition "
-                 f"> region {region} > activate and set a registry password. Then rerun.")
-    if "NAMESPACE_NOT_EXIST" not in str(exc):
-        raise
-    roa("CreateNamespace", "PUT", "/namespace", {"Namespace": {"Namespace": acr_namespace}})
-    print(f"created ACR namespace {acr_namespace}", file=sys.stderr)
-
-try:
-    roa("GetRepo", "GET", f"/repos/{acr_namespace}/{image_name}")
-except Exception as exc:
-    if "REPO_NOT_EXIST" not in str(exc):
-        raise
-    roa("CreateRepo", "PUT", "/repos", {"Repo": {
-        "RepoNamespace": acr_namespace, "RepoName": image_name,
-        "RepoType": "PRIVATE", "Summary": "Erlang AI Vision FastAPI backend"}})
-    print(f"created ACR repo {acr_namespace}/{image_name} (private)", file=sys.stderr)
-
-token_data = roa("GetAuthorizationToken", "GET", "/tokens")["body"]["data"]
-# Personal Edition instances use instance-specific domains; the legacy
-# registry-intl.<region> shared domain 403s docker logins for these accounts.
+# --- ACR Personal Edition: fixed Docker credentials, then push ---------------
+# Personal Edition does not support API-minted temporary registry tokens. Create
+# the instance, namespace and repository once in the console, then put only the
+# registry username/password in the untracked local .env file.
 registry = os.environ["SE_ACR_DOMAIN"]
 _head, _tail = registry.split(".", 1)
 vpc_registry = f"{_head}-vpc.{_tail}"
 image = f"{vpc_registry}/{acr_namespace}/{image_name}:{image_tag}"
 push_image = f"{registry}/{acr_namespace}/{image_name}:{image_tag}"
+acr_username = os.environ.get("ACR_USERNAME", "").strip()
+acr_password = os.environ.get("ACR_PASSWORD", "")
+if not acr_username or not acr_password:
+    sys.exit("ACR_USERNAME and ACR_PASSWORD are required in the untracked .env file. "
+             "Activate Personal Edition and set its Docker login password in the ACR console first.")
 
 def run(cmd, **kw):
     proc = subprocess.run(cmd, **kw)
@@ -273,11 +264,10 @@ def run(cmd, **kw):
         sys.exit(f"command failed: {cmd[0]} {cmd[1] if len(cmd) > 1 else ''}")
 
 print(f"docker push {push_image}", file=sys.stderr)
-run(["docker", "login", registry, "--username", token_data["tempUserName"], "--password-stdin"],
-    input=token_data["authorizationToken"].encode())
+run(["docker", "login", registry, "--username", acr_username, "--password-stdin"],
+    input=acr_password.encode())
 run(["docker", "tag", f"{image_name}:{image_tag}", push_image])
 run(["docker", "push", push_image])
-
 # --- discover the RDS network so ECI lands in the same VPC/vSwitch ---------
 from alibabacloud_rds20140815.client import Client as Rds
 from alibabacloud_rds20140815 import models as rm
@@ -315,9 +305,18 @@ print(f"RDS whitelist 'eci' = {vsw.cidr_block}", file=sys.stderr)
 
 # --- Caddy config ------------------------------------------------------------
 oss_internal = f"{bucket}.oss-{region}-internal.aliyuncs.com"
+caddy_site = ":80" if allow_insecure_http else domain
+cors_origin = "https://pending.invalid" if allow_insecure_http else f"https://{domain}"
 caddyfile = f"""
-:80 {{
-	@backend path /api/* /healthz /docs /docs/* /openapi.json
+{caddy_site} {{
+	header {{
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "microphone=(), geolocation=()"
+	}}
+	@backend path /api/* /healthz /readyz /docs /docs/* /openapi.json
 	handle @backend {{
 		reverse_proxy localhost:8000 {{
 			flush_interval -1
@@ -363,6 +362,10 @@ if existing:
 
 backend_env = [
     {"Key": "APP_ENV", "Value": "production"},
+    # The image contains only bundled demo frames; this simulator accepts the dev_judge_ device prefix only.
+    {"Key": "DEMO_SIMULATION_ENABLED", "Value": "true"},
+    {"Key": "CORS_ALLOWED_ORIGINS", "Value": cors_origin},
+    {"Key": "CORS_ALLOWED_ORIGIN_REGEX", "Value": ""},
     {"Key": "GOOGLE_SECRET_MANAGER_PROJECT", "Value": project_id},
     {
         "Key": "GOOGLE_SECRET_MANAGER_SECRETS",
@@ -375,6 +378,16 @@ backend_env = [
 ]
 
 eip_id = os.environ.get("SE_EIP_ID", "")
+if eip_id:
+    for _ in range(30):
+        eip = ecs.describe_eip_addresses(em.DescribeEipAddressesRequest(
+            region_id=region, allocation_id=eip_id)).body.eip_addresses.eip_address[0]
+        print(f"  waiting for EIP {eip_id}: status={eip.status}", file=sys.stderr)
+        if eip.status == "Available":
+            break
+        time.sleep(5)
+    else:
+        sys.exit("standing EIP did not become Available after the previous ECI group was deleted")
 eip_cfg = {"EipInstanceId": eip_id} if eip_id else {"AutoCreateEip": True, "EipBandwidth": 5}
 req = eci_m.CreateContainerGroupRequest().from_map({
     "RegionId": region,
@@ -387,8 +400,8 @@ req = eci_m.CreateContainerGroupRequest().from_map({
     **eip_cfg,
     "ImageRegistryCredential": [{
         "Server": vpc_registry,
-        "UserName": token_data["tempUserName"],
-        "Password": token_data["authorizationToken"],
+        "UserName": acr_username,
+        "Password": acr_password,
     }],
     "Volume": [{
         "Name": "caddy-config",
@@ -409,7 +422,10 @@ req = eci_m.CreateContainerGroupRequest().from_map({
             "Image": "caddy:2-alpine",
             "Cpu": 0.25,
             "Memory": 0.5,
-            "Port": [{"Port": 80, "Protocol": "TCP"}],
+            "Port": [
+                {"Port": 80, "Protocol": "TCP"},
+                {"Port": 443, "Protocol": "TCP"},
+            ],
             "VolumeMount": [{"Name": "caddy-config", "MountPath": "/etc/caddy"}],
         },
     ],
@@ -441,5 +457,16 @@ if ($LASTEXITCODE -ne 0) { Write-Error "ECI deployment failed." }
 $Eci = ($EciOut | Select-Object -Last 1) | ConvertFrom-Json
 
 Write-Host ""
-Write-Host "Deployed: http://$($Eci.ip)/  (app + API on one origin)" -ForegroundColor Green
-Write-Host "Health:   http://$($Eci.ip)/healthz" -ForegroundColor Green
+if ($AllowInsecureHttp) {
+    Write-Warning "Temporary HTTP-only deployment: authenticated browser sessions will not work until HTTPS is enabled."
+    Write-Host "Deployed: http://$($Eci.ip)/" -ForegroundColor Yellow
+}
+else {
+    Write-Host "Deployed: https://$Domain/  (app + API on one origin)" -ForegroundColor Green
+}
+if ($AllowInsecureHttp) {
+    Write-Host "Health:   http://$($Eci.ip)/healthz" -ForegroundColor Yellow
+}
+else {
+    Write-Host "Health:   https://$Domain/healthz" -ForegroundColor Green
+}

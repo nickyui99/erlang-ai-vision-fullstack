@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/session_controller.dart';
 import '../../services/backend_auth_client.dart';
 import 'device_control_view.dart';
+import 'workspace_section.dart';
 import 'workspace_view.dart';
 
 /// Route host for `/console/:section` (and `/console/events/:eventId`). Reads the
@@ -12,11 +13,7 @@ import 'workspace_view.dart';
 /// state it owns: realtime stream, loaded devices/agents/events) is reused as
 /// the URL changes rather than rebuilt.
 class ConsolePage extends StatelessWidget {
-  const ConsolePage({
-    required this.section,
-    this.selectedEventId,
-    super.key,
-  });
+  const ConsolePage({required this.section, this.selectedEventId, super.key});
 
   final WorkspaceSection section;
   final String? selectedEventId;
@@ -132,9 +129,7 @@ class _ConsoleLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
 
