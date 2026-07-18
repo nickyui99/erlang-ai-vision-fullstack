@@ -8,7 +8,12 @@ from app.api.v1 import health
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.errors import register_exception_handlers
-from app.core.middleware import CsrfOriginMiddleware, RequestIdMiddleware
+from app.core.middleware import (
+    CsrfOriginMiddleware,
+    RateLimitMiddleware,
+    RequestIdMiddleware,
+    RequestSizeLimitMiddleware,
+)
 from app.services import media_retention_service
 from app.services.qwen_client import close_qwen_clients
 
@@ -49,6 +54,7 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         docs_url="/docs" if settings.app_env != "production" else None,
         redoc_url="/redoc" if settings.app_env != "production" else None,
+        openapi_url="/openapi.json" if settings.app_env != "production" else None,
         lifespan=_lifespan,
     )
 
@@ -61,6 +67,8 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.add_middleware(CsrfOriginMiddleware)
+    app.add_middleware(RequestSizeLimitMiddleware)
+    app.add_middleware(RateLimitMiddleware)
     app.add_middleware(RequestIdMiddleware)
     register_exception_handlers(app)
 

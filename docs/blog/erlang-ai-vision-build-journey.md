@@ -41,7 +41,7 @@ Here's what happens behind the scenes:
 
 1. **Qwen compiles** your instruction into a structured detection rule.
 2. **Local models** watch the video and audio streams on the edge device and filter out routine activity — no frames leave the building.
-3. **When something matches the rule**, selected evidence goes to Qwen-VL for contextual verification.
+3. **When something matches the rule**, selected evidence goes to Qwen-Plus for contextual verification.
 4. **You get** not another motion alert, but a **verified event** with a clear reason, supporting evidence, and an audit trail of every action taken.
 
 [ VISUAL — Product demo GIF or storyboard. AI image prompt: "Clean 4-panel UI storyboard of a mobile security app: panel 1 shows a chat box where a user types a monitoring rule, panel 2 shows a live camera view of a doorway, panel 3 shows an AI analyzing a highlighted person with bounding box, panel 4 shows a push notification with a verified alert and explanation, modern flat design, teal accent color" ]
@@ -59,7 +59,7 @@ A XIAO ESP32-S3 module captures JPEG frames — VGA at ~15 FPS over USB, or CIF 
 The bridge receives frames over LAN or USB and runs the local AI pipeline: YOLO for video detection, YAMNet for audio events, and a local Qwen model (via Ollama) for first-pass triage. It also handles auto-tracking: when enabled, the camera physically follows the subject, aiming at their face (a ~5 ms YuNet pass) when one is visible — and when several people are in view, it frames the whole group instead of fixating on one person. Routine activity dies here — it never leaves the building. *(Measured: a 98.8% bandwidth reduction on a worst-case always-busy scene — see [Evaluation and Results](#evaluation-and-results).)*
 
 **3. Cloud backend (Alibaba Cloud).**
-Candidate events reach a FastAPI backend, where Qwen-VL verifies whether the evidence actually matches the user's rule. ApsaraDB stores event data; OSS stores clips and media.
+Candidate events reach a FastAPI backend, where Qwen-Plus verifies whether the evidence actually matches the user's rule. ApsaraDB stores event data; OSS stores clips and media.
 
 **4. App (Flutter).**
 Verified alerts stream to the Flutter web and Android app in real time over SSE, with push notifications via FCM for high-severity events. The app also offers live view, on-demand recording, and in-app playback of event clips (encoded as H.264 specifically so browsers will play them inline instead of forcing a download).
@@ -86,9 +86,9 @@ Without it, every user would be back to configuring detection zones and threshol
 
 ### 2. Contextual Event Verification
 
-YOLO detects *what is present*; Qwen-VL determines *what it means*.
+YOLO detects *what is present*; Qwen-Plus determines *what it means*.
 
-Without this stage, a delivery driver pausing at the door and a person casing the entrance generate identical alerts — the false-positive problem that makes people ignore their camera notifications entirely. Qwen-VL reviews the evidence against the user's actual rule and returns a verdict with an explanation.
+Without this stage, a delivery driver pausing at the door and a person casing the entrance generate identical alerts — the false-positive problem that makes people ignore their camera notifications entirely. Qwen-Plus reviews the evidence against the user's actual rule and returns a verdict with an explanation.
 
 > **Edge models detect what is present. Qwen understands what it means.**
 
@@ -142,10 +142,10 @@ On the cloud side, everything runs on Alibaba Cloud in the Kuala Lumpur region (
 - **ACR** stores the container images; deployment is one script (`backend.ps1 -Deploy`): build → smoke test → push → roll the container group.
 - **ApsaraDB RDS PostgreSQL** replaces local SQLite in production, with Alembic migrations and an all-or-nothing, dry-run-first data migration script.
 - **OSS** does double duty: one bucket serves the Flutter Web (WASM) build, another stores event clips and media accessed through signed URLs.
-- **DashScope** provides Qwen Plus and Qwen-VL.
+- **DashScope** provides Qwen Plus and Qwen-Max.
 - **Firebase** handles identity and push; runtime secrets load from a secret manager with least-privilege access — the runtime identity can read app secrets but never database-superuser credentials.
 
-The stack held up in testing: **148 backend tests passing**, Flutter analysis clean, and a **zero-hardware demo mode** so judges can experience the full pipeline — real Qwen-VL verification included — without owning an ESP32.
+The stack held up in testing: **148 backend tests passing**, Flutter analysis clean, and a **zero-hardware demo mode** so judges can experience the full pipeline — real Qwen-Plus verification included — without owning an ESP32.
 
 ## Four Engineering Challenges That Ate the Hackathon
 
@@ -197,7 +197,7 @@ None of this changes what the demo looks like — which is exactly the point. Se
 
 Claims about "efficient edge AI" are cheap, so we benchmarked ours. The harness (`scripts/bench_pipeline.py` in the edge repo) drives the **real** pipeline — YOLO detection, per-agent filtering, local Qwen triage, clip recording, routing — with a simulated VGA @ 15 FPS camera; the only thing substituted is the network, replaced by a byte-counting stub.
 
-The models under test are the production edge stack: **YOLO26-nano** for stage-1 detection, and **Qwen3.5 0.8B** (via Ollama, thinking off, 512 px keyframes, kept resident in memory) as the stage-2 triage VLM — with **Qwen3.5 4B** on standby as the offline-mode authority, and DashScope's **Qwen-VL** handling cloud verification beyond the edge. Hardware: an ordinary laptop (AMD Ryzen 7 5800U, CPU-only inference — no GPU anywhere in these numbers).
+The models under test are the production edge stack: **YOLO26-nano** for stage-1 detection, and **Qwen3.5 0.8B** (via Ollama, thinking off, 512 px keyframes, kept resident in memory) as the stage-2 triage VLM — with **Qwen3.5 4B** on standby as the offline-mode authority, and DashScope's **Qwen-Plus** handling cloud verification beyond the edge. Hardware: an ordinary laptop (AMD Ryzen 7 5800U, CPU-only inference — no GPU anywhere in these numbers).
 
 **Bandwidth — the headline.** Over a 3-minute window on a deliberately worst-case scene (a person and a dog visible almost continuously, so agents fire at their cooldown rate the entire time):
 
@@ -223,7 +223,7 @@ The pattern generalizes well beyond a shop's rear entrance:
 - **Small businesses** get after-hours monitoring that distinguishes a loiterer from a passer-by — without paying for a human monitoring service or drowning in motion alerts.
 - **Home care**: "alert me if my baby cries," "tell me if grandma hasn't appeared in the kitchen by 10 a.m." — rules that today require dedicated single-purpose devices.
 - **Privacy-sensitive settings** benefit from the edge-first split: continuous footage stays on the local network, and only event-tied evidence ever reaches the cloud.
-- **Cost**: cloud vision models are far too expensive to run on every frame. Local triage means Qwen-VL is consulted only for the events that matter. *(Estimated cost per verified event: [MEASURE].)*
+- **Cost**: cloud vision models are far too expensive to run on every frame. Local triage means Qwen-Plus is consulted only for the events that matter. *(Estimated cost per verified event: [MEASURE].)*
 
 The broader point: **natural language is the right configuration interface for the physical world.** The dwell times, confidence thresholds, and schedules still exist — but they've become compiler output, not user burden.
 

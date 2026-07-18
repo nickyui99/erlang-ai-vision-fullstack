@@ -75,7 +75,7 @@ Rules are compiled by `app/agents/compiler.py` using a Qwen Cloud text model (`Q
 
 ## Demo Simulation
 
-For demos without hardware, `app/services/demo_simulator.py` drives a camera server-side: it loops pre-extracted frames into the video broker (on-demand while a viewer watches) and periodically sends a keyframe to the Qwen-VL API to triage against the camera's rule, creating real events. It is strictly gated — active only when `DEMO_SIMULATION_ENABLED=true`, the `device_id` starts with `DEMO_SIM_DEVICE_PREFIX` (default `dev_judge_`), and a frame folder exists (`DEMO_FRAMES_DIR`). Normal accounts are unaffected. See the README "Demo Simulation & Judge Account" section.
+For demos without hardware, `app/services/demo_simulator.py` drives a camera server-side: it loops pre-extracted frames into the video broker (on-demand while a viewer watches) and periodically sends a keyframe to the Qwen-Plus API to triage against the camera's rule, creating real events. It is strictly gated — active only when `DEMO_SIMULATION_ENABLED=true`, the `device_id` starts with `DEMO_SIM_DEVICE_PREFIX` (default `dev_judge_`), and a frame folder exists (`DEMO_FRAMES_DIR`). Normal accounts are unaffected. See the README "Demo Simulation & Judge Account" section.
 
 ## Live Video Flow
 

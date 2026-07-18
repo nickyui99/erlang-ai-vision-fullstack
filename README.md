@@ -22,10 +22,10 @@ Submission for the **Qwen Cloud Global Hackathon — Track 5: EdgeAgent**.
 
 | | |
 |---|---|
-| **Live application** | [To Be Done] *(public domain + HTTPS in progress — this link will be updated)* |
+| **Live application** | [erlang-ai.duckdns.org](https://erlang-ai.duckdns.org) |
 | **Demo video** | *coming before submission — will be linked here and on Devpost* |
 | **Repositories** | [erlang-ai-vision-fullstack](https://github.com/nickyui99/erlang-ai-vision-fullstack) (cloud + app, this repo) · [SentinelEdge_LaptopEdge](https://github.com/KennethChua1998/SentinelEdge_LaptopEdge) (edge bridge) · [SentinelEdge_IOT](https://github.com/KennethChua1998/SentinelEdge_IOT) (ESP32-S3 firmware) |
-| **Deployment** | Alibaba Cloud `ap-southeast-3` (Kuala Lumpur): ECI container (FastAPI + Caddy), OSS (web app + media), RDS PostgreSQL, ACR |
+| **Deployment** | Alibaba Cloud `ap-southeast-3` (Kuala Lumpur): ECI container (FastAPI + Caddy), OSS (web app + media), RDS PostgreSQL, ACR — [architecture and deployment proof](docs/deployment/alibaba_cloud_architecture.md) |
 | **Team** | Nicholas Ooi ([@nickyui99](https://github.com/nickyui99)) · Kenneth Chua ([@KennethChua1998](https://github.com/KennethChua1998)) · Fang Wei Lim · Ng Wei Kiat|
 
 ### Qwen models used
@@ -71,7 +71,7 @@ and the git history for the full trail.
 2. The dashboard is **pre-seeded**: cameras for each use case, armed agents, and
    sample events, so there is something to explore immediately.
 3. **Zero-hardware demo**: judge cameras are simulated server-side — the backend
-   streams pre-extracted frames into the live view and runs *real* Qwen-VL
+   streams pre-extracted frames into the live view and runs *real* Qwen-Plus
    detection on them, so the full detect → verify → alert flow works with no
    physical device.
 4. Things to try:
@@ -85,13 +85,18 @@ and the git history for the full trail.
 5. To run everything locally instead (including the physical-device path), see
    the [Quickstart](#-quickstart) below.
 
+**Expected result:** the dashboard loads over HTTPS, a demo camera shows live
+frames, and a qualifying rule produces an event with a Qwen verification result
+and an in-app alert. If a live-Qwen dependency is unavailable, the UI reports
+the degraded state rather than presenting a mock result as live verification.
+
 ## 🎬 See it in action
 
-<!-- Add demo asset at docs/assets/demo.gif (10-15s screen capture) -->
-![Demo](docs/assets/demo.gif)
+
+![Erlang AI Vision architecture](docs/assets/erlang-ai-vision-architecture-flow.png)
 
 > No hardware? The backend ships a **zero-hardware demo mode** that plays video
-> into a virtual camera and runs real Qwen-VL detection on it.
+> into a virtual camera and runs real Qwen-Plus detection on it.
 
 ## What is Erlang AI Vision?
 
@@ -114,7 +119,7 @@ It spans three tiers:
 - 💬 **Conversational agent builder** — draft and refine rules through chat, preview the compiled detector.
 - 🤖 **Agentic AI assistant over MCP** — the in-app Erlang AI Agent connects to the platform's own MCP tool server and can inspect cameras, take snapshots, pan/tilt, query events, fetch clips, and create/arm agents for you ([details](#-mcp-tool-server)).
 - 🎥 **Live video fan-out** — edge streams JPEG frames; clients view signed MJPEG/frame URLs.
-- 🧠 **Two-stage AI** — local YOLO/Qwen triage on the edge, cloud Qwen-VL verification for high-value events.
+- 🧠 **Two-stage AI** — local YOLO/Qwen triage on the edge, cloud Qwen-Plus verification for high-value events.
 - 🔍 **Audited verification tools** — the verifier can pan the camera, grab a snapshot, and read recent events — all logged.
 - 🕹️ **Remote control** — pan / tilt / snapshot relayed over WebSocket.
 - 🔔 **Realtime + push** — SSE for live updates, FCM for high-severity alerts.

@@ -85,10 +85,10 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("QWEN_TEXT_MODEL", "QWEN_COMPILER_MODEL"),
     )
     # Ordered fallback chains, tried after the primary on quota/rate-limit/connection
-    # errors (see QwenClient). Comma-separated "model" (DashScope) or "model@base_url"
-    # (e.g. a local Ollama VLM). Text walks the qwen3.7-max snapshot/preview releases;
-    # vision falls back to the qwen3.7-plus snapshot, then a local Ollama VLM so
-    # verification still has eyes when every cloud model is exhausted.
+    # errors (see QwenClient). Comma-separated model names use the configured
+    # DashScope endpoint. Local ``model@base_url`` fallbacks are development/test
+    # only and are rejected in production so a cloud deployment never silently
+    # changes its verification authority.
     qwen_text_fallback_models: str = Field(
         default=(
             "qwen3.7-max-2026-05-20,qwen3.7-max-preview,"
@@ -98,8 +98,7 @@ class Settings(BaseSettings):
     )
     qwen_vision_fallback_models: str = Field(
         default=(
-            "qwen3.7-plus-2026-05-26,"
-            "qwen3.5:0.8b@http://localhost:11434/v1"
+            "qwen3.7-plus-2026-05-26"
         ),
         validation_alias="QWEN_VISION_FALLBACK_MODELS",
     )
@@ -107,6 +106,9 @@ class Settings(BaseSettings):
     qwen_local_api_key: str = Field(default="ollama", validation_alias="QWEN_LOCAL_API_KEY")
     qwen_timeout_seconds: float = Field(default=20, validation_alias="QWEN_TIMEOUT_SECONDS")
     qwen_max_tool_turns: int = Field(default=4, validation_alias="QWEN_MAX_TOOL_TURNS")
+    max_request_body_bytes: int = Field(
+        default=1_000_000, validation_alias="MAX_REQUEST_BODY_BYTES"
+    )
 
     # MCP actuation guardrails (Milestone 9B). Pan is rate-limited per event.
     mcp_max_pans_per_event: int = Field(default=3, validation_alias="MCP_MAX_PANS_PER_EVENT")
@@ -176,6 +178,14 @@ class Settings(BaseSettings):
             errors.append("FIREBASE_PROJECT_ID is required")
         if not self.google_application_credentials:
             errors.append("Firebase service-account credentials are required")
+        if not self.qwen_api_key:
+            errors.append("QWEN_API_KEY is required; production cannot use the mock client")
+        if not self.qwen_base_url.startswith("https://"):
+            errors.append("QWEN_BASE_URL must use HTTPS in production")
+        if "@" in self.qwen_text_fallback_models or "@" in self.qwen_vision_fallback_models:
+            errors.append("Qwen fallback models must use the configured cloud endpoint in production")
+        if self.max_request_body_bytes <= 0:
+            errors.append("MAX_REQUEST_BODY_BYTES must be positive")
         if not self.alicloud_oss_endpoint or not self.alicloud_oss_bucket:
             errors.append("ALICLOUD_OSS_ENDPOINT and ALICLOUD_OSS_BUCKET are required")
         if not self.alibaba_cloud_access_key_id or not self.alibaba_cloud_access_key_secret:

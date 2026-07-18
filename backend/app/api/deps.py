@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import time
 from collections.abc import AsyncIterator
 
@@ -22,13 +23,13 @@ from app.models.user import User
 # token->device_id mapping with a short TTL so steady-state auth is O(1), and run
 # the cold-path scan off the event loop so even a miss doesn't block other requests.
 _EDGE_AUTH_TTL_S = 300.0
-_edge_auth_cache: dict[str, tuple[str, float]] = {}
+_edge_auth_cache: dict[str, tuple[str, str, float]] = {}
 
 
-def _match_edge_token(raw_token: str, rows: list[tuple[str, str]]) -> str | None:
+def _match_edge_token(raw_token: str, rows: list[tuple[str, str]]) -> tuple[str, str] | None:
     for device_id, token_hash in rows:
         if verify_edge_token(raw_token, token_hash):
-            return device_id
+            return device_id, token_hash
     return None
 
 
@@ -87,18 +88,22 @@ async def get_edge_device_from_authorization(session: AsyncSession, authorizatio
 
     now = time.monotonic()
     cached = _edge_auth_cache.get(raw_token)
-    if cached is not None and cached[1] > now:
-        device = await session.get(Device, cached[0])
-        if device is not None:
+    if cached is not None and cached[2] > now:
+        device_id, cached_hash, _expires_at = cached
+        device = await session.get(Device, device_id)
+        # Compare the stored hash on every request so rotating a token invalidates
+        # an already cached old value immediately without repeating PBKDF2 work.
+        if device is not None and hmac.compare_digest(device.edge_token_hash, cached_hash):
             return device
-        _edge_auth_cache.pop(raw_token, None)  # device gone -> drop stale entry
+        _edge_auth_cache.pop(raw_token, None)
 
     # Cold path: scan rows, but run the pbkdf2 verification off the event loop so it
     # cannot block other requests (commands, the video stream, other heartbeats).
     rows = (await session.execute(select(Device.device_id, Device.edge_token_hash))).all()
-    device_id = await asyncio.to_thread(_match_edge_token, raw_token, [tuple(r) for r in rows])
-    if device_id is not None:
-        _edge_auth_cache[raw_token] = (device_id, now + _EDGE_AUTH_TTL_S)
+    match = await asyncio.to_thread(_match_edge_token, raw_token, [tuple(r) for r in rows])
+    if match is not None:
+        device_id, token_hash = match
+        _edge_auth_cache[raw_token] = (device_id, token_hash, now + _EDGE_AUTH_TTL_S)
         device = await session.get(Device, device_id)
         if device is not None:
             return device

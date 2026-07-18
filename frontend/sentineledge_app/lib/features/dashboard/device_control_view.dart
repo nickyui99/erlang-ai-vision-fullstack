@@ -110,6 +110,21 @@ class _DeviceControlViewState extends State<DeviceControlView> {
         break;
       case 'event.verified':
         _loadEvents();
+        if ((message.data['verified'] == true ||
+                message.data['verified']?.toString() == 'true') &&
+            (ModalRoute.of(context)?.isCurrent ?? true)) {
+          final severity = message.data['severity']?.toString();
+          final eventId = message.data['event_id']?.toString();
+          showEventAlert(
+            ScaffoldMessenger.maybeOf(context),
+            title: 'Verified ${(severity ?? 'event').toLowerCase()} alert',
+            body:
+                message.data['summary']?.toString() ??
+                'Qwen verified a camera event that needs review.',
+            tone: toneForSeverity(severity),
+            dedupeKey: eventId == null ? null : 'verified:$eventId',
+          );
+        }
         break;
       case 'clip.available':
         _loadPlaybackClips();

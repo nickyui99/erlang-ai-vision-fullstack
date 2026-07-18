@@ -15,8 +15,8 @@
 - [x] Add an open-source license to LaptopEdge (committed and pushed).
 - [x] Add an open-source license to IoT.
 - [x] Add an open-source license to Fullstack (committed and pushed).
-- [ ] Configure a public domain for the Alibaba Cloud deployment.
-- [ ] Enable HTTPS with a valid TLS certificate.
+- [x] Configure a public domain for the Alibaba Cloud deployment (`https://erlang-ai.duckdns.org`).
+- [x] Enable HTTPS with a valid TLS certificate (Caddy on the ECI public origin).
 - [ ] Verify Firebase permits the production domain.
 - [ ] Test judge login from a fresh browser.
 - [ ] Confirm production session cookies work over HTTPS.
@@ -31,8 +31,28 @@
 - [x] Limit judge-demo inference: send the first camera frame to Qwen after 4 seconds, then at most once per minute.
 - [x] Disable Qwen hidden thinking for the judge demo's structured vision response.
 - [x] Refresh local Baby-camera demo frames from `data/demo_videos/baby.mp4`.
-- [ ] Deploy the refreshed Baby-camera frames and judge-demo timing configuration.
+- [x] Deploy the refreshed judge-camera frames and judge-demo timing configuration.
+- [x] Enable the production judge-demo simulator; bundled frames now publish to `dev_judge_` cameras on demand.
 - [ ] Verify in a fresh browser that a judge camera produces a Qwen event after the first 4-second sample.
+
+## Production updates — July 18–19
+
+- [x] Deploy the Flutter web app and FastAPI backend on one HTTPS origin (`https://erlang-ai.duckdns.org`), with Caddy routing `/api` to FastAPI and the app to OSS over Alibaba's internal endpoint.
+- [x] Keep the deployment on one ECI + standing EIP; no CDN or second API instance is required for the current demo.
+- [x] Serve the release web bundle with Brotli compression and local Flutter WebAssembly renderer assets to improve first-load performance.
+- [x] Reduce Flutter startup dependencies and defer dashboard loading work; Flutter analysis passes after the optimisation work.
+- [x] Fix judge live-view frame availability by enabling the server-side demo simulator in the deployed ECI configuration.
+- [x] Add a root app messenger so foreground FCM messages show the floating Flutter in-app alert after login or session restore.
+- [x] Deduplicate matching FCM and realtime alerts, so one event does not produce multiple in-app banners.
+- [x] Enable alerts from `low` upward in production; low, medium, high, and critical events now qualify for the alert flow.
+- [x] Verify the deployed backend health endpoint and the cloud ECI alert-threshold configuration without exposing secrets.
+- [x] Verify the live frontend and backend readiness endpoint return HTTP 200 after the July 19 deployment.
+- [x] Update the production Content Security Policy to permit Flutter CanvasKit and Google Fonts (`gstatic`/`fonts.gstatic.com`); text and WebAssembly renderer assets can load.
+- [ ] Add `erlang-ai.duckdns.org` to Firebase Authentication's authorized domains, then test Google sign-in from a fresh browser.
+- [ ] Restore the former `erlang-ai-vision.duckdns.org` hostname after its Let's Encrypt certificate issuance window clears (do not redeploy that hostname before then).
+- [x] Scan the pending source changes for credential signatures before pushing to `main`; local `.env` remains ignored.
+- [ ] Verify foreground in-app alerts and low/medium alert delivery from a fresh browser session.
+- [ ] Complete the LaptopEdge simulator/cloud run: wait for `device listener ready` and `backend websocket connected`, then verify frames and events arrive in the cloud console.
 
 ## Shipped July 15 (document in README, Devpost, and the demo video)
 
@@ -52,7 +72,7 @@
 
 - [x] Add a “Qwen Cloud Global Hackathon” section near the top of the README.
 - [x] State the submission track: `Track 5 — EdgeAgent`.
-- [x] Add the live application URL (currently the EIP `http://47.250.155.149`; swap in the domain + HTTPS link once configured).
+- [x] Replace the README live-application placeholder with `https://erlang-ai.duckdns.org`.
 - [ ] Add the public demo-video URL (placeholder row is in the README table — record the video first).
 - [x] Add judge testing instructions.
 - [x] Add links to all three repositories (hackathon table + tier table).
@@ -69,7 +89,7 @@
 - [ ] Configure the GitHub repository description.
 - [ ] Configure the GitHub homepage with the live-demo URL.
 - [ ] Add GitHub topics such as `qwen`, `edge-ai`, `iot`, `flutter`, `fastapi`, and `alibaba-cloud`.
-- [ ] Confirm the MIT license appears in GitHub’s About section.
+- [X] Confirm the MIT license appears in GitHub’s About section.
 
 ## Landing page and visual presentation
 
@@ -78,7 +98,7 @@
 - [x] Show the real architecture image.
 - [ ] Add screenshots of natural-language agent creation.
 - [ ] Show the compiled detector configuration.
-- [x] Show Qwen-VL verification output.
+- [x] Show Qwen-Plus verification output.
 - [x] Show audited Qwen tool calls.
 - [x] Show camera pan/tilt actions.
 - [ ] Show realtime alerts.
@@ -109,16 +129,16 @@
 
 ## Production security
 
-- [ ] Reject startup when `SESSION_SECRET_KEY=change-me`.
-- [ ] Reject production startup when required secrets are missing.
-- [ ] Prevent silent mock-Qwen fallback in production.
+- [x] Reject startup when `SESSION_SECRET_KEY=change-me`.
+- [x] Reject production startup when required secrets are missing.
+- [x] Prevent silent mock-Qwen fallback in production.
 - [ ] Clearly label demo/mock mode in the UI.
-- [ ] Add rate limiting to authentication endpoints.
+- [x] Add production rate limiting to Firebase login (10 requests/minute per forwarded client IP) and edge ingestion (240 requests/minute per forwarded client IP).
 - [x] Add rate limiting to chat endpoints (per-account daily message cap, July 15; burst/per-second limiting can still be added at a proxy if needed).
-- [ ] Add rate limiting to Qwen verification endpoints.
-- [ ] Add request-size limits for images and media.
-- [ ] Confirm CORS permits only required production origins.
-- [ ] Confirm Firebase authorized domains are restricted correctly.
+- [x] Add rate limiting to Qwen verification endpoints.
+- [x] Add request-size limits for HTTP API bodies; media bytes upload directly to OSS through signed URLs.
+- [x] Confirm CORS permits only the required production origin in the ECI deployment configuration.
+- [ ] Confirm Firebase authorized domains include only the active production hostname and required development hosts.
 - [ ] Confirm judge credentials have limited permissions.
 - [ ] Confirm demo accounts cannot access real devices.
 - [ ] Rotate credentials before making repositories public.
@@ -131,9 +151,13 @@
 
 ## Reliability and observability
 
-- [ ] Add a production readiness endpoint.
+- [x] Add production health and readiness endpoints (`/healthz` and `/readyz`).
 - [ ] Report Qwen configuration status without exposing secrets.
-- [ ] Report database connectivity.
+- [x] Report database connectivity through `/readyz`.
+- [x] Restrict RDS access to the ECI private network; remove public database CIDR access.
+- [x] Disable production FastAPI OpenAPI/docs routes and block `/docs` and `/openapi.json` at the proxy.
+- [x] Apply production browser security headers (HSTS, CSP, anti-framing, content-type, referrer, and permissions policies).
+- [x] Invalidate cached edge tokens immediately when a device token is rotated.
 - [ ] Report Alibaba OSS connectivity.
 - [ ] Report Firebase connectivity.
 - [ ] Track Qwen request latency.
@@ -161,7 +185,7 @@
 - [x] Run backend tests: 143 passed, 1 skipped (July 15; includes MCP server, agentic chat, recording, and history-preservation tests).
 - [x] Run edge (LaptopEdge) tests: triage 11/11 with the real model; all bridge assertions incl. recording + refresh-nudge.
 - [x] Run Flutter tests: 10 passed.
-- [x] Run Flutter static analysis: no issues (re-verified July 15 after assignment-state changes).
+- [x] Run Flutter static analysis: no issues (re-verified July 19 after the in-app alert work).
 - [ ] Fix the two `aiosqlite` teardown warnings.
 - [ ] Add Qwen timeout tests.
 - [ ] Add Qwen HTTP 429 tests.
@@ -170,7 +194,7 @@
 - [ ] Add empty model-response tests.
 - [ ] Add retry/backoff tests.
 - [ ] Add frontend AI chat-screen widget tests.
-- [ ] Add production configuration validation tests.
+- [x] Add production configuration validation tests.
 - [ ] Add an end-to-end judge smoke test.
 - [ ] Run the smoke test against the Alibaba deployment.
 - [ ] Add backend test execution to CI.

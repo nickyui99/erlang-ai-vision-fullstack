@@ -56,7 +56,7 @@ async def main() -> None:
     except QwenError as exc:
         print(f"QwenError: {exc}")
         print("\nIf this is a model/input error, try a text model for 9A, e.g.")
-        print("  QWEN_MODEL=qwen-plus   (qwen-vl-* is for the multimodal 9C path)")
+        print("  QWEN_MODEL=qwen-plus   (qwen-plus-* is for the multimodal 9C path)")
         return
 
     print("RAW REPLY:")
