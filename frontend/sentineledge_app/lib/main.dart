@@ -16,8 +16,16 @@ void main() {
   if (kIsWeb) {
     usePathUrlStrategy();
   }
-  final session = SessionController();
-  runApp(ErlangVisionApp(session: session));
+  final notificationMessengerKey = GlobalKey<ScaffoldMessengerState>();
+  final session = SessionController(
+    notificationMessengerKey: notificationMessengerKey,
+  );
+  runApp(
+    ErlangVisionApp(
+      session: session,
+      scaffoldMessengerKey: notificationMessengerKey,
+    ),
+  );
   unawaited(_initializeStartup(session));
 }
 

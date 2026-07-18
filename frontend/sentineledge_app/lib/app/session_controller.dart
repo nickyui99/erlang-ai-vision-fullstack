@@ -22,13 +22,16 @@ class SessionController extends ChangeNotifier {
     ErlangVisionApiClient? apiClient,
     BackendAuthClient? authClient,
     PushNotificationService? pushNotifications,
+    GlobalKey<ScaffoldMessengerState>? notificationMessengerKey,
   }) : apiClient = apiClient ?? ErlangVisionApiClient(),
        _authClient = authClient ?? BackendAuthClient(),
-       _pushNotifications = pushNotifications ?? PushNotificationService();
+       _pushNotifications = pushNotifications ?? PushNotificationService(),
+       _notificationMessengerKey = notificationMessengerKey;
 
   final ErlangVisionApiClient apiClient;
   final BackendAuthClient _authClient;
   final PushNotificationService _pushNotifications;
+  final GlobalKey<ScaffoldMessengerState>? _notificationMessengerKey;
 
   SessionStatus _status = SessionStatus.restoring;
   BackendUser? _user;
@@ -123,7 +126,8 @@ class SessionController extends ChangeNotifier {
     try {
       await _pushNotifications.registerForCurrentUser(
         apiClient,
-        messenger: messenger,
+        messengerProvider: () =>
+            _notificationMessengerKey?.currentState ?? messenger,
       );
     } catch (_) {
       // Push registration is best-effort; sign-in must not fail because of it.

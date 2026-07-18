@@ -631,6 +631,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                 message.data['summary']?.toString() ??
                 'A camera event needs review.',
             tone: toneForSeverity(severity),
+            dedupeKey: message.data['event_id']?.toString(),
           );
         }
         break;

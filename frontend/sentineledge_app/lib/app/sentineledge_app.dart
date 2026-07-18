@@ -22,9 +22,14 @@ abstract final class AppRoutes {
 }
 
 class ErlangVisionApp extends StatefulWidget {
-  const ErlangVisionApp({required this.session, super.key});
+  const ErlangVisionApp({
+    required this.session,
+    required this.scaffoldMessengerKey,
+    super.key,
+  });
 
   final SessionController session;
+  final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey;
 
   @override
   State<ErlangVisionApp> createState() => _ErlangVisionAppState();
@@ -51,6 +56,7 @@ class _ErlangVisionAppState extends State<ErlangVisionApp> {
           valueListenable: _themeModeController,
           builder: (context, themeMode, _) {
             return MaterialApp.router(
+              scaffoldMessengerKey: widget.scaffoldMessengerKey,
               title: 'Erlang AI Vision',
               debugShowCheckedModeBanner: false,
               theme: AppTheme.light(),

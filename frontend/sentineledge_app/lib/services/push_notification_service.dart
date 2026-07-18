@@ -7,7 +7,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../firebase_options.dart';
 import '../shared/event_alert.dart';
-import 'browser_notification.dart' as browser_notification;
 import 'backend_auth_client.dart';
 
 /// High-importance channel for security alerts. Android shows notifications on
@@ -41,7 +40,7 @@ class PushNotificationService {
 
   Future<void> registerForCurrentUser(
     ErlangVisionApiClient apiClient, {
-    ScaffoldMessengerState? messenger,
+    ScaffoldMessengerState? Function()? messengerProvider,
   }) async {
     if (!DefaultFirebaseOptions.isConfigured) return;
 
@@ -66,8 +65,9 @@ class PushNotificationService {
     await _foregroundSubscription?.cancel();
     _foregroundSubscription = FirebaseMessaging.onMessage.listen((message) {
       unawaited(_showForegroundMessage(message));
-      // Keep the in-app banner too when a messenger is available, so users
-      // already looking at the app get an inline cue alongside the pop-up.
+      // The root messenger stays valid across login, page refresh, and route
+      // changes, so foreground web alerts always have an in-app surface.
+      final messenger = messengerProvider?.call();
       if (messenger != null) _showInAppBanner(messenger, message);
     });
   }
@@ -124,14 +124,7 @@ class PushNotificationService {
         'A camera event needs review.';
     final eventId = message.data['event_id']?.toString();
 
-    if (kIsWeb) {
-      browser_notification.showBrowserNotification(
-        title: title,
-        body: body,
-        eventId: eventId,
-      );
-      return;
-    }
+    if (kIsWeb) return;
 
     await _initLocalNotifications();
     final details = NotificationDetails(
@@ -178,6 +171,7 @@ class PushNotificationService {
       title: title,
       body: body,
       tone: toneForSeverity(message.data['severity']?.toString()),
+      dedupeKey: message.data['event_id']?.toString(),
     );
   }
 

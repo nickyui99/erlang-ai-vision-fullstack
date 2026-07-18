@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../design/app_colors.dart';
 
+final _recentAlertKeys = <String, DateTime>{};
+
 /// Severity -> tone (high/critical=red, medium=amber, low=blue).
 StatusTone toneForSeverity(String? severity) {
   switch ((severity ?? '').toLowerCase().trim()) {
@@ -34,7 +36,16 @@ void showEventAlert(
   required String body,
   StatusTone tone = StatusTone.danger,
   VoidCallback? onView,
+  String? dedupeKey,
 }) {
+  if (dedupeKey != null && dedupeKey.isNotEmpty) {
+    final now = DateTime.now();
+    _recentAlertKeys.removeWhere(
+      (_, shownAt) => now.difference(shownAt) > const Duration(seconds: 10),
+    );
+    if (_recentAlertKeys.containsKey(dedupeKey)) return;
+    _recentAlertKeys[dedupeKey] = now;
+  }
   playAlertCue();
   if (messenger == null) return;
   final color = tone.base;
