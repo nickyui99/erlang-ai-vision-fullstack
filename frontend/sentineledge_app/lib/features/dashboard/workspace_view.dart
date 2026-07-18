@@ -642,6 +642,23 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         if (eventId != null && eventId == _selectedEventId) {
           _loadEventAudit(eventId);
         }
+        // Judge-demo events become actionable after Qwen returns. Surface that
+        // transition as an in-app alert even when the initial edge candidate
+        // arrived at a lower severity.
+        if ((message.data['verified'] == true ||
+                message.data['verified']?.toString() == 'true') &&
+            (ModalRoute.of(context)?.isCurrent ?? true)) {
+          final severity = message.data['severity']?.toString();
+          showEventAlert(
+            ScaffoldMessenger.maybeOf(context),
+            title: 'Verified ${(severity ?? 'event').toLowerCase()} alert',
+            body:
+                message.data['summary']?.toString() ??
+                'Qwen verified a camera event that needs review.',
+            tone: toneForSeverity(severity),
+            dedupeKey: eventId == null ? null : 'verified:$eventId',
+          );
+        }
         break;
       case 'clip.available':
         final eventId = message.data['event_id']?.toString();
@@ -2393,9 +2410,9 @@ class _Sidebar extends StatelessWidget {
     final scheme = theme.colorScheme;
     final width = extended ? 252.0 : 76.0;
     final logoAsset = theme.brightness == Brightness.dark
-        ? 'assets/brand/erlang-ai-vision-logo-light.png'
-        : 'assets/brand/erlang-ai-vision-logo-dark.png';
-    const iconAsset = 'assets/brand/erlang-ai-vision-icon.png';
+        ? 'assets/brand/erlang-ai-vision-logo-light.webp'
+        : 'assets/brand/erlang-ai-vision-logo-dark.webp';
+    const iconAsset = 'assets/brand/erlang-ai-vision-icon.webp';
 
     return AnimatedContainer(
       duration: AppMotion.duration(context, AppMotion.base),

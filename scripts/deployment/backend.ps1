@@ -298,9 +298,19 @@ else:
 print(f"security group: {sg_id}", file=sys.stderr)
 
 # --- RDS whitelist: dedicated array for the ECI subnet ----------------------
-rds.modify_security_ips(rm.ModifySecurityIpsRequest(
-    dbinstance_id=db.dbinstance_id, security_ips=vsw.cidr_block,
-    dbinstance_iparray_name="eci", modify_mode="Cover"))
+# Avoid a no-op API mutation: RDS rejects updates while transitioning after a
+# restart even when the existing whitelist is already the required subnet.
+ip_arrays = rds.describe_dbinstance_iparray_list(
+    rm.DescribeDBInstanceIPArrayListRequest(dbinstance_id=db.dbinstance_id)
+).body.items.dbinstance_iparray
+eci_ips = next(
+    (str(item.security_iplist or "") for item in ip_arrays if item.dbinstance_iparray_name == "eci"),
+    "",
+)
+if eci_ips != vsw.cidr_block:
+    rds.modify_security_ips(rm.ModifySecurityIpsRequest(
+        dbinstance_id=db.dbinstance_id, security_ips=vsw.cidr_block,
+        dbinstance_iparray_name="eci", modify_mode="Cover"))
 print(f"RDS whitelist 'eci' = {vsw.cidr_block}", file=sys.stderr)
 
 # --- Caddy config ------------------------------------------------------------
@@ -314,9 +324,14 @@ caddyfile = f"""
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
-		Permissions-Policy "microphone=(), geolocation=()"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self' https://accounts.google.com; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://www.gstatic.com https://apis.google.com https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://www.gstatic.com https://fonts.gstatic.com https://accounts.google.com https://apis.google.com https://*.googleapis.com https://*.firebaseapp.com https://*.firebaseio.com wss://*.firebaseio.com; worker-src 'self' blob:; frame-src https://accounts.google.com https://*.firebaseapp.com; media-src 'self' blob: https:; upgrade-insecure-requests"
 	}}
-	@backend path /api/* /healthz /readyz /docs /docs/* /openapi.json
+	@hidden_docs path /docs /docs/* /openapi.json
+	handle @hidden_docs {{
+		respond "Not found" 404
+	}}
+	@backend path /api/* /healthz /readyz
 	handle @backend {{
 		reverse_proxy localhost:8000 {{
 			flush_interval -1

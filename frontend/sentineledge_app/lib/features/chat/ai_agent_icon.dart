@@ -6,7 +6,7 @@ import '../../design/app_colors.dart';
 import '../../design/app_motion.dart';
 
 /// Brand mascot asset for the Erlang AI Agent.
-const aiAgentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
+const aiAgentIconAsset = 'assets/brand/erlang-ai-agent-icon.webp';
 
 /// Compact, Flutter-only animated orb for the Agents navigation destination.
 /// Orange and blue drift vertically while the selected icon lifts out of the

@@ -95,14 +95,21 @@ try {
     flutter @BuildArgs
     if ($LASTEXITCODE -ne 0) { Write-Error "flutter build web failed." }
 
-    # Keep the Wasm renderer on our existing OSS origin. Flutter otherwise
-    # retrieves skwasm from a public Google host on every cold load.
+    # Serve the engine binaries (skwasm/CanvasKit, the largest downloads) from
+    # Google's free flutter-canvaskit CDN instead of the high-RTT OSS origin.
+    # The loader already defaults to gstatic; this rewrites the index.html
+    # preload hints to the same revision-pinned URL so the early fetch is the
+    # one the engine reuses.
     $BootstrapPath = Join-Path $FrontendDir "build/web/flutter_bootstrap.js"
     $Bootstrap = Get-Content -Raw $BootstrapPath
-    $LoaderCall = "_flutter.loader.load({"
-    if (-not $Bootstrap.Contains($LoaderCall)) { Write-Error "Flutter bootstrap loader call was not found." }
-    $Bootstrap = $Bootstrap.Replace($LoaderCall, "_flutter.loader.load({`n  config: { useLocalCanvasKit: true },")
-    [System.IO.File]::WriteAllText($BootstrapPath, $Bootstrap, [System.Text.UTF8Encoding]::new($false))
+    if ($Bootstrap -notmatch '"engineRevision":"([0-9a-f]+)"') { Write-Error "engineRevision was not found in flutter_bootstrap.js." }
+    $EngineBase = "https://www.gstatic.com/flutter-canvaskit/$($Matches[1])/"
+    $IndexPath = Join-Path $FrontendDir "build/web/index.html"
+    $Index = Get-Content -Raw $IndexPath
+    $LocalEngineBase = "var engineBase = 'canvaskit/';"
+    if (-not $Index.Contains($LocalEngineBase)) { Write-Error "engineBase preload placeholder was not found in index.html." }
+    $Index = $Index.Replace($LocalEngineBase, "var engineBase = '$EngineBase';")
+    [System.IO.File]::WriteAllText($IndexPath, $Index, [System.Text.UTF8Encoding]::new($false))
 }
 finally {
     Pop-Location
@@ -162,6 +169,12 @@ CONTENT_TYPES = {
 # Entry/manifest files the browser must revalidate so deploys take effect
 # immediately; everything else is version-gated by the service worker.
 NO_CACHE = {"index.html", "flutter_service_worker.js", "version.json", "flutter_bootstrap.js"}
+# Fonts, images, and icons only change on rebrands; a day of caching keeps
+# repeat visits off the high-RTT EIP while the ETag still catches updates.
+LONG_CACHE_PREFIXES = ("assets/", "icons/")
+# The engine binaries are served from Google's flutter-canvaskit CDN (see the
+# index.html preload patch above), so the local copies are dead weight.
+SKIP_PREFIXES = ("canvaskit/",)
 # Flutter's WebAssembly and CanvasKit binaries are several megabytes each. OSS
 # does not compress proxied objects automatically, so upload Brotli-encoded
 # variants with the original object names; browsers transparently decompress
@@ -189,14 +202,21 @@ for file in sorted(build_dir.rglob("*")):
     if not file.is_file():
         continue
     key = file.relative_to(build_dir).as_posix()
+    if key.startswith(SKIP_PREFIXES):
+        continue
     content_type = CONTENT_TYPES.get(file.suffix) or mimetypes.guess_type(file.name)[0] or "application/octet-stream"
-    cache = "no-cache" if key in NO_CACHE else "public, max-age=3600"
+    if key in NO_CACHE:
+        cache = "no-cache"
+    elif key.startswith(LONG_CACHE_PREFIXES):
+        cache = "public, max-age=86400"
+    else:
+        cache = "public, max-age=3600"
     headers = {"Content-Type": content_type, "Cache-Control": cache}
     if file.suffix in BROTLI_SUFFIXES:
         headers["Content-Encoding"] = "br"
         headers["Vary"] = "Accept-Encoding"
         with file.open("rb") as source:
-            bucket.put_object(key, brotli.compress(source.read(), quality=6), headers=headers)
+            bucket.put_object(key, brotli.compress(source.read(), quality=11), headers=headers)
     else:
         bucket.put_object_from_file(key, str(file), headers=headers)
     uploaded += 1

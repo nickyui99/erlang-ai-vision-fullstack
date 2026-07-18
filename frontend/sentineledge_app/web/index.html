@@ -32,6 +32,48 @@
   <title>Erlang AI Vision</title>
   <link rel="manifest" href="manifest.json">
 
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+
+  <script>
+    // Start fetching the app + engine binaries immediately, in parallel with
+    // flutter_bootstrap.js, instead of waiting for the loader to request them
+    // (saves a full network round trip on the multi-megabyte critical path).
+    // The WasmGC probe mirrors the loader's own check byte-for-byte so only
+    // the build variant that will actually run is preloaded. If COOP/COEP
+    // headers are ever added (crossOriginIsolated), the loader switches to
+    // skwasm_heavy.wasm and the skwasm.wasm preload below must follow it.
+    (function () {
+      // Deploy-time patch target: frontend.ps1 rewrites this to the
+      // gstatic flutter-canvaskit URL for the built engine revision so the
+      // engine downloads come from Google's CDN, not the OSS origin.
+      var engineBase = 'canvaskit/';
+      var wasmGC = false;
+      try {
+        wasmGC = WebAssembly.validate(new Uint8Array(
+          [0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 95, 1, 120, 0]));
+      } catch (_) {}
+      function add(rel, href, as) {
+        var link = document.createElement('link');
+        link.rel = rel;
+        link.href = href;
+        if (as) link.as = as;
+        // Match the credentials mode of the engine's fetch()/import() calls
+        // so the preloaded response is actually reused.
+        if (as === 'fetch') link.crossOrigin = 'anonymous';
+        document.head.appendChild(link);
+      }
+      if (wasmGC) {
+        add('preload', 'main.dart.wasm', 'fetch');
+        add('preload', engineBase + 'skwasm.wasm', 'fetch');
+        add('modulepreload', 'main.dart.mjs');
+      } else {
+        add('preload', 'main.dart.js', 'script');
+        add('preload', engineBase + 'canvaskit.wasm', 'fetch');
+      }
+    })();
+  </script>
+
   <script>
     // Match the splash to the app's persisted theme before first paint.
     // shared_preferences stores strings JSON-encoded under a "flutter." prefix.

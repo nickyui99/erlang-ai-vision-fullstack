@@ -5,9 +5,9 @@ import '../../design/app_spacing.dart';
 import '../../design/app_typography.dart';
 import '../../shared/external_link.dart';
 
-const _logoAsset = 'assets/brand/erlang-ai-vision-logo-long-white.png';
+const _logoAsset = 'assets/brand/erlang-ai-vision-logo-long-white.webp';
 const _cameraIconAsset = 'assets/brand/erlang-ai-camera-tile-icon.png';
-const _agentIconAsset = 'assets/brand/erlang-ai-agent-icon.png';
+const _agentIconAsset = 'assets/brand/erlang-ai-agent-icon.webp';
 const _scenarioAsset = 'assets/landing/edge-ai-scenario.webp';
 const _eventTriageAsset = 'assets/landing/event-triage-console.webp';
 const _xiaoEsp32Asset = 'assets/landing/pipeline/xiao-esp32-s3.webp';
@@ -971,7 +971,7 @@ class _CameraPreviewCard extends StatelessWidget {
                 children: [
                   Positioned.fill(
                     child: Image.asset(
-                      'assets/landing/frontdoor-cctv.gif',
+                      'assets/landing/frontdoor-cctv.webp',
                       fit: BoxFit.cover,
                       alignment: const Alignment(0.25, -0.2),
                       gaplessPlayback: true,

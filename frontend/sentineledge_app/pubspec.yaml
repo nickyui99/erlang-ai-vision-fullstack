@@ -74,18 +74,16 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - assets/brand/erlang-ai-vision-icon.png
-    - assets/brand/erlang-ai-vision-logo-light.png
-    - assets/brand/erlang-ai-vision-logo-dark.png
-    - assets/brand/erlang-ai-vision-logo.png
-    - assets/brand/erlang-ai-vision-logo-long-transparent.png
-    - assets/brand/erlang-ai-vision-logo-long-white.png
+    - assets/brand/erlang-ai-vision-icon.webp
+    - assets/brand/erlang-ai-vision-logo-light.webp
+    - assets/brand/erlang-ai-vision-logo-dark.webp
+    - assets/brand/erlang-ai-vision-logo-long-white.webp
     - assets/brand/google-g.png
     - assets/brand/erlang-ai-camera-tile-icon.png
-    - assets/brand/erlang-ai-agent-icon.png
+    - assets/brand/erlang-ai-agent-icon.webp
     - assets/landing/edge-ai-scenario.webp
     - assets/landing/event-triage-console.webp
-    - assets/landing/frontdoor-cctv.gif
+    - assets/landing/frontdoor-cctv.webp
     - assets/landing/laptop-frame.webp
     - assets/landing/mobile-agent-frame.webp
     - assets/landing/erlang-ai-vision-architecture-flow.webp

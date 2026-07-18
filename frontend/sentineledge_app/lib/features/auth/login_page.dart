@@ -436,7 +436,7 @@ class _MobileLoginFrameState extends State<_MobileLoginFrame>
                             ),
                             clipBehavior: Clip.antiAlias,
                             child: Image.asset(
-                              'assets/brand/erlang-ai-vision-icon.png',
+                              'assets/brand/erlang-ai-vision-icon.webp',
                               fit: BoxFit.contain,
                             ),
                           ),
@@ -541,7 +541,7 @@ class _BrandPanelState extends State<_BrandPanel>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final compact = widget.compact;
-    const logoAsset = 'assets/brand/erlang-ai-vision-icon.png';
+    const logoAsset = 'assets/brand/erlang-ai-vision-icon.webp';
     return AnimatedBuilder(
       animation: _motion,
       builder: (context, child) {
