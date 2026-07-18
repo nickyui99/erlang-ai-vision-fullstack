@@ -7,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../firebase_options.dart';
 import '../shared/event_alert.dart';
+import 'browser_notification.dart' as browser_notification;
 import 'backend_auth_client.dart';
 
 /// High-importance channel for security alerts. Android shows notifications on
@@ -114,8 +115,6 @@ class PushNotificationService {
   }
 
   Future<void> _showForegroundMessage(RemoteMessage message) async {
-    if (kIsWeb) return;
-    await _initLocalNotifications();
     final notification = message.notification;
     final title = notification?.title ??
         'Erlang AI Vision · ${_severityTitle(message.data['severity'])}';
@@ -123,7 +122,18 @@ class PushNotificationService {
         message.data['summary']?.toString() ??
         message.data['event_type']?.toString() ??
         'A camera event needs review.';
+    final eventId = message.data['event_id']?.toString();
 
+    if (kIsWeb) {
+      browser_notification.showBrowserNotification(
+        title: title,
+        body: body,
+        eventId: eventId,
+      );
+      return;
+    }
+
+    await _initLocalNotifications();
     final details = NotificationDetails(
       android: AndroidNotificationDetails(
         _alertChannel.id,
@@ -142,7 +152,6 @@ class PushNotificationService {
     );
 
     // A stable id per event de-dupes repeats; fall back to time-ordered hash.
-    final eventId = message.data['event_id']?.toString();
     final id = (eventId != null && eventId.isNotEmpty)
         ? eventId.hashCode & 0x7fffffff
         : message.hashCode & 0x7fffffff;
