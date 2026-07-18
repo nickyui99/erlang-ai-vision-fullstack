@@ -364,6 +364,8 @@ backend_env = [
     {"Key": "APP_ENV", "Value": "production"},
     # The image contains only bundled demo frames; this simulator accepts the dev_judge_ device prefix only.
     {"Key": "DEMO_SIMULATION_ENABLED", "Value": "true"},
+    # The web console should surface every demo severity, including low and medium.
+    {"Key": "ALERT_MIN_SEVERITY", "Value": "low"},
     {"Key": "CORS_ALLOWED_ORIGINS", "Value": cors_origin},
     {"Key": "CORS_ALLOWED_ORIGIN_REGEX", "Value": ""},
     {"Key": "GOOGLE_SECRET_MANAGER_PROJECT", "Value": project_id},
