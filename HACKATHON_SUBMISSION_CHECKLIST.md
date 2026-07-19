@@ -17,10 +17,10 @@
 - [x] Add an open-source license to Fullstack (committed and pushed).
 - [x] Configure the public Alibaba Cloud domain (`https://erlang-vision.duckdns.org`).
 - [x] Enable HTTPS with a valid TLS certificate (Caddy on the ECI public origin).
-- [ ] Verify Firebase permits the production domain.
-- [ ] Test judge login from a fresh browser.
-- [ ] Confirm production session cookies work over HTTPS.
-- [ ] Create a judge account and document its credentials securely.
+- [X] Verify Firebase permits the production domain.
+- [X] Test judge login from a fresh browser.
+- [X] Confirm production session cookies work over HTTPS.
+- [X] Create a judge account and document its credentials securely.
 - [ ] Record a public demonstration video under three minutes.
 - [x] Publish the public judge APK release ([`v1.0.0-judge`](https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/tag/v1.0.0-judge)); verify its live-backend URL and downloadable APK while signed out.
 - [ ] Upload the video to YouTube, Vimeo, or Youku.
@@ -34,7 +34,7 @@
 - [x] Refresh local Baby-camera demo frames from `data/demo_videos/baby.mp4`.
 - [x] Deploy the refreshed judge-camera frames and judge-demo timing configuration.
 - [x] Enable the production judge-demo simulator; bundled frames now publish to `dev_judge_` cameras on demand.
-- [ ] Verify in a fresh browser that a judge camera produces a Qwen event after the first 4-second sample.
+- [X] Verify in a fresh browser that a judge camera produces a Qwen event after the first 4-second sample.
 
 ## Production updates — July 18–19
 
@@ -49,11 +49,11 @@
 - [x] Verify the deployed backend health endpoint and the cloud ECI alert-threshold configuration without exposing secrets.
 - [x] Verify the live frontend and backend readiness endpoint return HTTP 200 after the July 19 deployment.
 - [x] Update the production Content Security Policy to permit Flutter CanvasKit and Google Fonts (`gstatic`/`fonts.gstatic.com`); text and WebAssembly renderer assets can load.
-- [ ] Add `erlang-vision.duckdns.org` to Firebase Authentication's authorized domains, then test Google sign-in from a fresh browser.
+- [X] Add `erlang-vision.duckdns.org` to Firebase Authentication's authorized domains, then test Google sign-in from a fresh browser.
 - [x] Preserve the valid TLS certificate on `erlang-vision.duckdns.org` during subsequent deployments.
 - [x] Scan the pending source changes for credential signatures before pushing to `main`; local `.env` remains ignored.
-- [ ] Verify foreground in-app alerts and low/medium alert delivery from a fresh browser session.
-- [ ] Complete the LaptopEdge simulator/cloud run: wait for `device listener ready` and `backend websocket connected`, then verify frames and events arrive in the cloud console.
+- [X] Verify foreground in-app alerts and low/medium alert delivery from a fresh browser session.
+- [X] Complete the LaptopEdge simulator/cloud run: wait for `device listener ready` and `backend websocket connected`, then verify frames and events arrive in the cloud console.
 
 ## Shipped July 15 (document in README, Devpost, and the demo video)
 
