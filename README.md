@@ -196,22 +196,28 @@ MCP server is unreachable, the chat degrades gracefully to text-only answers.
 ```powershell
 # 1. Backend deps + env
 pip install -r backend\requirements.txt
+#    expected: ends with "Successfully installed ..." (no red ERROR lines)
 Copy-Item .env.example .env
 
 # 2. Initialize or upgrade the local SQLite schema
 python -m alembic -c backend\alembic.ini upgrade head
+#    expected: "Running upgrade ..." lines ending at the head revision, exit code 0
 
 # 3. Run backend + Flutter web together
 .\scripts\start-dev.ps1
+#    expected: backend logs "Uvicorn running on http://0.0.0.0:8000",
+#    Flutter logs "lib\main.dart is being served at http://localhost:8080"
 ```
 
 API docs: `http://localhost:8000/docs` · App: `http://localhost:8080`
+**Expected result:** the app loads at `localhost:8080` and `http://localhost:8000/healthz` returns `{"data":{"status":"ok"}}`.
 
 **Try it with no hardware:**
 
 ```powershell
 $env:PYTHONPATH="backend"
 python scripts\create_judge_account.py     # seed demo login + cameras + agents
+#    expected: ends with "=== judge demo account ready ===" and the login credentials
 ```
 
 Set `DEMO_SIMULATION_ENABLED=true` and a Qwen vision model in `.env`, then open a
