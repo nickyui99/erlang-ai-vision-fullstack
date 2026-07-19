@@ -22,7 +22,7 @@ Submission for the **Qwen Cloud Global Hackathon — Track 5: EdgeAgent**.
 
 | | |
 |---|---|
-| **Live application** | [erlang-ai.duckdns.org](https://erlang-ai.duckdns.org) |
+| **Live application** | [erlang-vision.duckdns.org](https://erlang-vision.duckdns.org) |
 | **Demo video** | *coming before submission — will be linked here and on Devpost* |
 | **Repositories** | [erlang-ai-vision-fullstack](https://github.com/nickyui99/erlang-ai-vision-fullstack) (cloud + app, this repo) · [SentinelEdge_LaptopEdge](https://github.com/KennethChua1998/SentinelEdge_LaptopEdge) (edge bridge) · [SentinelEdge_IOT](https://github.com/KennethChua1998/SentinelEdge_IOT) (ESP32-S3 firmware) |
 | **Deployment** | Alibaba Cloud `ap-southeast-3` (Kuala Lumpur): ECI container (FastAPI + Caddy), OSS (web app + media), RDS PostgreSQL, ACR — [architecture and deployment proof](docs/deployment/alibaba_cloud_architecture.md) |

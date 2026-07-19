@@ -15,13 +15,14 @@
 - [x] Add an open-source license to LaptopEdge (committed and pushed).
 - [x] Add an open-source license to IoT.
 - [x] Add an open-source license to Fullstack (committed and pushed).
-- [x] Configure a public domain for the Alibaba Cloud deployment (`https://erlang-ai.duckdns.org`).
+- [x] Configure the public Alibaba Cloud domain (`https://erlang-vision.duckdns.org`).
 - [x] Enable HTTPS with a valid TLS certificate (Caddy on the ECI public origin).
 - [ ] Verify Firebase permits the production domain.
 - [ ] Test judge login from a fresh browser.
 - [ ] Confirm production session cookies work over HTTPS.
 - [ ] Create a judge account and document its credentials securely.
 - [ ] Record a public demonstration video under three minutes.
+- [x] Publish the public judge APK release ([`v1.0.0-judge`](https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/tag/v1.0.0-judge)); verify its live-backend URL and downloadable APK while signed out.
 - [ ] Upload the video to YouTube, Vimeo, or Youku.
 - [ ] Add the video URL to Devpost.
 
@@ -37,7 +38,7 @@
 
 ## Production updates — July 18–19
 
-- [x] Deploy the Flutter web app and FastAPI backend on one HTTPS origin (`https://erlang-ai.duckdns.org`), with Caddy routing `/api` to FastAPI and the app to OSS over Alibaba's internal endpoint.
+- [x] Deploy the Flutter web app and FastAPI backend on one HTTPS origin (`https://erlang-vision.duckdns.org`), with Caddy routing `/api` to FastAPI and the app to OSS over Alibaba's internal endpoint.
 - [x] Keep the deployment on one ECI + standing EIP; no CDN or second API instance is required for the current demo.
 - [x] Serve the release web bundle with Brotli compression and local Flutter WebAssembly renderer assets to improve first-load performance.
 - [x] Reduce Flutter startup dependencies and defer dashboard loading work; Flutter analysis passes after the optimisation work.
@@ -48,8 +49,8 @@
 - [x] Verify the deployed backend health endpoint and the cloud ECI alert-threshold configuration without exposing secrets.
 - [x] Verify the live frontend and backend readiness endpoint return HTTP 200 after the July 19 deployment.
 - [x] Update the production Content Security Policy to permit Flutter CanvasKit and Google Fonts (`gstatic`/`fonts.gstatic.com`); text and WebAssembly renderer assets can load.
-- [ ] Add `erlang-ai.duckdns.org` to Firebase Authentication's authorized domains, then test Google sign-in from a fresh browser.
-- [ ] Restore the former `erlang-ai-vision.duckdns.org` hostname after its Let's Encrypt certificate issuance window clears (do not redeploy that hostname before then).
+- [ ] Add `erlang-vision.duckdns.org` to Firebase Authentication's authorized domains, then test Google sign-in from a fresh browser.
+- [x] Preserve the valid TLS certificate on `erlang-vision.duckdns.org` during subsequent deployments.
 - [x] Scan the pending source changes for credential signatures before pushing to `main`; local `.env` remains ignored.
 - [ ] Verify foreground in-app alerts and low/medium alert delivery from a fresh browser session.
 - [ ] Complete the LaptopEdge simulator/cloud run: wait for `device listener ready` and `backend websocket connected`, then verify frames and events arrive in the cloud console.
@@ -72,7 +73,7 @@
 
 - [x] Add a “Qwen Cloud Global Hackathon” section near the top of the README.
 - [x] State the submission track: `Track 5 — EdgeAgent`.
-- [x] Replace the README live-application placeholder with `https://erlang-ai.duckdns.org`.
+- [x] Replace the README live-application placeholder with `https://erlang-vision.duckdns.org`.
 - [ ] Add the public demo-video URL (placeholder row is in the README table — record the video first).
 - [x] Add judge testing instructions.
 - [x] Add links to all three repositories (hackathon table + tier table).
