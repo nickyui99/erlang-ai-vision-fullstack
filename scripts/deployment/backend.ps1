@@ -345,7 +345,9 @@ caddyfile = f"""
 			header_down -x-oss-force-download
 			@missing status 404 403
 			handle_response @missing {{
-				rewrite * /index.html
+				# Deep app routes (/login, /console, ...) boot the Flutter
+				# shell; the static landing owns only the root index.html.
+				rewrite * /app.html
 				reverse_proxy http://{oss_internal} {{
 					header_up Host {oss_internal}
 					header_down -Content-Disposition
