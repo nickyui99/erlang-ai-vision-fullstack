@@ -166,9 +166,13 @@ CONTENT_TYPES = {
     ".frag": "application/octet-stream",
     ".webp": "image/webp",
 }
+# The static landing page ships as the site root so first paint never waits on
+# the Flutter engine; the Flutter shell moves to app.html and is served for
+# every deep route via the bucket website error document.
+KEY_RENAMES = {"index.html": "app.html", "landing.html": "index.html"}
 # Entry/manifest files the browser must revalidate so deploys take effect
 # immediately; everything else is version-gated by the service worker.
-NO_CACHE = {"index.html", "flutter_service_worker.js", "version.json", "flutter_bootstrap.js"}
+NO_CACHE = {"index.html", "app.html", "flutter_service_worker.js", "version.json", "flutter_bootstrap.js"}
 # Fonts, images, and icons only change on rebrands; a day of caching keeps
 # repeat visits off the high-RTT EIP while the ETag still catches updates.
 LONG_CACHE_PREFIXES = ("assets/", "icons/")
@@ -195,13 +199,14 @@ except oss2.exceptions.NoSuchBucket:
 # New buckets ship with Block Public Access on, which overrides the
 # public-read ACL with 403s.
 bucket.put_bucket_public_access_block(False)
-bucket.put_bucket_website(oss2.models.BucketWebsite("index.html", "index.html"))
+bucket.put_bucket_website(oss2.models.BucketWebsite("index.html", "app.html"))
 
 uploaded = 0
 for file in sorted(build_dir.rglob("*")):
     if not file.is_file():
         continue
     key = file.relative_to(build_dir).as_posix()
+    key = KEY_RENAMES.get(key, key)
     if key.startswith(SKIP_PREFIXES):
         continue
     content_type = CONTENT_TYPES.get(file.suffix) or mimetypes.guess_type(file.name)[0] or "application/octet-stream"
