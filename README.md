@@ -90,6 +90,14 @@ frames, and a qualifying rule produces an event with a Qwen verification result
 and an in-app alert. If a live-Qwen dependency is unavailable, the UI reports
 the degraded state rather than presenting a mock result as live verification.
 
+### Expected outcomes by demo path
+
+| Path | Start here | Expected result |
+|---|---|---|
+| **Production judge demo** | Sign in at the [live application](https://erlang-vision.duckdns.org) with the Devpost judge account. | The pre-seeded dashboard and demo cameras load over HTTPS; live frames, verified events, clips, and in-app alerts are available without physical hardware. |
+| **Local no-hardware demo** | Follow the [Quickstart](#-quickstart), create the judge account, and enable `DEMO_SIMULATION_ENABLED=true`. | The backend creates the demo account, publishes simulated frames, and submits the first eligible frame to Qwen after four seconds. |
+| **Physical device path** | Complete the LaptopEdge and ESP32-S3 setup in the linked companion repositories. | The bridge reports `device listener ready` and `backend websocket connected`; the dashboard receives live frames and an armed agent can create an event and alert. |
+
 ## 🎬 See it in action
 
 

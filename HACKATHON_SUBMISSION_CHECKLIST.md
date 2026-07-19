@@ -78,14 +78,14 @@
 - [x] Add judge testing instructions.
 - [x] Add links to all three repositories (hackathon table + tier table).
 - [x] Add a prominent architecture diagram.
-- [ ] Add a direct Alibaba Cloud deployment-proof link.
+- [x] Add a direct Alibaba Cloud deployment-proof link.
 - [x] List the Qwen models used.
 - [x] Explain why Qwen is essential to the project.
 - [x] Document what was built after May 26, 2026.
 - [x] Add team-member information.
 - [x] Add a no-hardware demo walkthrough.
 - [x] Add a full physical-device setup walkthrough.
-- [ ] Add expected results to every setup step.
+- [x] Add expected results to every setup step.
 - [x] Add troubleshooting guidance.
 - [ ] Configure the GitHub repository description.
 - [x] Configure the GitHub homepage with the live-demo URL.
