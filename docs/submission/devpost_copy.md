@@ -39,7 +39,7 @@ The production deployment uses HTTPS, restricted CORS, secure session cookies, C
 
 - Live application: https://erlang-vision.duckdns.org
 - Source: https://github.com/nickyui99/erlang-ai-vision-fullstack
-- Edge source: https://github.com/KennethChua1998/SentinelEdge_LaptopEdge
-- Firmware source: https://github.com/KennethChua1998/SentinelEdge_IOT
+- Edge source: https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge
+- Firmware source: https://github.com/KennethChua1998/ErlangAIVision_IOT
 - Architecture/deployment proof: docs/deployment/alibaba_cloud_architecture.md in the fullstack repository
 - Demo video: add after upload
