@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import 'app/app_messenger.dart';
 import 'app/sentineledge_app.dart';
 import 'app/session_controller.dart';
 export 'app/sentineledge_app.dart';
@@ -16,14 +17,13 @@ void main() {
   if (kIsWeb) {
     usePathUrlStrategy();
   }
-  final notificationMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final session = SessionController(
-    notificationMessengerKey: notificationMessengerKey,
+    notificationMessengerKey: appScaffoldMessengerKey,
   );
   runApp(
     ErlangVisionApp(
       session: session,
-      scaffoldMessengerKey: notificationMessengerKey,
+      scaffoldMessengerKey: appScaffoldMessengerKey,
     ),
   );
   unawaited(_initializeStartup(session));

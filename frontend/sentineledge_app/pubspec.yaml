@@ -88,6 +88,9 @@ flutter:
     - assets/landing/mobile-agent-frame.webp
     - assets/landing/erlang-ai-vision-architecture-flow.webp
     - assets/landing/erlang-cloud-architecture.webp
+    - assets/landing/judge-proof/natural-language-agent.png
+    - assets/landing/judge-proof/agent-rule-editor.png
+    - assets/landing/judge-proof/verified-event-review.png
     - assets/landing/pipeline/xiao-esp32-s3.webp
     - assets/landing/pipeline/ultralytics-yolo26.webp
     - assets/landing/pipeline/qwen.webp

@@ -19,6 +19,10 @@ const _youtubeDemoUrl = '';
 const _architectureFlowAsset =
     'assets/landing/erlang-ai-vision-architecture-flow.webp';
 const _cloudArchitectureAsset = 'assets/landing/erlang-cloud-architecture.webp';
+const _agentBuilderEvidenceAsset =
+    'assets/landing/judge-proof/natural-language-agent.png';
+const _agentRuleEvidenceAsset = 'assets/landing/judge-proof/agent-rule-editor.png';
+const _verifiedEventEvidenceAsset = 'assets/landing/judge-proof/verified-event-review.png';
 const _githubUrl = 'https://github.com/nickyui99/erlang-ai-vision-fullstack';
 const _iotRepoUrl = 'https://github.com/KennethChua1998/SentinelEdge_IOT';
 const _laptopEdgeRepoUrl =
@@ -96,6 +100,10 @@ class _LandingPageState extends State<LandingPage> {
                   _Reveal(
                     style: _RevealStyle.slideLeft,
                     child: _ProofSection(compact: compact),
+                  ),
+                  _Reveal(
+                    style: _RevealStyle.zoom,
+                    child: _WorkflowEvidenceSection(compact: compact),
                   ),
                   _Reveal(
                     style: _RevealStyle.zoom,
@@ -1170,6 +1178,170 @@ class _ProofSection extends StatelessWidget {
   }
 }
 
+class _WorkflowEvidenceSection extends StatelessWidget {
+  const _WorkflowEvidenceSection({required this.compact});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final secondary = [
+      const _EvidenceFrame(
+        asset: _agentRuleEvidenceAsset,
+        eyebrow: '02 / Rule editor',
+        title: 'A rule the operator can inspect.',
+        body:
+            'The natural-language intent stays visible and editable before it is assigned to a camera.',
+        semanticLabel: 'Judge workspace showing an editable Front Door Watch rule',
+      ),
+      const _EvidenceFrame(
+        asset: _verifiedEventEvidenceAsset,
+        eyebrow: '03 / Verified event',
+        title: 'Evidence, verdict, and confidence together.',
+        body:
+            'The event timeline keeps the camera, Qwen verification result, severity, and operator context in one review surface.',
+        semanticLabel: 'Judge workspace showing a verified event and Qwen review',
+      ),
+    ];
+
+    return _DarkSection(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeading(
+            dark: true,
+            eyebrow: 'Live product evidence',
+            title: 'The judge flow, as it runs.',
+            body:
+                'These are real views from the judge workspace: turn a plain-language request into a protection rule, then inspect a Qwen-verified event without leaving the console.',
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+          const _EvidenceFrame(
+            asset: _agentBuilderEvidenceAsset,
+            eyebrow: '01 / Natural-language creation',
+            title: 'Refine a protection agent in plain language.',
+            body:
+                'The AI-assisted builder keeps the current rule, proposed rule, and named detector together before anything is saved.',
+            semanticLabel:
+                'Judge workspace showing the natural-language agent refinement flow',
+            prominent: true,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          if (compact)
+            Column(
+              children: [
+                secondary[0],
+                const SizedBox(height: AppSpacing.lg),
+                secondary[1],
+              ],
+            )
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: secondary[0]),
+                const SizedBox(width: AppSpacing.lg),
+                Expanded(child: secondary[1]),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EvidenceFrame extends StatelessWidget {
+  const _EvidenceFrame({
+    required this.asset,
+    required this.eyebrow,
+    required this.title,
+    required this.body,
+    required this.semanticLabel,
+    this.prominent = false,
+  });
+
+  final String asset;
+  final String eyebrow;
+  final String title;
+  final String body;
+  final String semanticLabel;
+  final bool prominent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.055),
+        borderRadius: AppRadius.lgAll,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.13)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.22),
+            blurRadius: 22,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: 1536 / 746,
+            child: Image.asset(
+              asset,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.high,
+              semanticLabel: semanticLabel,
+              errorBuilder: (context, error, stackTrace) => DecoratedBox(
+                decoration: const BoxDecoration(color: AppColors.neutral900),
+                child: Center(
+                  child: Icon(
+                    Icons.image_not_supported_outlined,
+                    color: AppColors.neutral400,
+                    size: prominent ? 40 : 30,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  eyebrow.toUpperCase(),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.accentOrange,
+                    letterSpacing: 1.05,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  title,
+                  style: (prominent
+                          ? Theme.of(context).textTheme.titleLarge
+                          : Theme.of(context).textTheme.titleMedium)
+                      ?.copyWith(color: Colors.white),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  body,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.neutral300,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 class _DemoVideoSection extends StatelessWidget {
   const _DemoVideoSection({required this.compact, required this.onLaunchDemo});
 
@@ -2174,7 +2346,7 @@ class _ImagePlaceholder extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Image placeholder',
+                    'Visual unavailable',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: foreground.withValues(alpha: 0.7),
                       letterSpacing: 0.6,

@@ -619,21 +619,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     if (!mounted) return;
     switch (message.type) {
       case 'event.created':
+        // Wait for Qwen verification before interrupting the user. The event
+        // still appears in the activity feed immediately.
         _refreshEventsIfVisible();
-        // Only the visible screen alerts (avoids double alerts when a camera
-        // detail view is on top with its own realtime feed).
-        if (ModalRoute.of(context)?.isCurrent ?? true) {
-          final severity = message.data['severity']?.toString();
-          showEventAlert(
-            ScaffoldMessenger.maybeOf(context),
-            title: 'New ${(severity ?? 'event').toLowerCase()} detection',
-            body:
-                message.data['summary']?.toString() ??
-                'A camera event needs review.',
-            tone: toneForSeverity(severity),
-            dedupeKey: message.data['event_id']?.toString(),
-          );
-        }
         break;
       case 'event.verified':
         // Verification finished: refresh so the verdict + agent trail update.
@@ -642,23 +630,23 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         if (eventId != null && eventId == _selectedEventId) {
           _loadEventAudit(eventId);
         }
-        // Judge-demo events become actionable after Qwen returns. Surface that
-        // transition as an in-app alert even when the initial edge candidate
-        // arrived at a lower severity.
-        if ((message.data['verified'] == true ||
-                message.data['verified']?.toString() == 'true') &&
-            (ModalRoute.of(context)?.isCurrent ?? true)) {
-          final severity = message.data['severity']?.toString();
-          showEventAlert(
-            ScaffoldMessenger.maybeOf(context),
-            title: 'Verified ${(severity ?? 'event').toLowerCase()} alert',
-            body:
-                message.data['summary']?.toString() ??
-                'Qwen verified a camera event that needs review.',
-            tone: toneForSeverity(severity),
-            dedupeKey: eventId == null ? null : 'verified:$eventId',
-          );
-        }
+        // The activity list updates immediately; the toast arrives once Qwen
+        // finishes so the user sees the actual verification result.
+        final verified = isPositiveVerification(message.data);
+        final severity = message.data['severity']?.toString();
+        showEventAlert(
+          null,
+          title: verified
+              ? 'Verified ${(severity ?? 'event').toLowerCase()} alert'
+              : 'Verification complete',
+          body:
+              message.data['summary']?.toString() ??
+              (verified
+                  ? 'Qwen verified a camera event that needs review.'
+                  : 'Qwen reviewed this detection and did not raise an alert.'),
+          tone: verified ? toneForSeverity(severity) : StatusTone.success,
+          dedupeKey: eventId == null ? null : 'verified:$eventId',
+        );
         break;
       case 'clip.available':
         final eventId = message.data['event_id']?.toString();

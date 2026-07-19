@@ -10,8 +10,8 @@
 - [x] Switch the local Fullstack repository to `main`.
 - [x] Synchronize local `main` with `origin/main`.
 - [x] Make `erlang-ai-vision-fullstack` public (verified anonymously, July 15).
-- [ ] Make `SentinelEdge_LaptopEdge` public (still returns 404 to a logged-out request as of July 15).
-- [ ] Make `SentinelEdge_IOT` public (still returns 404 to a logged-out request as of July 15).
+- [x] Make `SentinelEdge_LaptopEdge` public (confirmed by project owner, July 19; still run final logged-out link check before submission).
+- [x] Make `SentinelEdge_IOT` public (confirmed by project owner, July 19; still run final logged-out link check before submission).
 - [x] Add an open-source license to LaptopEdge (committed and pushed).
 - [x] Add an open-source license to IoT.
 - [x] Add an open-source license to Fullstack (committed and pushed).
@@ -87,26 +87,27 @@
 - [x] Add a full physical-device setup walkthrough.
 - [x] Add expected results to every setup step.
 - [x] Add troubleshooting guidance.
-- [ ] Configure the GitHub repository description.
+- [X] Configure the GitHub repository description.
 - [x] Configure the GitHub homepage with the live-demo URL.
-- [ ] Add GitHub topics such as `qwen`, `edge-ai`, `iot`, `flutter`, `fastapi`, and `alibaba-cloud`.
+- [X] Add GitHub topics such as `qwen`, `edge-ai`, `iot`, `flutter`, `fastapi`, and `alibaba-cloud`.
 - [X] Confirm the MIT license appears in GitHub’s About section.
 
 ## Landing page and visual presentation
 
-- [ ] Replace the visible “Image placeholder.”
-- [ ] Replace the “Cloud architecture image placeholder.”
+- [X] Replace the visible “Image placeholder.”
+- [X] Replace the “Cloud architecture image placeholder.”
 - [x] Show the real architecture image.
-- [ ] Add screenshots of natural-language agent creation.
-- [ ] Show the compiled detector configuration.
+- [x] Add screenshots of natural-language agent creation (captured from the judge workspace, deployed to the public root landing page, and verified on the custom domain, July 19).
+- [x] Show the compiled detector configuration (judge-workspace rule editor screenshot deployed on the landing page, July 19).
+- [x] Add a direct public judge-APK download link to the landing page (GitHub `v1.0.0-judge` asset and public root page both verified HTTP 200, July 19).
 - [x] Show Qwen-Plus verification output.
 - [x] Show audited Qwen tool calls.
 - [x] Show camera pan/tilt actions.
 - [ ] Show realtime alerts.
 - [ ] Show event playback.
-- [ ] Test the landing page on desktop.
-- [ ] Test the landing page on mobile.
-- [ ] Check every public image and link.
+- [x] Test the landing page on desktop (local release preview and public root-page verification after OSS deployment, July 19).
+- [X] Test the landing page on mobile.
+- [X] Check every public image and link.
 - [ ] Remove remaining unfinished comments or placeholder copy.
 
 ## EdgeAgent judging criteria
@@ -115,11 +116,11 @@
 - [x] Document which processing happens locally.
 - [x] Document which data is sent to Qwen Cloud.
 - [x] Explain how user privacy is protected.
-- [ ] Measure edge-to-cloud event latency.
-- [ ] Measure Qwen verification latency.
-- [ ] Measure bandwidth reduction from local triage.
+- [x] Measure edge-to-cloud event latency (candidate → cloud escalation: 12.9s p50, 20.7s p95; includes local triage and routing, not a dedicated WAN-only test).
+- [x] Measure Qwen verification latency (five real Qwen Cloud image calls: 2.47s p50, 2.59s p95; recorded in README).
+- [x] Measure bandwidth reduction from local triage (180s benchmark: 106.99 MB ingress → 1.30 MB egress, 98.8% reduction; documented in README).
 - [ ] Measure false-positive reduction.
-- [ ] Estimate Qwen API cost per event.
+- [x] Estimate Qwen API cost per event (US$0.00027 for the measured Qwen image-verification sample; documented in README with pricing and exchange-rate assumptions).
 - [ ] Demonstrate weak-network behavior.
 - [ ] Demonstrate complete Qwen Cloud outage behavior.
 - [ ] Demonstrate event queueing and reconnection.
@@ -143,6 +144,7 @@
 - [ ] Confirm judge credentials have limited permissions.
 - [ ] Confirm demo accounts cannot access real devices.
 - [ ] Rotate credentials before making repositories public.
+- [x] Rotate the Firebase password for `judge@erlang.ai` after the credential review; the Firebase UID and existing RDS identity mapping are unchanged (July 19).
 - [ ] Run a final secret scan across Git history.
 - [ ] Review Firebase rules.
 - [ ] Review Alibaba OSS bucket permissions.

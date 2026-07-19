@@ -150,6 +150,8 @@
     .btn-filled { color: #fff; background: var(--primary); border: none; }
     .btn-filled:hover { background: var(--primary-hover); }
     .btn-lg { height: 52px; min-width: 160px; font-size: 15px; }
+    .btn-download { color: #080B10; background: #fff; border: 1px solid rgba(255,255,255,0.72); box-shadow: 0 10px 24px rgba(0,0,0,0.22); }
+    .btn-download:hover { background: #FFE7E2; border-color: #fff; }
 
     .hero-cols { display: flex; align-items: center; gap: 48px; margin-top: 76px; }
     .hero-copy { flex: 9; min-width: 0; }
@@ -271,6 +273,14 @@
     .proof-card .mi { font-size: 28px; color: var(--accent); }
     .proof-card h3 { margin-top: 16px; font-size: 17px; font-weight: 600; color: #fff; }
     .proof-card p { margin-top: 8px; font-size: 14px; line-height: 1.55; color: var(--n300); }
+    /* Judge workspace evidence */
+    .evidence-section { background: #10161E; }
+    .evidence-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 32px; }
+    .evidence-card { overflow: hidden; border-radius: 16px; background: #080B10; border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 16px 28px rgba(0,0,0,0.22); }
+    .evidence-card img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; }
+    .evidence-copy { padding: 16px; }
+    .evidence-copy h3 { font-size: 16px; font-weight: 600; color: #fff; }
+    .evidence-copy p { margin-top: 6px; font-size: 14px; line-height: 1.5; color: var(--n300); }
 
     /* ---------- Demo video ---------- */
     .video-card {
@@ -413,6 +423,7 @@
       .cmp-table { display: none; }
       .cmp-cards { display: block; }
       .grid-3 { grid-template-columns: 1fr; }
+      .evidence-grid { grid-template-columns: 1fr; }
       .stage-card .vis { width: 90px; height: 60px; }
     }
     @media (max-width: 700px) {
@@ -463,8 +474,8 @@
           <h1 class="rv rv-rise">Camera intelligence that <br>sees, thinks, and verifies.</h1>
           <p class="hero-sub rv rv-rise"><span class="brush">ESP32 cameras</span> see, the <span class="brush">edge bridge</span> thinks, and <span class="brush">Qwen Cloud</span> verifies — only real events reach your team, with no more scrubbing through CCTV footage.</p>
           <div class="hero-actions rv rv-rise">
-            <a class="btn btn-filled btn-lg" href="/console"><span class="mi">&#xf00a0;</span>Demo Video</a>
-            <a class="btn btn-outline btn-lg" href="#architecture"><span class="mi">&#xee36;</span>Architecture</a>
+            <a class="btn btn-filled btn-lg" href="/console"><span class="mi">&#xf00a0;</span>Open web console</a>
+            <a class="btn btn-download btn-lg" href="https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/download/v1.0.0-judge/app-release.apk" target="_blank" rel="noopener"><span class="mi">&#xe085;</span>Download Android APK</a>
           </div>
           <div class="chips rv rv-rise">
             <span class="chip"><span class="mi" style="color:var(--success)">&#xe085;</span><span class="name">Android</span><span class="status" style="color:var(--success)">Available</span></span>
@@ -567,6 +578,39 @@
     </div>
   </section>
 
+  <!-- ============ JUDGE WORKSPACE EVIDENCE ============ -->
+  <section class="section dark-section evidence-section" id="workflow">
+    <div class="inner rv rv-zoom">
+      <div class="section-heading on-dark">
+        <div class="eyebrow">Judge workspace</div>
+        <h2>See the workflow in the live console.</h2>
+        <p>Captured from the judge workspace: create a rule in natural language, refine the detector, then inspect Qwen&rsquo;s verified event decision.</p>
+      </div>
+      <div class="evidence-grid">
+        <article class="evidence-card">
+          <img src="assets/assets/landing/judge-proof/natural-language-agent.png" alt="Natural-language agent creation in the judge workspace" loading="lazy">
+          <div class="evidence-copy">
+            <h3>Natural-language creation</h3>
+            <p>Start with the operator&rsquo;s instruction, then let the agent turn it into a reviewable protection rule.</p>
+          </div>
+        </article>
+        <article class="evidence-card">
+          <img src="assets/assets/landing/judge-proof/agent-rule-editor.png" alt="Agent detector configuration in the judge workspace" loading="lazy">
+          <div class="evidence-copy">
+            <h3>Detector configuration</h3>
+            <p>Review the active rule, camera assignment, and detector settings before the agent is armed.</p>
+          </div>
+        </article>
+        <article class="evidence-card">
+          <img src="assets/assets/landing/judge-proof/verified-event-review.png" alt="Verified event review in the judge workspace" loading="lazy">
+          <div class="evidence-copy">
+            <h3>Verified event review</h3>
+            <p>Inspect the alert, evidence, and Qwen decision in an auditable operator timeline.</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
   <!-- ============ DEMO VIDEO ============ -->
   <section class="section light-section">
     <div class="inner rv rv-zoom">
@@ -725,6 +769,7 @@
             <a class="repo-btn" href="https://github.com/nickyui99/erlang-ai-vision-fullstack" target="_blank" rel="noopener"><span class="mi">&#xf242;</span>Fullstack</a>
             <a class="repo-btn" href="https://github.com/KennethChua1998/SentinelEdge_IOT" target="_blank" rel="noopener"><span class="mi">&#xf242;</span>IoT firmware</a>
             <a class="repo-btn" href="https://github.com/KennethChua1998/SentinelEdge_LaptopEdge" target="_blank" rel="noopener"><span class="mi">&#xf242;</span>Laptop edge</a>
+            <a class="repo-btn" href="https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/download/v1.0.0-judge/app-release.apk" target="_blank" rel="noopener"><span class="mi">&#xe085;</span>Download judge APK</a>
           </div>
         </div>
         <div class="check-col" id="checklist"></div>
@@ -738,7 +783,8 @@
       <h2>See it in action.</h2>
       <p>Launch the demo console, or sign in to your own cameras.</p>
       <div class="actions">
-        <a class="btn btn-filled btn-lg" href="/console"><span class="mi">&#xf00a0;</span>Demo Video</a>
+        <a class="btn btn-filled btn-lg" href="/console"><span class="mi">&#xf00a0;</span>Open web console</a>
+        <a class="btn btn-outline btn-lg" href="https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/download/v1.0.0-judge/app-release.apk" target="_blank" rel="noopener"><span class="mi">&#xe085;</span>Download APK</a>
         <a class="btn btn-outline btn-lg" href="/login"><span class="mi">&#xf198;</span>Login</a>
       </div>
     </div>
@@ -746,6 +792,20 @@
 
   <script>
     // ---- Comparison table data (mirrors the Flutter landing page) ----
+    // Returning from Flutter uses this marker to force the static entry point.
+    // Keep the public URL tidy once this document is definitely loaded.
+    if (new URLSearchParams(window.location.search).get('landing') === '1') {
+      window.history.replaceState(null, document.title, '/');
+    }
+    // A previous Flutter build may still have a root-scope worker registered.
+    // Remove it while the public document is open so Login cannot capture `/`.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (registrations) {
+        registrations.forEach(function (registration) {
+          registration.unregister();
+        });
+      }).catch(function () {});
+    }
     var CMP = [
       { i: '', a: 'Alerting',
         t: 'Basic motion and object models can detect people or vehicles, but shadows, pets, reflections, and occlusion still trigger costly false alarms.',

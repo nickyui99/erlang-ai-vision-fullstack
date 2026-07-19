@@ -110,6 +110,20 @@ try {
     if (-not $Index.Contains($LocalEngineBase)) { Write-Error "engineBase preload placeholder was not found in index.html." }
     $Index = $Index.Replace($LocalEngineBase, "var engineBase = '$EngineBase';")
     [System.IO.File]::WriteAllText($IndexPath, $Index, [System.Text.UTF8Encoding]::new($false))
+    # The static landing and Flutter shell deliberately share an origin. Disable
+    # the Flutter service worker so it never captures `/` and replaces the
+    # static landing with the Flutter app on a later navigation.
+    $ServiceWorkerSettingsPattern = 'serviceWorkerSettings:\s*\{\s*serviceWorkerVersion:\s*"[^"]+"[^}]*\}'
+    if ($Bootstrap -notmatch $ServiceWorkerSettingsPattern) { Write-Error "serviceWorkerSettings was not found in flutter_bootstrap.js." }
+    $Bootstrap = [regex]::Replace($Bootstrap, $ServiceWorkerSettingsPattern, 'serviceWorkerSettings: null', 1)
+    # App entrypoints are unversioned Flutter filenames. Give each build a URL
+    # version so a browser cannot run an older cached WASM bundle with new HTML.
+    $BuildStamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    foreach ($RuntimeAsset in @('main.dart.wasm', 'main.dart.mjs', 'main.dart.js')) {
+        if (-not $Bootstrap.Contains(('"' + $RuntimeAsset + '"'))) { Write-Error "$RuntimeAsset was not found in flutter_bootstrap.js." }
+        $Bootstrap = $Bootstrap.Replace(('"' + $RuntimeAsset + '"'), ('"' + $RuntimeAsset + '?v=' + $BuildStamp + '"'))
+    }
+    [System.IO.File]::WriteAllText($BootstrapPath, $Bootstrap, [System.Text.UTF8Encoding]::new($false))
 }
 finally {
     Pop-Location
@@ -170,9 +184,9 @@ CONTENT_TYPES = {
 # the Flutter engine; the Flutter shell moves to app.html and is served for
 # every deep route via the bucket website error document.
 KEY_RENAMES = {"index.html": "app.html", "landing.html": "index.html"}
-# Entry/manifest files the browser must revalidate so deploys take effect
-# immediately; everything else is version-gated by the service worker.
-NO_CACHE = {"index.html", "app.html", "flutter_service_worker.js", "version.json", "flutter_bootstrap.js"}
+# Entry files and app runtimes must always revalidate. The public root and
+# Flutter shell share an origin, so this deployment intentionally has no worker.
+NO_CACHE = {"index.html", "app.html", "flutter_service_worker.js", "version.json", "flutter_bootstrap.js", "main.dart.wasm", "main.dart.mjs", "main.dart.js"}
 # Fonts, images, and icons only change on rebrands; a day of caching keeps
 # repeat visits off the high-RTT EIP while the ETag still catches updates.
 LONG_CACHE_PREFIXES = ("assets/", "icons/")

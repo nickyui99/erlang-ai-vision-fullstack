@@ -23,6 +23,7 @@ Submission for the **Qwen Cloud Global Hackathon — Track 5: EdgeAgent**.
 | | |
 |---|---|
 | **Live application** | [erlang-vision.duckdns.org](https://erlang-vision.duckdns.org) |
+| **Android judge build** | [Download signed APK](https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/download/v1.0.0-judge/app-release.apk) · [release notes](https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/tag/v1.0.0-judge) |
 | **Demo video** | *coming before submission — will be linked here and on Devpost* |
 | **Repositories** | [erlang-ai-vision-fullstack](https://github.com/nickyui99/erlang-ai-vision-fullstack) (cloud + app, this repo) · [SentinelEdge_LaptopEdge](https://github.com/KennethChua1998/SentinelEdge_LaptopEdge) (edge bridge) · [SentinelEdge_IOT](https://github.com/KennethChua1998/SentinelEdge_IOT) (ESP32-S3 firmware) |
 | **Deployment** | Alibaba Cloud `ap-southeast-3` (Kuala Lumpur): ECI container (FastAPI + Caddy), OSS (web app + media), RDS PostgreSQL, ACR — [architecture and deployment proof](docs/deployment/alibaba_cloud_architecture.md) |
@@ -45,8 +46,10 @@ open-weight VLM on a CPU laptop to frontier cloud models** behind one prompt sty
 1. **Plain language is the product** — user rules become detector configs through
    Qwen text models; there is no form-based rule editor.
 2. **The edge filter needs a local VLM** — `qwen3.5:0.8b` triages every candidate
-   frame on the laptop, which is what lets the system drop ~99% of frames before
-   any cloud call (bandwidth, cost, and privacy win).
+   frame on the laptop. In the documented 180-second edge benchmark, that cut
+   cloud-bound bytes by **98.8%** (106.99 MB camera ingress → 1.30 MB cloud
+   egress); see [Measured EdgeAgent results](#-measured-edgeagent-results) for
+   the scope and limits of that measurement.
 3. **Verification needs vision + tools** — `qwen3.7-plus` doesn't just look at a
    keyframe; it can pan the camera, take a fresh snapshot, and check recent
    events through audited tool calls before ruling.
@@ -65,16 +68,17 @@ browser-playable (H.264) event clips. See `HACKATHON_SUBMISSION_CHECKLIST.md`
 and the git history for the full trail.
 
 ### 🧑‍⚖️ Judge testing instructions
+1. **Android option:** [download the signed judge APK](https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/download/v1.0.0-judge/app-release.apk), install it, then use the same judge credentials below. The browser console remains available at the [live application](https://erlang-vision.duckdns.org).
 
-1. **Sign in** at the live application URL with the judge credentials provided
+2. **Sign in** at the live application URL with the judge credentials provided
    on Devpost (the account is pre-verified — no email confirmation needed).
-2. The dashboard is **pre-seeded**: cameras for each use case, armed agents, and
+3. The dashboard is **pre-seeded**: cameras for each use case, armed agents, and
    sample events, so there is something to explore immediately.
-3. **Zero-hardware demo**: judge cameras are simulated server-side — the backend
+4. **Zero-hardware demo**: judge cameras are simulated server-side — the backend
    streams pre-extracted frames into the live view and runs *real* Qwen-Plus
    detection on them, so the full detect → verify → alert flow works with no
    physical device.
-4. Things to try:
+5. Things to try:
    - Create an agent in plain English (e.g. *"alert me if a person lingers at
      the door after 9pm"*) and inspect the compiled detector config.
    - Open the **Erlang AI Agent** chat and ask *"which cameras do I have and
@@ -82,7 +86,7 @@ and the git history for the full trail.
      arm agents or take snapshots for you.
    - Open an event and play its clip; check the audited tool calls on verified
      events.
-5. To run everything locally instead (including the physical-device path), see
+6. To run everything locally instead (including the physical-device path), see
    the [Quickstart](#-quickstart) below.
 
 **Expected result:** the dashboard loads over HTTPS, a demo camera shows live
@@ -97,6 +101,20 @@ the degraded state rather than presenting a mock result as live verification.
 | **Production judge demo** | Sign in at the [live application](https://erlang-vision.duckdns.org) with the Devpost judge account. | The pre-seeded dashboard and demo cameras load over HTTPS; live frames, verified events, clips, and in-app alerts are available without physical hardware. |
 | **Local no-hardware demo** | Follow the [Quickstart](#-quickstart), create the judge account, and enable `DEMO_SIMULATION_ENABLED=true`. | The backend creates the demo account, publishes simulated frames, and submits the first eligible frame to Qwen after four seconds. |
 | **Physical device path** | Complete the LaptopEdge and ESP32-S3 setup in the linked companion repositories. | The bridge reports `device listener ready` and `backend websocket connected`; the dashboard receives live frames and an armed agent can create an event and alert. |
+
+## 📊 Measured EdgeAgent results
+
+![Measured EdgeAgent results](docs/assets/edgeagent-results.svg)
+
+| Measure | Result | Measurement context |
+|---|---:|---|
+| **Edge → cloud escalation** | **12.9 s p50** · **20.7 s p95** | Candidate detected → event escalated during a 180-second CPU-only LaptopEdge run (18 candidates; 14 cloud escalations). This includes local triage and routing; it is not a dedicated production-WAN latency test. |
+| **Qwen Cloud verification** | **2.47 s p50** · **2.59 s p95** | Five sequential real `qwen3.7-plus` image-verification calls to the DashScope International endpoint on July 19, 2026; one 18 KB JPEG and a fixed rule prompt per call. |
+| **Cloud-bound bandwidth** | **98.8% lower** (about **83×**) | Same 180-second edge run: 106.99 MB camera ingress vs. 1.30 MB cloud egress (2,703 frames captured; local stages selected 14 cloud escalations). |
+| **False-positive reduction** | **Not yet measured** | The 18 → 14 local filtering funnel is not a labelled false-positive rate. A threshold-only, labelled baseline is still required before claiming a reduction. |
+| **Approx. Qwen cost / event** | **US$0.00027** | 314 input + 73 output tokens per sampled call × `qwen3.7-plus` International 0–256K token pricing, converted at 6.7758 CNY/USD. Excludes any account-specific discount, taxes, or later pricing changes. |
+
+**Reproducibility notes.** The edge benchmark ran for 180 seconds on an AMD Ryzen 7 5800U CPU-only laptop with a simulated camera. It processed 883 frames (4.9 FPS), with 18 Stage-1 candidates; local Qwen triage resolved 4 and escalated 14. Its byte accounting uses a cloud-egress stub, so the reported reduction is a pipeline measurement, not a claim about every deployment's WAN throughput. The live-cloud sample used the same 18,059-byte bundled front-door JPEG, a fixed person-lingering rule, and `enable_thinking: false`. The USD estimate uses the June 2026 monthly 6.7758 CNY/USD rate. See the [edge benchmark report](https://github.com/KennethChua1998/SentinelEdge_LaptopEdge/blob/main/docs/BENCHMARKS.md), [DashScope model pricing](https://help.aliyun.com/en/model-studio/model-pricing), and [Federal Reserve exchange-rate series](https://fred.stlouisfed.org/series/EXCHUS).
 
 ## 🎬 See it in action
 
@@ -250,8 +268,3 @@ Full setup → [Backend setup](docs/backend/backend_setup.md) · [Frontend setup
 Licensed under the [MIT License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md) · Built for the Erlang AI Vision hackathon.
 
 </div>
-
-<!--
-  ASSETS: banner.png is wired in (save it under docs/assets/). Still optional:
-  - demo.gif     10-15s     chat a rule -> live view -> event fires -> alert
--->

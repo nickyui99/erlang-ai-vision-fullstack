@@ -95,36 +95,28 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     if (deviceId != _device.deviceId) return; // only this camera
     switch (message.type) {
       case 'event.created':
+        // The activity list updates immediately; reserve the toast for a
+        // positive Qwen verification result.
         _loadEvents();
-        if (ModalRoute.of(context)?.isCurrent ?? true) {
-          final severity = message.data['severity']?.toString();
-          showEventAlert(
-            ScaffoldMessenger.maybeOf(context),
-            title: 'New ${(severity ?? 'event').toLowerCase()} detection',
-            body: message.data['summary']?.toString() ??
-                'A camera event needs review.',
-            tone: toneForSeverity(severity),
-            dedupeKey: message.data['event_id']?.toString(),
-          );
-        }
         break;
       case 'event.verified':
         _loadEvents();
-        if ((message.data['verified'] == true ||
-                message.data['verified']?.toString() == 'true') &&
-            (ModalRoute.of(context)?.isCurrent ?? true)) {
-          final severity = message.data['severity']?.toString();
-          final eventId = message.data['event_id']?.toString();
-          showEventAlert(
-            ScaffoldMessenger.maybeOf(context),
-            title: 'Verified ${(severity ?? 'event').toLowerCase()} alert',
-            body:
-                message.data['summary']?.toString() ??
-                'Qwen verified a camera event that needs review.',
-            tone: toneForSeverity(severity),
-            dedupeKey: eventId == null ? null : 'verified:$eventId',
-          );
-        }
+        final verified = isPositiveVerification(message.data);
+        final severity = message.data['severity']?.toString();
+        final eventId = message.data['event_id']?.toString();
+        showEventAlert(
+          null,
+          title: verified
+              ? 'Verified ${(severity ?? 'event').toLowerCase()} alert'
+              : 'Verification complete',
+          body:
+              message.data['summary']?.toString() ??
+              (verified
+                  ? 'Qwen verified a camera event that needs review.'
+                  : 'Qwen reviewed this detection and did not raise an alert.'),
+          tone: verified ? toneForSeverity(severity) : StatusTone.success,
+          dedupeKey: eventId == null ? null : 'verified:$eventId',
+        );
         break;
       case 'clip.available':
         _loadPlaybackClips();
@@ -143,9 +135,11 @@ class _DeviceControlViewState extends State<DeviceControlView> {
 
   // Unassigning disarms the sub-agent but keeps its row (so event history survives),
   // so "assigned" means an ARMED sub-agent -- a disarmed leftover must read as off.
-  Iterable<SurveillanceAgent> _subsForDefinition(String definitionId) => _agents.where(
-    (agent) => agent.parentAgentId == definitionId && agent.state == 'armed',
-  );
+  Iterable<SurveillanceAgent> _subsForDefinition(String definitionId) =>
+      _agents.where(
+        (agent) =>
+            agent.parentAgentId == definitionId && agent.state == 'armed',
+      );
 
   bool _isAssigned(String definitionId) => _subsForDefinition(
     definitionId,
@@ -273,6 +267,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
       ),
     );
   }
+
   Future<void> _showPlaybackSheet(
     MediaClip clip,
     ClipPlaybackUrl playback,
@@ -307,7 +302,10 @@ class _DeviceControlViewState extends State<DeviceControlView> {
       final download = await widget.apiClient.signedClipDownloadUrl(
         clip.clipId,
       );
-      final opened = await openPlaybackUrl(download.downloadUrl, download: true);
+      final opened = await openPlaybackUrl(
+        download.downloadUrl,
+        download: true,
+      );
       if (!opened) {
         await Clipboard.setData(ClipboardData(text: download.downloadUrl));
         if (!mounted) return;
@@ -321,6 +319,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
       _toast(error.toString());
     }
   }
+
   Future<void> _refreshDevice() async {
     try {
       final device = await widget.apiClient.getDevice(_device.deviceId);
@@ -338,7 +337,6 @@ class _DeviceControlViewState extends State<DeviceControlView> {
     await _loadEvents();
     await _loadPlaybackClips();
   }
-
 
   Future<void> _saveDevicePreferences({
     bool? isFavorite,
@@ -455,7 +453,6 @@ class _DeviceControlViewState extends State<DeviceControlView> {
       if (mounted) setState(() => _isSnapshotting = false);
     }
   }
-
 
   Future<void> _sendCameraControl({
     required String busyKey,
@@ -750,9 +747,7 @@ class _DeviceControlViewState extends State<DeviceControlView> {
               onRefresh: _refreshDevice,
               notificationPredicate: (_) => compact,
               child: ListView(
-                physics: compact
-                    ? const AlwaysScrollableScrollPhysics()
-                    : null,
+                physics: compact ? const AlwaysScrollableScrollPhysics() : null,
                 padding: EdgeInsets.fromLTRB(
                   compact ? AppSpacing.md : AppSpacing.lg,
                   compact ? AppSpacing.sm : AppSpacing.lg,
@@ -760,23 +755,23 @@ class _DeviceControlViewState extends State<DeviceControlView> {
                   AppSpacing.xxl,
                 ),
                 children: [
-                if (_error != null) ...[
-                  AppBanner(text: _error!),
-                  const SizedBox(height: AppSpacing.md),
-                ],
-                if (compact) ...[
-                  primaryControls,
-                  const SizedBox(height: AppSpacing.md),
-                  secondaryPanels,
-                ] else
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 7, child: primaryControls),
-                      const SizedBox(width: AppSpacing.lg),
-                      Expanded(flex: 5, child: secondaryPanels),
-                    ],
-                  ),
+                  if (_error != null) ...[
+                    AppBanner(text: _error!),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  if (compact) ...[
+                    primaryControls,
+                    const SizedBox(height: AppSpacing.md),
+                    secondaryPanels,
+                  ] else
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(flex: 7, child: primaryControls),
+                        const SizedBox(width: AppSpacing.lg),
+                        Expanded(flex: 5, child: secondaryPanels),
+                      ],
+                    ),
                 ],
               ),
             ),
@@ -875,9 +870,10 @@ class _DeviceControlViewState extends State<DeviceControlView> {
         : 'off';
     final subtitle = switch (mode) {
       'auto_track' => 'The camera automatically follows a detected person.',
-      'agent' => _armedHere > 0
-          ? 'The armed agent decides how the camera pans and tilts.'
-          : 'Arm an agent under Protection so it can drive the camera.',
+      'agent' =>
+        _armedHere > 0
+            ? 'The armed agent decides how the camera pans and tilts.'
+            : 'Arm an agent under Protection so it can drive the camera.',
       _ => 'Manual control only - the camera stays put until you move it.',
     };
     return AppCard(
@@ -890,13 +886,19 @@ class _DeviceControlViewState extends State<DeviceControlView> {
         children: [
           Row(
             children: [
-              Icon(Icons.control_camera_outlined,
-                  size: 20, color: scheme.onSurfaceVariant),
+              Icon(
+                Icons.control_camera_outlined,
+                size: 20,
+                color: scheme.onSurfaceVariant,
+              ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: Text('Camera control',
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Camera control',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               if (_isSettingMode)
                 const SizedBox.square(
@@ -931,9 +933,12 @@ class _DeviceControlViewState extends State<DeviceControlView> {
                 : (selection) => _setControlMode(selection.first),
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(subtitle,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: scheme.onSurfaceVariant)),
+          Text(
+            subtitle,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
         ],
       ),
     );
@@ -1223,7 +1228,10 @@ class _ActivityTile extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    _MetaChip(label: _titleCase(event.severity), tone: severityTone),
+                    _MetaChip(
+                      label: _titleCase(event.severity),
+                      tone: severityTone,
+                    ),
                     _MetaChip(label: statusLabel, tone: statusTone),
                     if (event.confidence != null)
                       _MetaChip(
@@ -1507,12 +1515,16 @@ class _RecordingBlockTile extends StatelessWidget {
     final scheme = theme.colorScheme;
     final start = recording.startTime?.toLocal();
     final end = recording.endTime?.toLocal();
-    final entries = _timelineEntries(events: events, clips: clips).where((entry) {
+    final entries = _timelineEntries(events: events, clips: clips).where((
+      entry,
+    ) {
       if (start == null || end == null) return false;
       final timestamp = entry.timestamp.toLocal();
       return !timestamp.isBefore(start) && timestamp.isBefore(end);
     }).toList();
-    final playableEntries = entries.where((entry) => entry.clip != null).toList();
+    final playableEntries = entries
+        .where((entry) => entry.clip != null)
+        .toList();
     final isBusy = playingRecordingId == recording.recordingId;
 
     return SizedBox(
@@ -1522,92 +1534,95 @@ class _RecordingBlockTile extends StatelessWidget {
         onTap: () => onPlayRecording(recording),
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerLow,
-          borderRadius: AppRadius.mdAll,
-          border: Border.all(color: scheme.outlineVariant),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    start == null || end == null
-                        ? 'Recording block'
-                        : '${_formatTimelineTime(start)} - ${_formatTimelineTime(end)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.mono(
-                      color: scheme.onSurface,
-                    ).copyWith(fontWeight: FontWeight.w700, fontSize: 12),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: AppRadius.mdAll,
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      start == null || end == null
+                          ? 'Recording block'
+                          : '${_formatTimelineTime(start)} - ${_formatTimelineTime(end)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.mono(
+                        color: scheme.onSurface,
+                      ).copyWith(fontWeight: FontWeight.w700, fontSize: 12),
+                    ),
                   ),
-                ),
-                if (isBusy)
-                  const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  _PlaybackBadge(text: _formatDuration(recording.durationSeconds)),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  const markerSize = 16.0;
-                  final width = constraints.maxWidth;
-                  final durationMs = start == null || end == null
-                      ? 1.0
-                      : end.difference(start).inMilliseconds.toDouble();
-                  return Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        top: 18,
-                        child: Container(
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: scheme.primary.withValues(alpha: 0.18),
-                            borderRadius: AppRadius.pillAll,
+                  if (isBusy)
+                    const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    _PlaybackBadge(
+                      text: _formatDuration(recording.durationSeconds),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    const markerSize = 16.0;
+                    final width = constraints.maxWidth;
+                    final durationMs = start == null || end == null
+                        ? 1.0
+                        : end.difference(start).inMilliseconds.toDouble();
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: 18,
+                          child: Container(
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: scheme.primary.withValues(alpha: 0.18),
+                              borderRadius: AppRadius.pillAll,
+                            ),
                           ),
                         ),
-                      ),
-                      for (final entry in entries)
-                        _TimelineMarker(
-                          entry: entry,
-                          playingClipId: playingClipId,
-                          left: start == null
-                              ? 0
-                              : (((entry.timestamp.toLocal()
-                                              .difference(start)
-                                              .inMilliseconds /
-                                          durationMs) *
-                                      (width - markerSize))
-                                  .clamp(0.0, width - markerSize)),
-                          size: markerSize,
-                          onPlayClip: onPlayClip,
-                        ),
-                    ],
-                  );
-                },
+                        for (final entry in entries)
+                          _TimelineMarker(
+                            entry: entry,
+                            playingClipId: playingClipId,
+                            left: start == null
+                                ? 0
+                                : (((entry.timestamp
+                                                  .toLocal()
+                                                  .difference(start)
+                                                  .inMilliseconds /
+                                              durationMs) *
+                                          (width - markerSize))
+                                      .clamp(0.0, width - markerSize)),
+                            size: markerSize,
+                            onPlayClip: onPlayClip,
+                          ),
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
-            Text(
-              playableEntries.isEmpty
-                  ? recording.status
-                  : '${playableEntries.length} event clips',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: scheme.onSurfaceVariant,
+              Text(
+                playableEntries.isEmpty
+                    ? recording.status
+                    : '${playableEntries.length} event clips',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
-            ),
-          ],
+            ],
           ),
         ),
       ),
@@ -1648,7 +1663,9 @@ class _PlaybackTimelineBlock extends StatelessWidget {
       final timestamp = entry.timestamp.toLocal();
       return !timestamp.isBefore(windowStart) && timestamp.isBefore(windowEnd);
     }).toList();
-    final playableCount = visibleEntries.where((entry) => entry.clip != null).length;
+    final playableCount = visibleEntries
+        .where((entry) => entry.clip != null)
+        .length;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -1709,12 +1726,14 @@ class _PlaybackTimelineBlock extends StatelessWidget {
                       _TimelineMarker(
                         entry: entry,
                         playingClipId: playingClipId,
-                        left: (((entry.timestamp.toLocal()
-                                        .difference(windowStart)
-                                        .inMilliseconds /
-                                    windowMs) *
-                                (width - markerSize))
-                            .clamp(0.0, width - markerSize)),
+                        left:
+                            (((entry.timestamp
+                                            .toLocal()
+                                            .difference(windowStart)
+                                            .inMilliseconds /
+                                        windowMs) *
+                                    (width - markerSize))
+                                .clamp(0.0, width - markerSize)),
                         size: markerSize,
                         onPlayClip: onPlayClip,
                       ),
@@ -1743,11 +1762,7 @@ class _PlaybackTimelineBlock extends StatelessWidget {
 }
 
 class _TimelineEntry {
-  const _TimelineEntry({
-    required this.timestamp,
-    this.event,
-    this.clip,
-  });
+  const _TimelineEntry({required this.timestamp, this.event, this.clip});
 
   final DateTime timestamp;
   final SecurityEvent? event;
@@ -1810,7 +1825,8 @@ class _TimelineMarker extends StatelessWidget {
       left: left,
       top: 8,
       child: Tooltip(
-        message: '${entry.label} - ${_formatTimelineTime(entry.timestamp.toLocal())}',
+        message:
+            '${entry.label} - ${_formatTimelineTime(entry.timestamp.toLocal())}',
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: clip == null || isBusy ? null : () => onPlayClip(clip),
@@ -1843,7 +1859,9 @@ class _TimelineMarker extends StatelessWidget {
                 : Icon(
                     _eventIcon(entry.event?.eventType, clip?.clipType),
                     size: 12,
-                    color: clip == null ? scheme.onSurfaceVariant : Colors.white,
+                    color: clip == null
+                        ? scheme.onSurfaceVariant
+                        : Colors.white,
                   ),
           ),
         ),
@@ -1851,6 +1869,7 @@ class _TimelineMarker extends StatelessWidget {
     );
   }
 }
+
 IconData _eventIcon(String? eventType, String? clipType) {
   final value = (eventType ?? clipType ?? '').toLowerCase();
   if (value.contains('person') || value.contains('human')) {
@@ -1872,7 +1891,8 @@ IconData _eventIcon(String? eventType, String? clipType) {
 }
 
 String _eventLabel(String? eventType, String clipType) {
-  final raw = eventType ?? (clipType == 'event' ? 'activity_detected' : clipType);
+  final raw =
+      eventType ?? (clipType == 'event' ? 'activity_detected' : clipType);
   return raw
       .replaceAll('_', ' ')
       .split(' ')
@@ -1880,6 +1900,7 @@ String _eventLabel(String? eventType, String clipType) {
       .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
       .join(' ');
 }
+
 class _PlaybackClipTile extends StatelessWidget {
   const _PlaybackClipTile({
     required this.clip,
@@ -2049,7 +2070,8 @@ class _RecordingPlaybackSheet extends StatelessWidget {
                 Expanded(
                   child: SingleChildScrollView(
                     padding: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).viewInsets.bottom +
+                      bottom:
+                          MediaQuery.of(context).viewInsets.bottom +
                           AppSpacing.lg,
                     ),
                     child: Column(
@@ -2063,8 +2085,14 @@ class _RecordingPlaybackSheet extends StatelessWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(title, style: theme.textTheme.titleMedium),
-                                  Text(expires, style: theme.textTheme.bodySmall),
+                                  Text(
+                                    title,
+                                    style: theme.textTheme.titleMedium,
+                                  ),
+                                  Text(
+                                    expires,
+                                    style: theme.textTheme.bodySmall,
+                                  ),
                                 ],
                               ),
                             ),
@@ -2093,7 +2121,9 @@ class _RecordingPlaybackSheet extends StatelessWidget {
                             children: [
                               _PlaybackMetaRow(
                                 label: 'Duration',
-                                value: _formatDuration(recording.durationSeconds),
+                                value: _formatDuration(
+                                  recording.durationSeconds,
+                                ),
                               ),
                               _PlaybackMetaRow(
                                 label: 'Start',
@@ -2128,6 +2158,7 @@ class _RecordingPlaybackSheet extends StatelessWidget {
     );
   }
 }
+
 class _PlaybackSheet extends StatelessWidget {
   const _PlaybackSheet({
     required this.clip,
@@ -2165,7 +2196,8 @@ class _PlaybackSheet extends StatelessWidget {
                 Expanded(
                   child: SingleChildScrollView(
                     padding: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).viewInsets.bottom +
+                      bottom:
+                          MediaQuery.of(context).viewInsets.bottom +
                           AppSpacing.lg,
                     ),
                     child: Column(
@@ -2183,7 +2215,10 @@ class _PlaybackSheet extends StatelessWidget {
                                     'Playback clip',
                                     style: theme.textTheme.titleMedium,
                                   ),
-                                  Text(expires, style: theme.textTheme.bodySmall),
+                                  Text(
+                                    expires,
+                                    style: theme.textTheme.bodySmall,
+                                  ),
                                 ],
                               ),
                             ),
@@ -2257,6 +2292,7 @@ class _PlaybackSheet extends StatelessWidget {
     );
   }
 }
+
 class _PlaybackMetaRow extends StatelessWidget {
   const _PlaybackMetaRow({required this.label, required this.value});
 
@@ -2294,6 +2330,7 @@ String _formatTimelineTime(DateTime value) {
   final local = value.toLocal();
   return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
 }
+
 String _formatDuration(int? seconds) {
   if (seconds == null || seconds <= 0) return '--:--';
   final minutes = seconds ~/ 60;
@@ -2332,7 +2369,9 @@ class _CameraActionBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final actions = <_CameraAction>[
       _CameraAction(
-        icon: isRecording ? Icons.stop_circle_outlined : Icons.videocam_outlined,
+        icon: isRecording
+            ? Icons.stop_circle_outlined
+            : Icons.videocam_outlined,
         label: isRecording ? 'Stop' : 'Record',
         onTap: busyKey == 'recording' ? null : onRecord,
         active: isRecording,
@@ -2952,4 +2991,3 @@ class _AgentToggleTile extends StatelessWidget {
     );
   }
 }
-

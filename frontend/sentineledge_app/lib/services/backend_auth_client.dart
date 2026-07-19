@@ -8,7 +8,11 @@ import 'backend_http_client.dart';
 String? _backendSessionCookie;
 
 Map<String, String> _withSessionCookie([Map<String, String>? headers]) {
-  return <String, String>{...?headers, 'Cookie': ?_backendSessionCookie};
+  return <String, String>{
+    ...?headers,
+    'Cookie': ?_backendSessionCookie,
+    if (!kIsWeb && _backendSessionCookie != null) 'Origin': BackendAuthClient.baseUrl,
+  };
 }
 
 void _captureSessionCookie(http.Response response) {

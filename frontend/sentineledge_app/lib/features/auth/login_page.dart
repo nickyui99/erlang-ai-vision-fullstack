@@ -3,10 +3,10 @@ import 'dart:math' as math;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../app/session_controller.dart';
+import '../../shared/external_link.dart';
 import '../../design/app_colors.dart';
 import '../../design/app_shadows.dart';
 import '../../design/app_spacing.dart';
@@ -170,7 +170,7 @@ class _LoginPageState extends State<LoginPage> {
       onGoogleSignIn: _signInWithGoogleProvider,
       onEmailSignIn: _signInWithEmailPassword,
       onEmailCreate: _createEmailPasswordAccount,
-      onBackToLanding: kIsWeb ? () => context.go('/') : null,
+      onBackToLanding: kIsWeb ? returnToPublicLanding : null,
     );
   }
 }
