@@ -4,8 +4,8 @@ Login is Firebase-backed and the backend rejects any token whose email is not
 verified (see app/services/auth_service.upsert_firebase_user). A normally
 self-registered email/password account is *unverified*, so a judge would get
 stuck on "please verify your email". This script sidesteps that by minting the
-account through the Firebase Admin SDK with ``email_verified=True`` and a known
-password, then seeding a demo dataset for that account: a spread of cameras,
+account through the Firebase Admin SDK with ``email_verified=True`` and a
+caller-supplied password, then seeding a demo dataset for that account: a spread of cameras,
 one per use case, each with an armed agent + a sample event so the
 dashboard is populated the moment they sign in. You stream a real demo video
 into any camera later via the laptop edge (each camera has its own edge_token).
@@ -26,6 +26,7 @@ Usage
   $env:PYTHONPATH = 'backend'
 
   # Local SQLite (data/erlang_demo.db is picked up from .env):
+  $env:JUDGE_ACCOUNT_PASSWORD = '<generate-a-unique-password>'
   python scripts/create_judge_account.py
 
   # Production RDS (point DATABASE_URL at RDS; an explicit env var always wins
@@ -34,8 +35,9 @@ Usage
   $env:DATABASE_URL = 'postgresql+asyncpg://USER:PASSWORD@HOST:5432/erlang'
   python scripts/create_judge_account.py
 
-  # Override the credentials handed to judges:
-  python scripts/create_judge_account.py --email judge@erlang.ai --password "Judge2026!" --name "Hackathon Judge"
+  # Override the judge email/name. Supply the password through a protected
+  # environment variable or --password; it is never printed by this script:
+  python scripts/create_judge_account.py --email judge@erlang.ai --name "Hackathon Judge"
 
 Firebase Admin credentials + the target database both come from the same config
 loader the app uses (app.core.config -> KMS), so no extra wiring is needed.
@@ -45,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -71,7 +74,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
 
 # --- Defaults handed to judges ------------------------------------------------
 DEFAULT_EMAIL = "judge@erlang.ai"
-DEFAULT_PASSWORD = "ErlangVision2026!"
 DEFAULT_NAME = "Hackathon Judge"
 DEFAULT_API_BASE = "http://localhost:8000"
 
@@ -495,6 +497,7 @@ async def _run(
     uid_override: str | None,
     api_base: str,
     reset: bool,
+    print_edge_tokens: bool,
 ) -> None:
     if skip_firebase:
         uid = uid_override or f"judge-demo-uid-{email}"
@@ -505,26 +508,29 @@ async def _run(
     owner_id, edge_tokens = await seed_database(uid, email, name, reset=reset)
 
     print("\n=== judge demo account ready ===")
-    print(f"  database    : {settings.database_url}")
     print(f"  user_id     : {owner_id}")
     print(f"  firebase uid: {uid}")
-    print("\n  Judges sign in on the app's 'Sign in with email' form:")
-    print(f"    email    : {email}")
-    print(f"    password : {password}")
+    print("\n  Judge email:")
+    print(f"    {email}")
+    print("  The password is intentionally not printed.")
 
     print(f"\n  Seeded {len(CAMERAS)} demo cameras (each with an armed agent + sample event):")
     for cam in CAMERAS:
         print(f"    • {cam['name']} [{cam['location']}]")
         print(f"        use case  : {cam['use_case']}")
         print(f"        device_id : dev_judge_{cam['key']}")
-        print(f"        edge_token: {edge_tokens[cam['key']]}")
+        if print_edge_tokens:
+            print(f"        edge_token: {edge_tokens[cam['key']]}")
+        else:
+            print("        edge_token: [not printed; use --print-edge-tokens only in a private terminal]")
 
     print("\n  --- Place YOUR video into a camera later (run in SentinelEdge_LaptopEdge/src) ---")
     print("  Two terminals per camera — the bridge forwards frames to the cloud so the app's")
     print("  live view shows your footage, and the pipeline runs its agent on it:")
     example = CAMERAS[0]
     print(f"\n    # Terminal A — bridge for '{example['name']}':")
-    print(f"    python transport/edge_bridge.py --edge-token {edge_tokens[example['key']]} \\")
+    token = edge_tokens[example["key"]] if print_edge_tokens else "<PRIVATE_EDGE_TOKEN>"
+    print(f"    python transport/edge_bridge.py --edge-token {token} \\")
     print(f"        --api-base-url {api_base} --log-level INFO")
     print("    # Terminal B — feed your video in as the device:")
     print("    python transport/simulate_device.py --video <YOUR_VIDEO.mp4> --loop-video --tone")
@@ -544,7 +550,11 @@ async def _run(
 def main() -> None:
     ap = argparse.ArgumentParser(description="Create a pre-verified demo login + seed demo data for judges.")
     ap.add_argument("--email", default=DEFAULT_EMAIL, help=f"login email (default: {DEFAULT_EMAIL})")
-    ap.add_argument("--password", default=DEFAULT_PASSWORD, help="login password")
+    ap.add_argument(
+        "--password",
+        default=os.environ.get("JUDGE_ACCOUNT_PASSWORD"),
+        help="required Firebase password; defaults to JUDGE_ACCOUNT_PASSWORD and is never printed",
+    )
     ap.add_argument("--name", default=DEFAULT_NAME, help="display name")
     ap.add_argument(
         "--skip-firebase",
@@ -562,7 +572,15 @@ def main() -> None:
         action="store_true",
         help="delete stale dev_judge_* cameras not in the current catalog (cascades their data).",
     )
+    ap.add_argument(
+        "--print-edge-tokens",
+        action="store_true",
+        help="print generated edge tokens; use only in a private terminal, never CI or shared logs",
+    )
     args = ap.parse_args()
+
+    if not args.skip_firebase and not args.password:
+        ap.error("provide --password or set JUDGE_ACCOUNT_PASSWORD before creating/updating the Firebase judge account")
 
     asyncio.run(
         _run(
@@ -573,6 +591,7 @@ def main() -> None:
             args.uid,
             args.api_base_url,
             args.reset,
+            args.print_edge_tokens,
         )
     )
 
