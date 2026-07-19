@@ -88,7 +88,7 @@
 - [ ] Add expected results to every setup step.
 - [x] Add troubleshooting guidance.
 - [ ] Configure the GitHub repository description.
-- [ ] Configure the GitHub homepage with the live-demo URL.
+- [x] Configure the GitHub homepage with the live-demo URL.
 - [ ] Add GitHub topics such as `qwen`, `edge-ai`, `iot`, `flutter`, `fastapi`, and `alibaba-cloud`.
 - [X] Confirm the MIT license appears in GitHub’s About section.
 
