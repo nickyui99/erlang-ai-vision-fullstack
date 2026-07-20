@@ -37,9 +37,18 @@ Submission for the **Qwen Cloud Global Hackathon — Track 5: EdgeAgent**.
 3. Inspect the direct [Alibaba Cloud deployment script](scripts/deployment/backend.ps1): it builds the FastAPI container, pushes it to ACR, and creates or updates the ECI container group in `ap-southeast-3`.
 4. For the complete evidence map, expected outcomes, and three-repository layout, read the [judge guide](JUDGES.md).
 
-![Physical ESP32-S3 pan–tilt camera prototype](docs/assets/pan-tilt-camera-prototype.png)
+![Animated ESP32-S3 pan–tilt camera prototype](docs/assets/pan-tilt-camera-investigation.gif)
 
-*Physical proof: the ESP32-S3 camera prototype with its pan–tilt servo assembly. Qwen-directed camera movement is constrained, rate-limited, and written to the audit trail before it is relayed to the edge bridge.*
+*Recorded physical proof: the ESP32-S3 camera executes pan–tilt servo motion. In the deployed investigation flow, a Qwen-requested camera command is validated, clamped to safe movement limits, rate-limited, audited, and then relayed through the edge bridge.*
+
+### Measured edge evidence
+
+| Evidence | Result | Exact test setup |
+|---|---:|---|
+| **Local filtering bandwidth** | **106.99 MB → 1.30 MB** cloud-bound data (**98.8% lower**, about **83×**) | 180-second real LaptopEdge pipeline run on an AMD Ryzen 7 5800U, CPU-only, Windows 11. Simulated 640×480 JPEG camera at 15 FPS; 2,703 frames fed, 883 processed, 18 candidates, and 14 cloud escalations. The upstream byte count used an in-memory egress stub, so this is a pipeline measurement—not a universal WAN claim. |
+| **Qwen Cloud verification** | **2.47 s p50** · **2.59 s p95** | Five sequential real `qwen3.7-plus` image-verification calls to DashScope International on July 19, 2026, using one fixed 18,059-byte front-door JPEG, a fixed person-lingering rule, and `enable_thinking: false`. |
+
+Reproduce the local pipeline measurement with `python scripts/bench_pipeline.py --duration 180 --json results.json` in [LaptopEdge](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge); see its [full benchmark methodology](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge/blob/main/docs/BENCHMARKS.md).
 
 ### Qwen models used
 
