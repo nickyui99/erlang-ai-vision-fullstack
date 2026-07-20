@@ -14,8 +14,7 @@ const _xiaoEsp32Asset = 'assets/landing/pipeline/xiao-esp32-s3.webp';
 const _ultralyticsAsset = 'assets/landing/pipeline/ultralytics-yolo26.webp';
 const _qwenAsset = 'assets/landing/pipeline/qwen.webp';
 const _alibabaCloudAsset = 'assets/landing/pipeline/alibaba-cloud.webp';
-// Add the public watch URL after the hackathon demo is uploaded.
-const _youtubeDemoUrl = '';
+const _youtubeDemoUrl = 'https://www.youtube.com/watch?v=KhKXFZ7uV64';
 const _architectureFlowAsset =
     'assets/landing/erlang-ai-vision-architecture-flow.webp';
 const _cloudArchitectureAsset = 'assets/landing/erlang-cloud-architecture.webp';

@@ -24,7 +24,7 @@ Submission for the **Qwen Cloud Global Hackathon — Track 5: EdgeAgent**.
 |---|---|
 | **Live application** | [erlang-vision.duckdns.org](https://erlang-vision.duckdns.org) |
 | **Android judge build** | [Download signed APK](https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/download/v1.0.0-judge/app-release.apk) · [release notes](https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/tag/v1.0.0-judge) |
-| **Demo video** | *coming before submission — will be linked here and on Devpost* |
+| **Demo video** | [Watch on YouTube](https://www.youtube.com/watch?v=KhKXFZ7uV64) |
 | **Repositories** | [Fullstack](https://github.com/nickyui99/erlang-ai-vision-fullstack) (cloud + app, this repo) · [LaptopEdge](https://github.com/KennethChua1998/SentinelEdge_LaptopEdge) (edge bridge) · [IOT](https://github.com/KennethChua1998/SentinelEdge_IOT) (ESP32-S3 firmware) |
 | **Deployment** | Alibaba Cloud `ap-southeast-3` (Kuala Lumpur): ECI container (FastAPI + Caddy), OSS (web app + media), RDS PostgreSQL, ACR — [architecture and deployment proof](docs/deployment/alibaba_cloud_architecture.md) |
 | **Team** | Nicholas Ooi ([@nickyui99](https://github.com/nickyui99)) · Kenneth Chua ([@KennethChua1998](https://github.com/KennethChua1998)) · Fang Wei Lim · Ng Wei Kiat|

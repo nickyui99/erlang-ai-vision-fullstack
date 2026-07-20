@@ -199,22 +199,28 @@ Claims about "efficient edge AI" are cheap, so we benchmarked ours. The harness 
 
 The models under test are the production edge stack: **YOLO26-nano** for stage-1 detection, and **Qwen3.5 0.8B** (via Ollama, thinking off, 512 px keyframes, kept resident in memory) as the stage-2 triage VLM — with **Qwen3.5 4B** on standby as the offline-mode authority, and DashScope's **Qwen-Plus** handling cloud verification beyond the edge. Hardware: an ordinary laptop (AMD Ryzen 7 5800U, CPU-only inference — no GPU anywhere in these numbers).
 
-**Bandwidth — the headline.** Over a 3-minute window on a deliberately worst-case scene (a person and a dog visible almost continuously, so agents fire at their cooldown rate the entire time):
+**Measured results.** We measured the edge pipeline and the live cloud verifier separately, so we do not blur a byte-accounting benchmark into a production-WAN claim.
 
-| Direction | Volume | Rate |
-|---|---|---|
-| Camera → edge (what stream-everything would upload) | 107 MB | 2.14 GB/h |
-| Edge → cloud (event JSON + evidence clips) | 1.3 MB | ~26 MB/h |
+![Measured EdgeAgent evaluation results](../assets/edgeagent-measured-results.png)
 
-That is a **98.8% bandwidth reduction (~83× less)** — and it's a floor, not an average: a quiet scene sends nothing at all. Of 2,703 frames fed in, 18 became stage-1 candidates and only 14 were escalated with a ~10-second evidence clip; everything else never left the building.
+The visual summary is supported by the precise values and scope in the table below.
 
-**Latency.** Stage-1 detection runs at p50 **114 ms** per frame, so the camera reacts to the world in near real time. The local Qwen triage verdict takes p50 **8.7 s** per event on pure CPU (p95 11.1 s), putting the full candidate-detected → event-escalated path at p50 **12.9 s**. The breakdown says this is a hardware floor, not an architecture one — the same triage call runs in ~1–2 s with GPU offload, which is exactly why the roadmap points at Jetson-class edge hardware.
+| Measure | Result | Scope |
+|---|---:|---|
+| Camera → edge ingress | 106.99 MB / 180 s | Deliberately busy simulated VGA @ 15 FPS scene on an AMD Ryzen 7 5800U, CPU-only. |
+| Edge → cloud egress | 1.30 MB / 180 s | Event JSON + evidence clips recorded by a byte-counting cloud-egress stub. |
+| Cloud-bound bandwidth | **98.8% lower** (about **83×**) | 2,703 captured frames; 18 Stage-1 candidates; 14 cloud-bound escalation records. Quiet scenes send no event evidence. |
+| Candidate → cloud escalation | **12.9 s p50** · **20.7 s p95** | Includes local triage and routing. It is not a dedicated production-WAN latency measurement. |
+| Local Qwen triage | **8.7 s p50** · **11.1 s p95** | Qwen3.5 0.8B via Ollama, CPU-only, 512 px keyframes. |
+| Live Qwen Cloud verification | **2.47 s p50** · **2.59 s p95** | Five sequential real `qwen3.7-plus` DashScope International image-verification calls on the same 18,059-byte front-door JPEG and fixed rule prompt. |
+| Approx. Qwen Cloud cost / verified event | **US$0.00027** | Sample used 314 input + 73 output tokens; based on the DashScope 0–256K token tier and a 6.7758 CNY/USD reference rate. |
+| False-positive reduction | **Not yet measured** | The 18 → 14 filtering funnel is not a labelled false-positive rate; a threshold-only labelled baseline is still required. |
 
-**Efficiency.** Each locally-triaged event costs ~350 tokens on the local model — meaning a *rejected* false positive costs the cloud precisely zero.
+Stage-1 detection runs at p50 **114 ms per frame**, so the camera reacts to the world in near real time. Each locally-triaged event consumes roughly **350 local-model tokens**, meaning a rejected candidate creates **zero cloud-model cost**. The candidate-to-escalation number is a hardware floor, not an architecture limit: GPU offload is the reason the roadmap points to Jetson-class edge hardware.
 
 **Correctness.** 148 backend tests passing, Flutter analysis clean, and the edge pipeline's tests run against the real models (YOLO, YAMNet, Qwen via Ollama) rather than mocks.
 
-Full methodology, tables, and caveats live in the edge repo's `docs/BENCHMARKS.md`. Not yet measured — and we'd rather say so than hand-wave: cloud verification latency, cost per verified event, and false-positive reduction against a threshold-only baseline (which needs labeled footage).
+Full methodology and caveats live in the [edge benchmark report](https://github.com/KennethChua1998/SentinelEdge_LaptopEdge/blob/main/docs/BENCHMARKS.md). Qwen pricing and the USD conversion assumptions are linked in the [project README](../../README.md#-measured-edgeagent-results). The only result still intentionally unclaimed is false-positive reduction against a threshold-only labelled baseline.
 
 ## Potential Real-World Impact
 
@@ -223,7 +229,7 @@ The pattern generalizes well beyond a shop's rear entrance:
 - **Small businesses** get after-hours monitoring that distinguishes a loiterer from a passer-by — without paying for a human monitoring service or drowning in motion alerts.
 - **Home care**: "alert me if my baby cries," "tell me if grandma hasn't appeared in the kitchen by 10 a.m." — rules that today require dedicated single-purpose devices.
 - **Privacy-sensitive settings** benefit from the edge-first split: continuous footage stays on the local network, and only event-tied evidence ever reaches the cloud.
-- **Cost**: cloud vision models are far too expensive to run on every frame. Local triage means Qwen-Plus is consulted only for the events that matter. *(Estimated cost per verified event: [MEASURE].)*
+- **Cost**: cloud vision models are too expensive to run on every frame. Local triage means Qwen-Plus is consulted only for the events that matter — the measured sampled cloud-verification estimate is **US$0.00027 per event**, rather than a cloud call for every frame.
 
 The broader point: **natural language is the right configuration interface for the physical world.** The dwell times, confidence thresholds, and schedules still exist — but they've become compiler output, not user burden.
 
@@ -248,7 +254,7 @@ The build spanned all four layers — firmware, edge pipeline, cloud backend, an
 
 ## What Comes Next
 
-- **Measure the rest**: edge-side bandwidth and latency are benchmarked above; still open are cloud verification latency, cost per verified event, and false-positive reduction against a threshold-only baseline.
+- **Measure the remaining correctness baseline**: edge bandwidth/latency, live cloud verification latency, and sampled cloud cost are measured above; false-positive reduction against a threshold-only labelled baseline remains open.
 - **Harden for weak networks**: event queueing and replay across disconnects, and full local operation during cloud outages.
 - **Move the edge tier off the laptop** onto dedicated single-board hardware (Jetson/RK3588-class) — the laptop was the right prototype, not the destination.
 - **Richer investigations**: multi-camera correlation, longer temporal context, and human-confirmation gates for higher-risk physical actions.

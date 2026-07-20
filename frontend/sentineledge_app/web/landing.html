@@ -288,6 +288,7 @@
       aspect-ratio: 16 / 9; background: var(--n900); border: 1px solid var(--n200);
       box-shadow: 0 18px 30px rgba(0,0,0,0.16);
     }
+    .video-card iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
     .video-card > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .video-card .shade { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.15) 20%, rgba(8,11,18,0.8) 100%); }
     .yt-pill {
@@ -619,19 +620,15 @@
         <h2>See the full agent workflow in under two minutes.</h2>
         <p>Follow a camera event from local edge detection through Qwen verification, an auditable verdict, and the operator response.</p>
       </div>
-      <a class="video-card" href="/console" aria-label="Launch the Erlang AI Vision interactive demo">
-        <img src="assets/assets/landing/edge-ai-scenario.webp" alt="">
-        <div class="shade"></div>
-        <span class="yt-pill"><span class="mi" style="font-size:18px">&#xf00a0;</span>YOUTUBE DEMO</span>
-        <span class="play-btn"><span class="mi">&#xf00a0;</span></span>
-        <div class="video-caption">
-          <div>
-            <div class="t">From natural-language rule to verified alert</div>
-            <div class="s">Interactive demo available now. YouTube upload pending.</div>
-          </div>
-          <span class="mi">&#xf0034;</span>
-        </div>
-      </a>
+      <div class="video-card">
+        <iframe
+          src="https://www.youtube-nocookie.com/embed/KhKXFZ7uV64?rel=0"
+          title="Erlang AI Vision product walkthrough"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allowfullscreen>
+        </iframe>
+      </div>
     </div>
   </section>
 
