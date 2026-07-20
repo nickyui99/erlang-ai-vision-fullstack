@@ -50,6 +50,22 @@ Submission for the **Qwen Cloud Global Hackathon — Track 5: EdgeAgent**.
 
 Reproduce the local pipeline measurement with `python scripts/bench_pipeline.py --duration 180 --json results.json` in [LaptopEdge](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge); see its [full benchmark methodology](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge/blob/main/docs/BENCHMARKS.md).
 
+### Investigation loop: rule → evidence → action → verification
+
+```mermaid
+flowchart LR
+    Rule["1. Plain-language monitoring rule"] --> Edge["2. Local edge filter<br/>YOLO + YAMNet + Qwen triage"]
+    Edge --> Cloud["3. Qwen Cloud verifies<br/>selected evidence"]
+    Cloud --> More{"Need another view?"}
+    More -- "audited tool request" --> Guard["4. Guardrails<br/>permission · servo clamp · rate limit"]
+    Guard --> Servo["5. ESP32-S3 pan/tilt<br/>servo moves"]
+    Servo --> Fresh["6. Fresh snapshot"]
+    Fresh --> Cloud
+    More -- "no, or re-check complete" --> Event["7. Verified event<br/>clip · alert · audit trail"]
+```
+
+The GIF above proves the physical servo step; the live demo and audit trail show the full guarded investigation loop.
+
 ### Qwen models used
 
 | Model | Where it runs | What it does |
