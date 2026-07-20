@@ -20,6 +20,23 @@
 
 Submission for the **Qwen Cloud Global Hackathon — Track 5: EdgeAgent**.
 
+### From motion alerts to investigated evidence
+
+Most cameras detect movement but do not understand whether it matters. Repeated
+generic alerts create alert fatigue, while cloud-first systems continuously
+upload more footage than a useful decision requires.
+
+With Erlang AI Vision, a user starts with one sentence:
+
+> **“Alert me if Grandma falls in the living room.”**
+
+The edge continuously runs video and audio perception locally. Only selected
+candidate evidence reaches Qwen Cloud for contextual verification. When the
+first view is inconclusive, Qwen can request a guarded pan/tilt adjustment and
+a fresh snapshot before returning a verified alert with an explanation and
+audit trail. Continuous footage stays on the local network; the cloud reasons
+about moments that need it.
+
 | | |
 |---|---|
 | **Live application** | [erlang-vision.duckdns.org](https://erlang-vision.duckdns.org) |
@@ -30,11 +47,28 @@ Submission for the **Qwen Cloud Global Hackathon — Track 5: EdgeAgent**.
 | **Deployment** | Alibaba Cloud `ap-southeast-3` (Kuala Lumpur): ECI container (FastAPI + Caddy), OSS (web app + media), RDS PostgreSQL, ACR — [deployment code proof](scripts/deployment/backend.ps1) · [architecture](docs/deployment/alibaba_cloud_architecture.md) |
 | **Team** | Nicholas Ooi ([@nickyui99](https://github.com/nickyui99)) · Kenneth Chua ([@KennethChua1998](https://github.com/KennethChua1998)) · Fang Wei Lim · Ng Wei Kiat|
 
+### Verify the live Alibaba Cloud backend
+
+```bash
+curl -fsS https://erlang-vision.duckdns.org/healthz
+# {"data":{"status":"ok"}}
+
+curl -fsS https://erlang-vision.duckdns.org/readyz
+# {"data":{"status":"ready","database":"ok"}}
+```
+
+Both endpoints returned HTTP 200 when verified on July 20, 2026. They prove
+that the production backend is reachable and its database dependency is ready.
+The direct [deployment script](scripts/deployment/backend.ps1) demonstrates the
+Alibaba Cloud ACR and ECI provisioning, while the
+[cloud architecture](docs/deployment/alibaba_cloud_architecture.md) maps the
+running service to ECI, RDS PostgreSQL, OSS, and ACR.
+
 ### ⚡ Judge proof in 60 seconds
 
 1. Watch the [demo video](https://www.youtube.com/watch?v=D-ClCQNNbQA), then open the [live application](https://erlang-vision.duckdns.org).
 2. Sign in with the judge account supplied privately in Devpost. The pre-seeded workspace includes cameras, armed agents, events, clips, and alerts—no hardware is required for this path.
-3. Inspect the direct [Alibaba Cloud deployment script](scripts/deployment/backend.ps1): it builds the FastAPI container, pushes it to ACR, and creates or updates the ECI container group in `ap-southeast-3`.
+3. Run the live health and readiness checks above, then inspect the direct [Alibaba Cloud deployment script](scripts/deployment/backend.ps1).
 4. For the complete evidence map, expected outcomes, and three-repository layout, read the [judge guide](JUDGES.md).
 
 ![Animated ESP32-S3 pan–tilt camera prototype](docs/assets/pan-tilt-camera-investigation.gif)
