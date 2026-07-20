@@ -12,7 +12,7 @@
 ![Edge](https://img.shields.io/badge/edge-ESP32--S3-E7352C)
 ![AI](https://img.shields.io/badge/AI-Qwen--VL%20%2B%20YOLO-purple)
 
-[**Quickstart**](#-quickstart) · [**Architecture**](#️-architecture) · [**Docs**](#-documentation)
+[**Judge guide**](JUDGES.md) · [**Quickstart**](#-quickstart) · [**Architecture**](#️-architecture) · [**Build journey**](https://medium.com/@nicholasooi10/from-passive-cctv-to-intelligent-surveillance-agents-building-erlang-ai-vision-with-qwen-and-ffd1d16ebfb1?sharedUserId=nicholasooi10) · [**Docs**](#-documentation)
 
 </div>
 
@@ -24,10 +24,22 @@ Submission for the **Qwen Cloud Global Hackathon — Track 5: EdgeAgent**.
 |---|---|
 | **Live application** | [erlang-vision.duckdns.org](https://erlang-vision.duckdns.org) |
 | **Android judge build** | [Download signed APK](https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/download/v1.0.0-judge/app-release.apk) · [release notes](https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/tag/v1.0.0-judge) |
-| **Demo video** | [Watch on YouTube](https://www.youtube.com/watch?v=KhKXFZ7uV64) |
+| **Demo video** | [Watch on YouTube](https://www.youtube.com/watch?v=D-ClCQNNbQA) |
+| **Build journey** | [From Passive CCTV to Intelligent Surveillance Agents](https://medium.com/@nicholasooi10/from-passive-cctv-to-intelligent-surveillance-agents-building-erlang-ai-vision-with-qwen-and-ffd1d16ebfb1?sharedUserId=nicholasooi10) |
 | **Repositories** | [Fullstack](https://github.com/nickyui99/erlang-ai-vision-fullstack) (cloud + app, this repo) · [LaptopEdge](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge) (edge bridge) · [IOT](https://github.com/KennethChua1998/ErlangAIVision_IOT) (ESP32-S3 firmware) |
 | **Deployment** | Alibaba Cloud `ap-southeast-3` (Kuala Lumpur): ECI container (FastAPI + Caddy), OSS (web app + media), RDS PostgreSQL, ACR — [deployment code proof](scripts/deployment/backend.ps1) · [architecture](docs/deployment/alibaba_cloud_architecture.md) |
 | **Team** | Nicholas Ooi ([@nickyui99](https://github.com/nickyui99)) · Kenneth Chua ([@KennethChua1998](https://github.com/KennethChua1998)) · Fang Wei Lim · Ng Wei Kiat|
+
+### ⚡ Judge proof in 60 seconds
+
+1. Watch the [demo video](https://www.youtube.com/watch?v=D-ClCQNNbQA), then open the [live application](https://erlang-vision.duckdns.org).
+2. Sign in with the judge account supplied privately in Devpost. The pre-seeded workspace includes cameras, armed agents, events, clips, and alerts—no hardware is required for this path.
+3. Inspect the direct [Alibaba Cloud deployment script](scripts/deployment/backend.ps1): it builds the FastAPI container, pushes it to ACR, and creates or updates the ECI container group in `ap-southeast-3`.
+4. For the complete evidence map, expected outcomes, and three-repository layout, read the [judge guide](JUDGES.md).
+
+![Physical ESP32-S3 pan–tilt camera prototype](docs/assets/pan-tilt-camera-prototype.png)
+
+*Physical proof: the ESP32-S3 camera prototype with its pan–tilt servo assembly. Qwen-directed camera movement is constrained, rate-limited, and written to the audit trail before it is relayed to the edge bridge.*
 
 ### Qwen models used
 
@@ -55,6 +67,20 @@ open-weight VLM on a CPU laptop to frontier cloud models** behind one prompt sty
    events through audited tool calls before ruling.
 4. **Offline resilience needs the same brain smaller** — when the cloud is cut,
    `qwen3.5:4b` runs the *same kind* of agentic verification loop locally.
+
+### Track 5 — EdgeAgent evidence
+
+| Track requirement | Erlang AI Vision evidence |
+|---|---|
+| **Perceive at the edge** | The ESP32-S3 captures JPEG video and audio. The LaptopEdge bridge continuously runs YOLO and YAMNet, then uses local `qwen3.5:0.8b` to triage candidate evidence. |
+| **Reason with Qwen Cloud** | `qwen3.7-plus` verifies ambiguous events; `qwen3.7-max` turns plain-language instructions into monitoring rules and powers the MCP-connected assistant. |
+| **Act locally** | A cloud verifier can request a fresh snapshot or a safe pan/tilt adjustment. The backend validates the action, clamps movement, rate-limits it, and records the audit entry before the edge bridge relays it to the camera. |
+| **Work under bandwidth and outage constraints** | Local filtering reduced cloud-bound bytes by 98.8% in the documented benchmark. Eligible events are queued for later cloud verification, while the local degraded-mode authority remains available when cloud access is lost. |
+| **Handle privacy deliberately** | Continuous footage stays on the local network; only selected event evidence is escalated for cloud reasoning. All assistant tools are user-scoped and audited. |
+
+### What the judge demo proves—and its boundaries
+
+The hosted zero-hardware route uses server-side simulated cameras so judges can exercise the full detect → Qwen verify → event → alert flow without an ESP32. The application clearly labels degraded Qwen states rather than presenting a mock result as live verification. The physical-device route is documented in the companion [LaptopEdge](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge) and [IOT](https://github.com/KennethChua1998/ErlangAIVision_IOT) repositories; its ESP32-S3 camera, edge bridge, and pan–tilt command path are real hardware components.
 
 ### Built during the hackathon period (after May 26, 2026)
 
