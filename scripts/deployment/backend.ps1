@@ -1,12 +1,13 @@
 <#
 .SYNOPSIS
-    Build (and later push + deploy) the backend container.
+    Build, verify, and optionally deploy the backend container.
 
 .DESCRIPTION
-    Single source of truth for shipping the backend. Today it does the first
-    stage only: build backend/Dockerfile into a tagged image and verify it
-    boots by hitting /healthz. Tests are run by CI, not here. Push-to-registry
-    and remote deploy are stubbed below (-Deploy) for once a target is chosen.
+    Single source of truth for shipping the backend. It builds
+    backend/Dockerfile into a tagged image and verifies the container through
+    /healthz. When -Deploy is supplied, it pushes the image to Alibaba Cloud
+    ACR and provisions or updates the FastAPI + Caddy container group on ECI.
+    Tests are run by CI, not here.
 
 .EXAMPLE
     ./scripts/deployment/backend.ps1

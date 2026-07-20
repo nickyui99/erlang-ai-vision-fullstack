@@ -23,9 +23,9 @@ const _agentBuilderEvidenceAsset =
 const _agentRuleEvidenceAsset = 'assets/landing/judge-proof/agent-rule-editor.png';
 const _verifiedEventEvidenceAsset = 'assets/landing/judge-proof/verified-event-review.png';
 const _githubUrl = 'https://github.com/nickyui99/erlang-ai-vision-fullstack';
-const _iotRepoUrl = 'https://github.com/KennethChua1998/SentinelEdge_IOT';
+const _iotRepoUrl = 'https://github.com/KennethChua1998/ErlangAIVision_IOT';
 const _laptopEdgeRepoUrl =
-    'https://github.com/KennethChua1998/SentinelEdge_LaptopEdge';
+    'https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge';
 
 enum LandingSection { hero, architecture, qwen, github }
 

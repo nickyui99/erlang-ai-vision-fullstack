@@ -25,8 +25,8 @@ Submission for the **Qwen Cloud Global Hackathon — Track 5: EdgeAgent**.
 | **Live application** | [erlang-vision.duckdns.org](https://erlang-vision.duckdns.org) |
 | **Android judge build** | [Download signed APK](https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/download/v1.0.0-judge/app-release.apk) · [release notes](https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/tag/v1.0.0-judge) |
 | **Demo video** | [Watch on YouTube](https://www.youtube.com/watch?v=KhKXFZ7uV64) |
-| **Repositories** | [Fullstack](https://github.com/nickyui99/erlang-ai-vision-fullstack) (cloud + app, this repo) · [LaptopEdge](https://github.com/KennethChua1998/SentinelEdge_LaptopEdge) (edge bridge) · [IOT](https://github.com/KennethChua1998/SentinelEdge_IOT) (ESP32-S3 firmware) |
-| **Deployment** | Alibaba Cloud `ap-southeast-3` (Kuala Lumpur): ECI container (FastAPI + Caddy), OSS (web app + media), RDS PostgreSQL, ACR — [architecture and deployment proof](docs/deployment/alibaba_cloud_architecture.md) |
+| **Repositories** | [Fullstack](https://github.com/nickyui99/erlang-ai-vision-fullstack) (cloud + app, this repo) · [LaptopEdge](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge) (edge bridge) · [IOT](https://github.com/KennethChua1998/ErlangAIVision_IOT) (ESP32-S3 firmware) |
+| **Deployment** | Alibaba Cloud `ap-southeast-3` (Kuala Lumpur): ECI container (FastAPI + Caddy), OSS (web app + media), RDS PostgreSQL, ACR — [deployment code proof](scripts/deployment/backend.ps1) · [architecture](docs/deployment/alibaba_cloud_architecture.md) |
 | **Team** | Nicholas Ooi ([@nickyui99](https://github.com/nickyui99)) · Kenneth Chua ([@KennethChua1998](https://github.com/KennethChua1998)) · Fang Wei Lim · Ng Wei Kiat|
 
 ### Qwen models used
@@ -114,7 +114,7 @@ the degraded state rather than presenting a mock result as live verification.
 | **False-positive reduction** | **Not yet measured** | The 18 → 14 local filtering funnel is not a labelled false-positive rate. A threshold-only, labelled baseline is still required before claiming a reduction. |
 | **Approx. Qwen cost / event** | **US$0.00027** | 314 input + 73 output tokens per sampled call × `qwen3.7-plus` International 0–256K token pricing, converted at 6.7758 CNY/USD. Excludes any account-specific discount, taxes, or later pricing changes. |
 
-**Reproducibility notes.** The edge benchmark ran for 180 seconds on an AMD Ryzen 7 5800U CPU-only laptop with a simulated camera. It processed 883 frames (4.9 FPS), with 18 Stage-1 candidates; local Qwen triage resolved 4 and escalated 14. Its byte accounting uses a cloud-egress stub, so the reported reduction is a pipeline measurement, not a claim about every deployment's WAN throughput. The live-cloud sample used the same 18,059-byte bundled front-door JPEG, a fixed person-lingering rule, and `enable_thinking: false`. The USD estimate uses the June 2026 monthly 6.7758 CNY/USD rate. See the [edge benchmark report](https://github.com/KennethChua1998/SentinelEdge_LaptopEdge/blob/main/docs/BENCHMARKS.md), [DashScope model pricing](https://help.aliyun.com/en/model-studio/model-pricing), and [Federal Reserve exchange-rate series](https://fred.stlouisfed.org/series/EXCHUS).
+**Reproducibility notes.** The edge benchmark ran for 180 seconds on an AMD Ryzen 7 5800U CPU-only laptop with a simulated camera. It processed 883 frames (4.9 FPS), with 18 Stage-1 candidates; local Qwen triage resolved 4 and escalated 14. Its byte accounting uses a cloud-egress stub, so the reported reduction is a pipeline measurement, not a claim about every deployment's WAN throughput. The live-cloud sample used the same 18,059-byte bundled front-door JPEG, a fixed person-lingering rule, and `enable_thinking: false`. The USD estimate uses the June 2026 monthly 6.7758 CNY/USD rate. See the [edge benchmark report](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge/blob/main/docs/BENCHMARKS.md), [DashScope model pricing](https://help.aliyun.com/en/model-studio/model-pricing), and [Federal Reserve exchange-rate series](https://fred.stlouisfed.org/series/EXCHUS).
 
 ## 🎬 See it in action
 
@@ -136,8 +136,8 @@ It spans three tiers:
 | Tier | Repo | Role |
 |------|------|------|
 | **Cloud/App** | this repo | FastAPI backend + Flutter console: auth, agents, live video, verification |
-| **Edge bridge** | [`LaptopEdge`](https://github.com/KennethChua1998/SentinelEdge_LaptopEdge) | Local YOLO/YAMNet detection + Ollama Qwen triage |
-| **Camera** | [`IOT`](https://github.com/KennethChua1998/SentinelEdge_IOT) | ESP32-S3 firmware, QR provisioning, pan/tilt |
+| **Edge bridge** | [`LaptopEdge`](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge) | Local YOLO/YAMNet detection + Ollama Qwen triage |
+| **Camera** | [`IOT`](https://github.com/KennethChua1998/ErlangAIVision_IOT) | ESP32-S3 firmware, QR provisioning, pan/tilt |
 
 ## ✨ Features
 
@@ -176,11 +176,11 @@ Erlang AI Vision Flutter console
       - edge command relay over WebSocket
       - event/media/alert persistence
       - Qwen Cloud verification + MCP-style tools
-  <- Laptop edge bridge (SentinelEdge_LaptopEdge)
+  <- Laptop edge bridge (ErlangAIVision_LaptopEdge)
       - receives ESP32 frames/health/commands
       - runs YOLO/YAMNet/Ollama local pipeline
       - posts candidate events and media metadata
-  <- ESP32 camera firmware (SentinelEdge_IOT)
+  <- ESP32 camera firmware (ErlangAIVision_IOT)
       - captures JPEG frames
       - scans pairing QR for Wi-Fi + bridge address
       - drives pan/tilt servos
@@ -244,6 +244,13 @@ API docs: `http://localhost:8000/docs` · App: `http://localhost:8080`
 $env:PYTHONPATH="backend"
 python scripts\create_judge_account.py     # seed demo login + cameras + agents
 #    expected: ends with "=== judge demo account ready ===" and the login credentials
+
+# data/demo_frames is generated locally and intentionally git-ignored.
+# This uses the six sample clips committed under data/demo_videos/.
+# OpenCV is required only for this generation step.
+python -m pip install opencv-python
+python scripts\extract_demo_frames.py --videos-dir
+#    expected: writes JPEG sequences under data/demo_frames/<camera>/
 ```
 
 Set `DEMO_SIMULATION_ENABLED=true` and a Qwen vision model in `.env`, then open a
@@ -260,7 +267,7 @@ Full setup → [Backend setup](docs/backend/backend_setup.md) · [Frontend setup
 - [Media storage](docs/backend/media_storage.md)
 - [Deployment (Alibaba Cloud)](docs/deployment/alibaba_cloud_architecture.md)
 
-**Related repos:** `SentinelEdge_LaptopEdge` (edge pipeline) · `SentinelEdge_IOT` (ESP32 firmware)
+**Related repos:** [`ErlangAIVision_LaptopEdge`](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge) (edge pipeline) · [`ErlangAIVision_IOT`](https://github.com/KennethChua1998/ErlangAIVision_IOT) (ESP32 firmware)
 
 ---
 <div align="center">
