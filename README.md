@@ -46,7 +46,10 @@ Submission for the **Qwen Cloud Global Hackathon — Track 5: EdgeAgent**.
 | Evidence | Result | Exact test setup |
 |---|---:|---|
 | **Local filtering bandwidth** | **106.99 MB → 1.30 MB** cloud-bound data (**98.8% lower**, about **83×**) | 180-second real LaptopEdge pipeline run on an AMD Ryzen 7 5800U, CPU-only, Windows 11. Simulated 640×480 JPEG camera at 15 FPS; 2,703 frames fed, 883 processed, 18 candidates, and 14 cloud escalations. The upstream byte count used an in-memory egress stub, so this is a pipeline measurement—not a universal WAN claim. |
+| **Edge → cloud escalation** | **12.9 s p50** · **20.7 s p95** | Candidate detected → event escalated in the same CPU-only run. This includes local Qwen triage and routing, not only WAN latency. |
 | **Qwen Cloud verification** | **2.47 s p50** · **2.59 s p95** | Five sequential real `qwen3.7-plus` image-verification calls to DashScope International on July 19, 2026, using one fixed 18,059-byte front-door JPEG, a fixed person-lingering rule, and `enable_thinking: false`. |
+| **Approx. Qwen cost/event** | **US$0.00027** | 314 input + 73 output tokens for the measured call, using published International pricing and the documented exchange-rate assumption. |
+| **False-positive reduction** | **Not yet measured** | The 18 → 14 filtering funnel is not a labelled false-positive rate; a labelled baseline is still required. |
 
 Reproduce the local pipeline measurement with `python scripts/bench_pipeline.py --duration 180 --json results.json` in [LaptopEdge](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge); see its [full benchmark methodology](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge/blob/main/docs/BENCHMARKS.md).
 
@@ -70,9 +73,9 @@ The GIF above proves the physical servo step; the live demo and audit trail show
 
 | Model | Where it runs | What it does |
 |---|---|---|
-| `qwen3.7-plus` *(image verification)* | Qwen Cloud (DashScope) | Stage-3 event verification (vision + tool calling) — per-event image work runs on the plus tier to keep costs down (falls back to `qwen3.7-plus-2026-05-26`) |
-| `qwen3.7-max` *(chat + text)* | Qwen Cloud (DashScope) | The agentic in-app assistant (Erlang AI Agent), NL-rule compiler, and conversational agent builder (falls back through `qwen3.7-max-2026-05-20` → `qwen3.7-max-preview` → `qwen3.7-max-2026-05-17` → `qwen3.7-max-2026-06-08`) |
-| `qwen3.5:0.8b` | **On the edge laptop** via Ollama | Stage-2 triage: judges every candidate keyframe against the user's rule, locally (also the final vision fallback when every cloud model is exhausted) |
+| `qwen3.7-plus` *(image verification)* | Qwen Cloud (DashScope) | Stage-3 multimodal event verification and guarded evidence requests. |
+| `qwen3.7-max` *(chat + text)* | Qwen Cloud (DashScope) | MCP-connected assistant, natural-language rule compiler, and conversational agent builder. |
+| `qwen3.5:0.8b` | **On the edge laptop** via Ollama | Stage-2 candidate-keyframe triage and final local vision fallback. |
 | `qwen3.5:4b` | **On the edge laptop** via Ollama | Degraded-mode authority: an agentic tool-calling loop (pan, re-snapshot, re-assess) when the cloud is unreachable |
 
 ### Why Qwen is essential
@@ -85,7 +88,7 @@ open-weight VLM on a CPU laptop to frontier cloud models** behind one prompt sty
 2. **The edge filter needs a local VLM** — `qwen3.5:0.8b` triages every candidate
    frame on the laptop. In the documented 180-second edge benchmark, that cut
    cloud-bound bytes by **98.8%** (106.99 MB camera ingress → 1.30 MB cloud
-   egress); see [Measured EdgeAgent results](#-measured-edgeagent-results) for
+   egress); see [Measured edge evidence](#measured-edge-evidence) for
    the scope and limits of that measurement.
 3. **Verification needs vision + tools** — `qwen3.7-plus` doesn't just look at a
    keyframe; it can pan the camera, take a fresh snapshot, and check recent
@@ -110,85 +113,16 @@ The hosted zero-hardware route uses server-side simulated cameras so judges can 
 ### Built during the hackathon period (after May 26, 2026)
 
 All three repositories were built from scratch during the hackathon window
-(first commit June 11, 2026): the FastAPI backend and Flutter console, the
-laptop edge pipeline (YOLO/YAMNet + Ollama Qwen triage, offline queue, degraded
-mode), the ESP32-S3 firmware with QR provisioning and pan/tilt, the Alibaba
-Cloud deployment, and — in the final week — the MCP tool server with the
-agentic in-app assistant, on-demand recording, instant agent arm/disarm, and
-browser-playable (H.264) event clips. See `HACKATHON_SUBMISSION_CHECKLIST.md`
-and the git history for the full trail.
+(first commit June 11, 2026), including the cloud/app tier, edge pipeline,
+ESP32-S3 firmware, Alibaba Cloud deployment, MCP tool server, and agentic
+assistant. See `HACKATHON_SUBMISSION_CHECKLIST.md` and the git history for the
+full development trail.
 
-### 🧑‍⚖️ Judge testing instructions
-1. **Android option:** [download the signed judge APK](https://github.com/nickyui99/erlang-ai-vision-fullstack/releases/download/v1.0.0-judge/app-release.apk), install it, then use the same judge credentials below. The browser console remains available at the [live application](https://erlang-vision.duckdns.org).
+### 🧑‍⚖️ Judge testing details
 
-2. **Sign in** at the live application URL with the judge credentials provided
-   on Devpost (the account is pre-verified — no email confirmation needed).
-3. The dashboard is **pre-seeded**: cameras for each use case, armed agents, and
-   sample events, so there is something to explore immediately.
-4. **Zero-hardware demo**: judge cameras are simulated server-side — the backend
-   streams pre-extracted frames into the live view and runs *real* Qwen-Plus
-   detection on them, so the full detect → verify → alert flow works with no
-   physical device.
-5. Things to try:
-   - Create an agent in plain English (e.g. *"alert me if a person lingers at
-     the door after 9pm"*) and inspect the compiled detector config.
-   - Open the **Erlang AI Agent** chat and ask *"which cameras do I have and
-     are any agents armed?"* — it answers from live data via MCP tools, and can
-     arm agents or take snapshots for you.
-   - Open an event and play its clip; check the audited tool calls on verified
-     events.
-6. To run everything locally instead (including the physical-device path), see
-   the [Quickstart](#-quickstart) below.
-
-**Expected result:** the dashboard loads over HTTPS, a demo camera shows live
-frames, and a qualifying rule produces an event with a Qwen verification result
-and an in-app alert. If a live-Qwen dependency is unavailable, the UI reports
-the degraded state rather than presenting a mock result as live verification.
-
-### Expected outcomes by demo path
-
-| Path | Start here | Expected result |
-|---|---|---|
-| **Production judge demo** | Sign in at the [live application](https://erlang-vision.duckdns.org) with the Devpost judge account. | The pre-seeded dashboard and demo cameras load over HTTPS; live frames, verified events, clips, and in-app alerts are available without physical hardware. |
-| **Local no-hardware demo** | Follow the [Quickstart](#-quickstart), create the judge account, and enable `DEMO_SIMULATION_ENABLED=true`. | The backend creates the demo account, publishes simulated frames, and submits the first eligible frame to Qwen after four seconds. |
-| **Physical device path** | Complete the LaptopEdge and ESP32-S3 setup in the linked companion repositories. | The bridge reports `device listener ready` and `backend websocket connected`; the dashboard receives live frames and an armed agent can create an event and alert. |
-
-## 📊 Measured EdgeAgent results
-
-![Measured EdgeAgent results](docs/assets/edgeagent-results.svg)
-
-| Measure | Result | Measurement context |
-|---|---:|---|
-| **Edge → cloud escalation** | **12.9 s p50** · **20.7 s p95** | Candidate detected → event escalated during a 180-second CPU-only LaptopEdge run (18 candidates; 14 cloud escalations). This includes local triage and routing; it is not a dedicated production-WAN latency test. |
-| **Qwen Cloud verification** | **2.47 s p50** · **2.59 s p95** | Five sequential real `qwen3.7-plus` image-verification calls to the DashScope International endpoint on July 19, 2026; one 18 KB JPEG and a fixed rule prompt per call. |
-| **Cloud-bound bandwidth** | **98.8% lower** (about **83×**) | Same 180-second edge run: 106.99 MB camera ingress vs. 1.30 MB cloud egress (2,703 frames captured; local stages selected 14 cloud escalations). |
-| **False-positive reduction** | **Not yet measured** | The 18 → 14 local filtering funnel is not a labelled false-positive rate. A threshold-only, labelled baseline is still required before claiming a reduction. |
-| **Approx. Qwen cost / event** | **US$0.00027** | 314 input + 73 output tokens per sampled call × `qwen3.7-plus` International 0–256K token pricing, converted at 6.7758 CNY/USD. Excludes any account-specific discount, taxes, or later pricing changes. |
-
-**Reproducibility notes.** The edge benchmark ran for 180 seconds on an AMD Ryzen 7 5800U CPU-only laptop with a simulated camera. It processed 883 frames (4.9 FPS), with 18 Stage-1 candidates; local Qwen triage resolved 4 and escalated 14. Its byte accounting uses a cloud-egress stub, so the reported reduction is a pipeline measurement, not a claim about every deployment's WAN throughput. The live-cloud sample used the same 18,059-byte bundled front-door JPEG, a fixed person-lingering rule, and `enable_thinking: false`. The USD estimate uses the June 2026 monthly 6.7758 CNY/USD rate. See the [edge benchmark report](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge/blob/main/docs/BENCHMARKS.md), [DashScope model pricing](https://help.aliyun.com/en/model-studio/model-pricing), and [Federal Reserve exchange-rate series](https://fred.stlouisfed.org/series/EXCHUS).
-
-## 🎬 See it in action
-
-
-![Erlang AI Vision architecture](docs/assets/erlang-ai-vision-architecture-flow.png)
-
-> No hardware? The backend ships a **zero-hardware demo mode** that plays video
-> into a virtual camera and runs real Qwen-Plus detection on it.
-
-## What is Erlang AI Vision?
-
-Erlang AI Vision is a full-stack AI camera platform. Define detection rules in
-plain language ("alert me if a person is at the front door after 10pm"), and the
-system compiles them into edge detector configs, runs local AI on the camera feed,
-and escalates qualifying events to a cloud vision model for verification.
-
-It spans three tiers:
-
-| Tier | Repo | Role |
-|------|------|------|
-| **Cloud/App** | this repo | FastAPI backend + Flutter console: auth, agents, live video, verification |
-| **Edge bridge** | [`LaptopEdge`](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge) | Local YOLO/YAMNet detection + Ollama Qwen triage |
-| **Camera** | [`IOT`](https://github.com/KennethChua1998/ErlangAIVision_IOT) | ESP32-S3 firmware, QR provisioning, pan/tilt |
+Credentials, production and local testing paths, expected results, and the
+three-repository evidence map are in the [Judge Guide](JUDGES.md). The
+[Quickstart](#-quickstart) below covers a local zero-hardware run.
 
 ## ✨ Features
 
@@ -204,14 +138,13 @@ It spans three tiers:
 
 ## 🏗️ Architecture
 
-```mermaid
-flowchart TD
-    App[Flutter Console] <--> BE[FastAPI Backend]
-    BE <--> Edge[Laptop Edge Bridge]
-    Edge <--> Cam[ESP32-S3 Camera]
-    BE --> Qwen[Qwen Cloud Verification]
-    Edge --> Local[YOLO / YAMNet / Ollama]
-```
+![Erlang AI Vision architecture](docs/assets/erlang-ai-vision-architecture-flow.png)
+
+| Tier | Repo | Role |
+|---|---|---|
+| **Cloud/App** | this repo | FastAPI backend + Flutter console: auth, agents, live video, verification |
+| **Edge bridge** | [`LaptopEdge`](https://github.com/KennethChua1998/ErlangAIVision_LaptopEdge) | Local YOLO/YAMNet detection + Ollama Qwen triage |
+| **Camera** | [`IOT`](https://github.com/KennethChua1998/ErlangAIVision_IOT) | ESP32-S3 firmware, QR provisioning, pan/tilt |
 
 > The backend never talks directly to a LAN camera. The edge bridge keeps an
 > outbound connection open to the backend and relays commands to the camera.
