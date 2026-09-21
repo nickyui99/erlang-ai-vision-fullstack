@@ -106,6 +106,16 @@ def load_google_secret_manager_secrets(
     if dotenv_database_url and "DATABASE_URL" not in os.environ:
         os.environ["DATABASE_URL"] = dotenv_database_url
 
+    # Same rule for the Qwen key: a QWEN_API_KEY line in .env wins over the
+    # secret, including an empty one. That is how you disable cloud Qwen
+    # locally (the client falls back to MockQwenClient) when the stored key is
+    # revoked, without editing a secret that production shares. Absent from
+    # .env -> None -> the secret applies as before. The deployed image ships no
+    # .env at all, so this is inert there.
+    dotenv_qwen_key = _read_dotenv_key(env_file, "QWEN_API_KEY")
+    if dotenv_qwen_key is not None and "QWEN_API_KEY" not in os.environ:
+        os.environ["QWEN_API_KEY"] = dotenv_qwen_key
+
     try:
         service_account_info = (
             _decode_credentials(encoded_credentials)

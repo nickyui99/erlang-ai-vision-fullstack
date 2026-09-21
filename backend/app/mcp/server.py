@@ -35,6 +35,7 @@ from app.models.event import Event
 from app.models.recording import Recording
 from app.models.tool_audit import ToolAudit
 from app.services import agent_service
+from app.services.demo_simulator import demo_simulator
 from app.services.edge_command_hub import (
     EdgeCommandTimeoutError,
     EdgeNotConnectedError,
@@ -243,6 +244,11 @@ async def get_live_snapshot(device_id: str, ctx: Context):
     async def impl(user_id: str, session):
         await agent_service.ensure_owned_device(session, user_id, device_id)
         frame = video_stream_broker.latest_frame(device_id)
+        if not frame:
+            # A demo camera only publishes while its live view is open. Start it
+            # on demand so the chat agent can snapshot unattended, the same way
+            # the HTTP stream endpoints call touch(). No-op for real devices.
+            frame = await demo_simulator.ensure_frame(device_id, user_id)
         if not frame:
             return {"ok": False, "error": "no_live_frame (camera offline or not streaming)"}
         return Image(data=frame, format="jpeg")

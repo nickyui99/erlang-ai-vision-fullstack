@@ -123,7 +123,6 @@ def _database_url_from_rds_parts(secret_values: dict[str, Any]) -> str | None:
 def _apply_secret_values(secret_values: dict[str, Any]) -> None:
     for key in (
         "SESSION_SECRET_KEY",
-        "QWEN_API_KEY",
         "FIREBASE_PROJECT_ID",
         "ALIBABA_CLOUD_ACCESS_KEY_ID",
         "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
@@ -134,6 +133,12 @@ def _apply_secret_values(secret_values: dict[str, Any]) -> None:
         value = secret_values.get(key)
         if value:
             os.environ[key] = str(value)
+
+    # An explicitly set QWEN_API_KEY wins over the KMS value, so a local .env
+    # can blank it to force the offline mock client (see google_secrets).
+    qwen_api_key = secret_values.get("QWEN_API_KEY")
+    if qwen_api_key and "QWEN_API_KEY" not in os.environ:
+        os.environ["QWEN_API_KEY"] = str(qwen_api_key)
 
     # An explicitly set DATABASE_URL always wins over the KMS value: tests and
     # local tooling pin their own database, and silently redirecting them to

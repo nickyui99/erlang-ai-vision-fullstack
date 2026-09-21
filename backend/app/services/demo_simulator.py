@@ -162,6 +162,28 @@ class DemoSimulator:
             self._sims[device_id] = sim
             _logger.info("demo_sim: started camera %s (%d frames)", device_id, len(frames))
 
+    async def ensure_frame(
+        self, device_id: str, user_id: str, *, timeout: float = 2.0
+    ) -> bytes | None:
+        """Start a demo camera on demand and return its first published frame.
+
+        A sim only runs while a viewer is watching, and ``stop_publishing`` drops
+        the last frame, so a tool asking for a snapshot with the live view closed
+        would otherwise always miss. Returns None for real devices (they publish
+        from the edge) and when no frame arrives before ``timeout``.
+        """
+
+        if not self.is_demo_device(device_id):
+            return None
+        await self.touch(device_id, user_id)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            frame = video_stream_broker.latest_frame(device_id)
+            if frame:
+                return frame
+            await asyncio.sleep(0.05)
+        return None
+
     def keepalive(self, device_id: str) -> None:
         """O(1) refresh of viewer activity for an already-running sim (MJPEG hold)."""
 

@@ -24,6 +24,7 @@ from app.models.clip import Clip
 from app.models.device import Device
 from app.models.event import Event
 from app.models.tool_audit import ToolAudit
+from app.services.demo_simulator import demo_simulator
 from app.services.edge_command_hub import (
     EdgeCommandTimeoutError,
     EdgeNotConnectedError,
@@ -131,6 +132,10 @@ async def _get_live_snapshot(context: ToolContext) -> ToolResult:
     # Prefer the live stream's most recent frame; fall back to an on-demand
     # snapshot command so verification works even when no one is watching.
     frame = video_stream_broker.latest_frame(context.device_id)
+    if not frame:
+        # Demo cameras have no edge device to fall back to, so start the sim and
+        # take its frame before trying the edge command below.
+        frame = await demo_simulator.ensure_frame(context.device_id, context.user_id)
     if frame:
         return ToolResult(
             "get_live_snapshot",
