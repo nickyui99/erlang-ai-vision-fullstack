@@ -61,6 +61,8 @@ class _WebRealtimeConnection implements RealtimeConnection {
       'device.health_changed',
       'device.control_mode_changed',
       'agent.state_changed',
+      // Per-step progress of an in-flight AI Agent turn (reasoning + tool calls).
+      'chat.step',
     ]) {
       final listener = ((web.Event event) {
         _handleRealtimeEvent(type, event);

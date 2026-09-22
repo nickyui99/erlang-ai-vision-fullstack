@@ -114,10 +114,16 @@ class QwenToolCall:
 
 @dataclass
 class QwenResponse:
-    """One assistant turn: free-text content and/or a batch of tool calls."""
+    """One assistant turn: free-text content and/or a batch of tool calls.
+
+    ``reasoning`` carries the model's own chain-of-thought when the endpoint
+    returns one (DashScope's ``reasoning_content``). It is surfaced in the chat
+    UI's thinking panel and is never fed back into a later request.
+    """
 
     content: str | None = None
     tool_calls: list[QwenToolCall] = field(default_factory=list)
+    reasoning: str | None = None
 
 
 class BaseQwenClient(ABC):
@@ -301,7 +307,12 @@ class QwenClient(BaseQwenClient):
                     arguments=arguments if isinstance(arguments, dict) else {},
                 )
             )
-        return QwenResponse(content=message.get("content"), tool_calls=tool_calls)
+        reasoning = message.get("reasoning_content")
+        return QwenResponse(
+            content=message.get("content"),
+            tool_calls=tool_calls,
+            reasoning=str(reasoning).strip() or None if reasoning else None,
+        )
 
 
 class MockQwenClient(BaseQwenClient):

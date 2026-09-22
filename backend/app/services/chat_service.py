@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import secrets
+import time
 from contextlib import AsyncExitStack
 from datetime import UTC, datetime
 
@@ -29,6 +30,7 @@ from app.core.config import settings
 from app.core.security import create_signed_token
 from app.models.chat import ChatMessage, ChatSession
 from app.services.qwen_client import BaseQwenClient, QwenError, QwenResponse, get_qwen_client
+from app.services.realtime_bus import realtime_bus
 
 
 log = logging.getLogger("app.services.chat_service")
@@ -169,15 +171,83 @@ def _assistant_tool_message(response: QwenResponse) -> dict:
     }
 
 
+def _tool_succeeded(text: str) -> bool:
+    """Whether a tool's reply reads as a success.
+
+    MCP tools answer with a JSON object carrying an ``ok`` flag, so trust that
+    when it parses. Anything unparseable is treated as a success unless the
+    runner marked it failed, since a plain-text reply is normal output.
+    """
+    if text.strip() == "tool call failed":
+        return False
+    try:
+        parsed = json.loads(text)
+    except (ValueError, TypeError):
+        return True
+    if isinstance(parsed, dict) and "ok" in parsed:
+        return bool(parsed["ok"])
+    return True
+
+
+def _build_trace(steps: list[dict], started: float) -> dict | None:
+    """Wrap the ordered steps with the headline figures the UI's panel shows.
+
+    Returns None when there is nothing to show, so a plain turn stores no trace
+    and the UI renders it exactly as before.
+    """
+    if not steps:
+        return None
+    return {
+        "steps": steps,
+        "tools": sum(1 for s in steps if s.get("kind") == "tool"),
+        "duration_ms": int((time.monotonic() - started) * 1000),
+    }
+
+
+def _result_digest(text: str, limit: int = 160) -> str:
+    """A one-line preview of a tool result for the UI's thinking panel."""
+    collapsed = " ".join(text.split())
+    return collapsed if len(collapsed) <= limit else collapsed[: limit - 1] + "…"
+
+
 async def _agentic_reply(
     user_id: str,
     history: list[dict],
     client: BaseQwenClient,
     *,
+    session_id: str = "",
     runner_factory=None,
-) -> str:
-    """Run the tool loop against the MCP server; fall back to plain chat if it's down."""
+) -> tuple[str, list[dict]]:
+    """Run the tool loop against the MCP server; fall back to plain chat if it's down.
+
+    Returns the reply text plus the ordered trace of how it was reached: the
+    model's reasoning on each round and every tool it called. The trace is for
+    display only — it is never fed back into a later request.
+
+    Each step is also pushed to the user's realtime stream as it happens, so the
+    UI can show the agent working during the turn instead of only afterwards.
+    The same steps are returned for persistence, so a reload shows the same trace.
+    """
     factory = runner_factory or McpToolRunner
+    steps: list[dict] = []
+
+    async def emit(step: dict) -> None:
+        """Record a step and push it live. A publish failure must not fail the turn."""
+        steps.append(step)
+        if not session_id:
+            return
+        try:
+            await realtime_bus.publish(
+                user_id, "chat.step", {"session_id": session_id, "step": step}
+            )
+        except Exception:  # noqa: BLE001 - live progress is best-effort
+            log.debug("chat step publish failed", exc_info=True)
+
+    async def note_reasoning(response: QwenResponse) -> None:
+        reasoning = (getattr(response, "reasoning", None) or "").strip()
+        if reasoning:
+            await emit({"kind": "reasoning", "text": reasoning})
+
     try:
         async with factory(user_id) as runner:
             tool_specs = await runner.list_tool_specs()
@@ -186,12 +256,21 @@ async def _agentic_reply(
             )
             for _ in range(max(1, settings.qwen_max_tool_turns)):
                 response = await client.chat(messages, tools=tool_specs)
+                await note_reasoning(response)
                 if not response.tool_calls:
-                    return (response.content or "").strip() or "…"
+                    return (response.content or "").strip() or "…", steps
                 messages.append(_assistant_tool_message(response))
                 image_urls: list[str] = []
                 for call in response.tool_calls:
                     text, images = await runner.call(call.name, call.arguments)
+                    await emit({
+                        "kind": "tool",
+                        "name": call.name,
+                        "arguments": call.arguments,
+                        "ok": _tool_succeeded(text),
+                        "result": _result_digest(text),
+                        "images": len(images),
+                    })
                     messages.append(
                         {"role": "tool", "tool_call_id": call.id, "content": text}
                     )
@@ -209,13 +288,19 @@ async def _agentic_reply(
                     messages.append({"role": "user", "content": content})
             # Tool budget exhausted: force a final text answer without tools.
             response = await client.chat(messages)
-            return (response.content or "").strip() or "…"
+            await note_reasoning(response)
+            await emit({"kind": "note", "text": "Tool budget spent — answering directly."})
+            return (response.content or "").strip() or "…", steps
     except QwenError:
         raise  # the API layer maps this to 502 agent_unavailable
     except Exception:  # noqa: BLE001 - MCP down must degrade, not kill the chat
         log.warning("MCP tool loop unavailable; falling back to plain chat", exc_info=True)
         response = await client.chat(build_chat_messages(history))
-        return (response.content or "").strip() or "…"
+        # Keep whatever was gathered before the failure and say why it stopped,
+        # so a degraded turn is visibly degraded rather than silently tool-less.
+        await emit({"kind": "note", "text": "Tools unavailable — answered without them."})
+        await note_reasoning(response)
+        return (response.content or "").strip() or "…", steps
 
 
 async def create_session(
@@ -330,13 +415,19 @@ async def generate_turn(
     await session.commit()
 
     history = await _history_for(session, chat.session_id)
+    started = time.monotonic()
     if _tools_available(runner_factory):
-        reply_text = await _agentic_reply(
-            chat.user_id, history, client, runner_factory=runner_factory
+        reply_text, steps = await _agentic_reply(
+            chat.user_id, history, client,
+            session_id=chat.session_id, runner_factory=runner_factory,
         )
     else:
         response = await client.chat(build_chat_messages(history))
         reply_text = (response.content or "").strip() or "…"
+        steps = []
+        reasoning = (getattr(response, "reasoning", None) or "").strip()
+        if reasoning:
+            steps.append({"kind": "reasoning", "text": reasoning})
 
     assistant_now = datetime.now(UTC)
     assistant_msg = ChatMessage(
@@ -344,6 +435,7 @@ async def generate_turn(
         session_id=chat.session_id,
         role="assistant",
         content=reply_text,
+        trace=_build_trace(steps, started),
         created_at=assistant_now,
     )
     session.add(assistant_msg)

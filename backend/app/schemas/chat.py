@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -23,6 +23,10 @@ class ChatMessageRead(BaseModel):
     session_id: str
     role: ChatRole
     content: str
+    # How the reply was reached (reasoning + MCP tool calls), for the UI's
+    # thinking panel. Absent on user turns and on replies stored before traces
+    # were recorded, which the app renders unchanged.
+    trace: dict[str, Any] | None = None
     created_at: UTCDatetime
 
     model_config = ConfigDict(from_attributes=True)

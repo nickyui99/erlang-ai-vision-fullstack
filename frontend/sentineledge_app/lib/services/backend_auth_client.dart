@@ -864,6 +864,7 @@ class ChatMessage {
     required this.messageId,
     required this.role,
     required this.content,
+    this.trace,
     this.createdAt,
   });
 
@@ -872,14 +873,90 @@ class ChatMessage {
   /// 'user' | 'assistant' | 'system'.
   final String role;
   final String content;
+
+  /// How an assistant reply was reached: the model's reasoning and the MCP
+  /// tool calls it made. Null on user turns and on replies stored before
+  /// traces were recorded, which render without a thinking panel.
+  final ChatTrace? trace;
   final DateTime? createdAt;
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    final rawTrace = json['trace'];
     return ChatMessage(
       messageId: json['message_id']?.toString() ?? '',
       role: json['role']?.toString() ?? '',
       content: json['content']?.toString() ?? '',
+      trace: rawTrace is Map
+          ? ChatTrace.fromJson(Map<String, dynamic>.from(rawTrace))
+          : null,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
+    );
+  }
+}
+
+/// The ordered record of how one assistant reply was produced.
+class ChatTrace {
+  const ChatTrace({
+    required this.steps,
+    required this.toolCount,
+    required this.durationMs,
+  });
+
+  final List<ChatTraceStep> steps;
+  final int toolCount;
+  final int durationMs;
+
+  bool get isEmpty => steps.isEmpty;
+
+  factory ChatTrace.fromJson(Map<String, dynamic> json) {
+    final rawSteps = json['steps'];
+    return ChatTrace(
+      steps: rawSteps is List
+          ? rawSteps
+                .whereType<Map>()
+                .map((s) => ChatTraceStep.fromJson(Map<String, dynamic>.from(s)))
+                .toList(growable: false)
+          : const [],
+      toolCount: (json['tools'] as num?)?.toInt() ?? 0,
+      durationMs: (json['duration_ms'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// One entry in a [ChatTrace]: a stretch of model reasoning, a tool call, or a
+/// note about why the loop stopped early.
+class ChatTraceStep {
+  const ChatTraceStep({
+    required this.kind,
+    this.text = '',
+    this.name = '',
+    this.arguments = const {},
+    this.ok = true,
+    this.result = '',
+    this.images = 0,
+  });
+
+  /// 'reasoning' | 'tool' | 'note'.
+  final String kind;
+  final String text;
+  final String name;
+  final Map<String, dynamic> arguments;
+  final bool ok;
+  final String result;
+  final int images;
+
+  factory ChatTraceStep.fromJson(Map<String, dynamic> json) {
+    final rawArgs = json['arguments'];
+    return ChatTraceStep(
+      kind: json['kind']?.toString() ?? '',
+      text: json['text']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      arguments: rawArgs is Map
+          ? Map<String, dynamic>.from(rawArgs)
+          : const {},
+      ok: json['ok'] as bool? ?? true,
+      result: json['result']?.toString() ?? '',
+      images: (json['images'] as num?)?.toInt() ?? 0,
     );
   }
 }

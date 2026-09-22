@@ -30,6 +30,27 @@ class ChatController extends ChangeNotifier {
   String? _error;
   String? get error => _error;
 
+  /// Steps streamed over SSE for the turn currently in flight, in arrival order.
+  ///
+  /// These are the same steps the reply will carry in its persisted trace; they
+  /// exist so the agent's work is visible *while* it happens rather than only
+  /// once the answer lands. Cleared when the reply arrives and the persisted
+  /// trace takes over.
+  List<ChatTraceStep> _liveSteps = const [];
+  List<ChatTraceStep> get liveSteps => _liveSteps;
+
+  /// When the in-flight turn started, for the live elapsed counter.
+  DateTime? _turnStartedAt;
+  DateTime? get turnStartedAt => _turnStartedAt;
+
+  /// Feed in a `chat.step` realtime event. Ignored unless it belongs to the
+  /// session on screen, so a turn running in another tab can't bleed in.
+  void ingestLiveStep(String sessionId, Map<String, dynamic> stepJson) {
+    if (!_sending || sessionId != _currentSessionId) return;
+    _liveSteps = [..._liveSteps, ChatTraceStep.fromJson(stepJson)];
+    _notify();
+  }
+
   bool _disposed = false;
 
   @override
@@ -109,6 +130,8 @@ class ChatController extends ChangeNotifier {
     _messages = [..._messages, optimistic];
     _sending = true;
     _error = null;
+    _liveSteps = const [];
+    _turnStartedAt = DateTime.now();
     _notify();
 
     // Non-null once we create a session in this call (for rollback on failure).
@@ -131,6 +154,9 @@ class ChatController extends ChangeNotifier {
       // Only touch the visible transcript if we're still on that session.
       if (_currentSessionId == targetId) {
         _messages = [..._messages, reply];
+        // The reply carries the full persisted trace, so the live copy is
+        // redundant from here on — drop it rather than render both.
+        _liveSteps = const [];
       }
       // Refresh so the drawer reflects the new title and updated ordering. This
       // is cosmetic — a transient failure must not lose the just-sent turn, so

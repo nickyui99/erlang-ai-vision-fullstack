@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../design/app_colors.dart';
 import '../../design/app_spacing.dart';
 import '../../services/backend_auth_client.dart';
+import '../../services/realtime/realtime_client.dart';
 import '../../shared/console_widgets.dart';
 import 'ai_agent_icon.dart';
 import 'chat_controller.dart';
@@ -41,15 +42,34 @@ class _AiAgentChatScreenState extends State<AiAgentChatScreen> {
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
 
+  RealtimeConnection? _realtime;
+
   @override
   void initState() {
     super.initState();
     _controller.addListener(_onControllerChange);
     _controller.loadSessions();
+    // The agent's steps arrive on the same per-user SSE stream the dashboard
+    // uses, so an in-flight turn shows its work instead of a silent spinner.
+    _realtime = connectRealtime(
+      onMessage: _onRealtimeMessage,
+      onStatus: (_) {},
+    );
+  }
+
+  void _onRealtimeMessage(RealtimeMessage message) {
+    if (message.type != 'chat.step') return;
+    final step = message.data['step'];
+    if (step is! Map) return;
+    _controller.ingestLiveStep(
+      message.data['session_id']?.toString() ?? '',
+      Map<String, dynamic>.from(step),
+    );
   }
 
   @override
   void dispose() {
+    _realtime?.dispose();
     _controller.removeListener(_onControllerChange);
     _controller.dispose();
     _input.dispose();
@@ -198,7 +218,18 @@ class _AiAgentChatScreenState extends State<AiAgentChatScreen> {
       itemCount: messages.length + (_controller.sending ? 1 : 0),
       itemBuilder: (context, index) {
         if (index >= messages.length) {
-          return const AiAgentWaitingIndicator();
+          // Mid-turn: show the steps as they stream in. Before the first step
+          // lands there is nothing to report yet, so keep the plain indicator.
+          if (_controller.liveSteps.isEmpty) {
+            return const AiAgentWaitingIndicator();
+          }
+          return _ChatBubble(
+            role: 'assistant',
+            child: LiveThinkingPanel(
+              steps: _controller.liveSteps,
+              startedAt: _controller.turnStartedAt,
+            ),
+          );
         }
         final message = messages[index];
         return _ChatBubble(
@@ -208,7 +239,17 @@ class _AiAgentChatScreenState extends State<AiAgentChatScreen> {
           // and $...$/$$...$$ delimiters; useDollarSignsForLatex covers the
           // dollar forms too. User messages stay literal text.
           child: message.role == 'assistant'
-              ? AssistantMessageView(content: message.content)
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // How it got here, above what it concluded — collapsed
+                    // unless the reader opens it.
+                    if (message.trace != null && !message.trace!.isEmpty)
+                      ThinkingPanel(trace: message.trace!),
+                    AssistantMessageView(content: message.content),
+                  ],
+                )
               : Text(
                   message.content,
                   style: const TextStyle(color: Colors.white),
@@ -390,6 +431,276 @@ class _AiAgentChatScreenState extends State<AiAgentChatScreen> {
     return '${time.toLocal().year}-'
         '${time.toLocal().month.toString().padLeft(2, '0')}-'
         '${time.toLocal().day.toString().padLeft(2, '0')}';
+  }
+}
+
+/// The in-flight counterpart of [ThinkingPanel]: the agent's steps as they
+/// stream in over SSE, always open, with a running clock.
+///
+/// Replaced by the persisted [ThinkingPanel] once the reply lands.
+class LiveThinkingPanel extends StatefulWidget {
+  const LiveThinkingPanel({required this.steps, this.startedAt, super.key});
+
+  final List<ChatTraceStep> steps;
+  final DateTime? startedAt;
+
+  @override
+  State<LiveThinkingPanel> createState() => _LiveThinkingPanelState();
+}
+
+class _LiveThinkingPanelState extends State<LiveThinkingPanel> {
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    // Drive the elapsed counter; the steps themselves arrive via the parent.
+    _tick = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  String get _summary {
+    final tools = widget.steps.where((s) => s.kind == 'tool').length;
+    final start = widget.startedAt;
+    final elapsed = start == null
+        ? null
+        : DateTime.now().difference(start).inMilliseconds / 1000;
+    final parts = <String>[
+      if (tools > 0) tools == 1 ? '1 tool' : '$tools tools',
+      if (elapsed != null) '${elapsed.toStringAsFixed(1)}s',
+    ];
+    return parts.join(', ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = scheme.onSurfaceVariant;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox.square(
+              dimension: 11,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: scheme.primary,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              'Thinking',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: muted,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (_summary.isNotEmpty) ...[
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                '($_summary)',
+                style: theme.textTheme.labelSmall?.copyWith(color: muted),
+              ),
+            ],
+          ],
+        ),
+        for (final step in widget.steps) _TraceStepView(step: step),
+      ],
+    );
+  }
+}
+
+/// Collapsible record of how the assistant reached a reply: the model's own
+/// reasoning interleaved with the MCP tool calls it made, in order.
+///
+/// Collapsed by default — the answer is the point, and the trace is the
+/// evidence behind it.
+class ThinkingPanel extends StatefulWidget {
+  const ThinkingPanel({required this.trace, super.key});
+
+  final ChatTrace trace;
+
+  @override
+  State<ThinkingPanel> createState() => _ThinkingPanelState();
+}
+
+class _ThinkingPanelState extends State<ThinkingPanel> {
+  bool _expanded = false;
+
+  String get _summary {
+    final tools = widget.trace.toolCount;
+    final seconds = widget.trace.durationMs / 1000;
+    final toolPart = tools == 1 ? '1 tool' : '$tools tools';
+    final timePart = '${seconds.toStringAsFixed(1)}s';
+    return tools > 0 ? '$toolPart, $timePart' : timePart;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = scheme.onSurfaceVariant;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Semantics(
+            button: true,
+            expanded: _expanded,
+            label: 'Thinking, $_summary',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs + 2,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _expanded ? Icons.expand_more : Icons.chevron_right,
+                      size: 16,
+                      color: muted,
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      'Thinking',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: muted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Flexible(
+                      child: Text(
+                        '($_summary)',
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(color: muted),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (_expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.sm,
+                0,
+                AppSpacing.sm,
+                AppSpacing.sm,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final step in widget.trace.steps)
+                    _TraceStepView(step: step),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One row of a [ThinkingPanel]: reasoning prose, a tool call, or a note.
+class _TraceStepView extends StatelessWidget {
+  const _TraceStepView({required this.step});
+
+  final ChatTraceStep step;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = scheme.onSurfaceVariant;
+
+    if (step.kind == 'tool') {
+      final okColor = step.ok ? AppColors.success : scheme.error;
+      return Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.xs),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              step.ok ? Icons.check_circle_outline : Icons.error_outline,
+              size: 14,
+              color: okColor,
+            ),
+            const SizedBox(width: AppSpacing.xs + 2),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    step.name,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  if (step.result.isNotEmpty)
+                    Text(
+                      step.result,
+                      style: theme.textTheme.labelSmall?.copyWith(color: muted),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (step.kind == 'note') {
+      return Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.xs),
+        child: Text(
+          step.text,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: muted,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      );
+    }
+
+    // Reasoning: the model's own words, set apart from the tool rows.
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xs),
+      child: Text(
+        step.text,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: muted,
+          height: 1.4,
+        ),
+      ),
+    );
   }
 }
 

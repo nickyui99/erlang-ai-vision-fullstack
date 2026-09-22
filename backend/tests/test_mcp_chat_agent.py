@@ -29,6 +29,7 @@ from app.models.chat import ChatSession  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.services import chat_service  # noqa: E402
 from app.services.qwen_client import BaseQwenClient, QwenResponse, QwenToolCall  # noqa: E402
+from app.services.realtime_bus import realtime_bus  # noqa: E402
 
 
 EXPECTED_TOOLS = {
@@ -202,6 +203,129 @@ def test_agentic_turn_runs_tools_and_persists_reply() -> None:
     reply = asyncio.run(drive())
     assert FakeRunner.calls == [("list_devices", {})]
     assert reply == "You have 1 camera: Front Door."
+
+
+class ReasoningToolClient(BaseQwenClient):
+    """Like ToolCallingClient, but the model also returns its chain-of-thought."""
+
+    async def verify(self, request, *, repair: bool = False) -> str:
+        raise NotImplementedError
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def chat(self, messages, *, tools=None) -> QwenResponse:
+        self.calls += 1
+        if self.calls == 1:
+            return QwenResponse(
+                content=None,
+                tool_calls=[QwenToolCall(id="c1", name="list_devices", arguments={})],
+                reasoning="I should look up the cameras before answering.",
+            )
+        return QwenResponse(content="You have 1 camera.", reasoning="One device came back.")
+
+
+def test_turn_records_reasoning_and_tool_calls_in_trace() -> None:
+    FakeRunner.calls = []
+
+    async def drive():
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as session:
+            chat = await chat_service.get_owned_session(session, "usr_mcp", "chat_mcp_1")
+            return await chat_service.generate_turn(
+                session, chat, "what cameras do I have?",
+                client=ReasoningToolClient(), runner_factory=FakeRunner,
+            )
+
+    msg = asyncio.run(drive())
+    trace = msg.trace
+    assert trace is not None, "an agentic turn must record how it got there"
+    assert trace["tools"] == 1
+    assert trace["duration_ms"] >= 0
+
+    kinds = [s["kind"] for s in trace["steps"]]
+    # Reasoning is captured per round, interleaved with the tool it prompted.
+    assert kinds == ["reasoning", "tool", "reasoning"]
+
+    tool_step = trace["steps"][1]
+    assert tool_step["name"] == "list_devices"
+    assert tool_step["ok"] is True
+    assert "Front Door" in tool_step["result"]
+    assert trace["steps"][0]["text"].startswith("I should look up")
+
+
+def test_steps_publish_live_before_the_reply_returns() -> None:
+    """Each step reaches the user's realtime stream as it happens.
+
+    This is what makes the UI show work in progress rather than a silent wait,
+    so it must hold *during* the turn, not just in the persisted trace.
+    """
+    FakeRunner.calls = []
+
+    async def drive():
+        subscription = await realtime_bus.subscribe("usr_mcp")
+        try:
+            factory = async_sessionmaker(engine, expire_on_commit=False)
+            async with factory() as session:
+                chat = await chat_service.get_owned_session(
+                    session, "usr_mcp", "chat_mcp_1"
+                )
+                await chat_service.generate_turn(
+                    session, chat, "what cameras do I have?",
+                    client=ReasoningToolClient(), runner_factory=FakeRunner,
+                )
+            published = []
+            while not subscription.queue.empty():
+                published.append(subscription.queue.get_nowait())
+            return published
+        finally:
+            await realtime_bus.unsubscribe(subscription)
+
+    events = asyncio.run(drive())
+    assert events, "the turn must stream its steps"
+    assert {e.event for e in events} == {"chat.step"}
+    # Scoped to the session so another tab's turn can't bleed into this one.
+    assert all(e.data["session_id"] == "chat_mcp_1" for e in events)
+
+    kinds = [e.data["step"]["kind"] for e in events]
+    assert kinds == ["reasoning", "tool", "reasoning"]
+    tool_event = events[1].data["step"]
+    assert tool_event["name"] == "list_devices" and tool_event["ok"] is True
+
+
+def test_plain_turn_stores_no_trace() -> None:
+    """A tool-less reply with no reasoning stores nothing, so the UI is unchanged."""
+
+    async def drive():
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as session:
+            chat = await chat_service.get_owned_session(session, "usr_mcp", "chat_mcp_1")
+            return await chat_service.generate_turn(
+                session, chat, "hi", client=PlainClient(), runner_factory=None,
+            )
+
+    assert asyncio.run(drive()).trace is None
+
+
+def test_failed_tool_is_marked_in_trace() -> None:
+    """A tool that reports ok:false shows as failed rather than silently fine."""
+
+    class FailingRunner(FakeRunner):
+        async def call(self, name: str, arguments: dict):
+            return '{"ok": false, "error": "device_not_found"}', []
+
+    async def drive():
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as session:
+            chat = await chat_service.get_owned_session(session, "usr_mcp", "chat_mcp_1")
+            return await chat_service.generate_turn(
+                session, chat, "status?",
+                client=ToolCallingClient(), runner_factory=FailingRunner,
+            )
+
+    steps = asyncio.run(drive()).trace["steps"]
+    tool_steps = [s for s in steps if s["kind"] == "tool"]
+    assert tool_steps and tool_steps[0]["ok"] is False
 
 
 def test_agentic_turn_falls_back_when_mcp_down() -> None:
