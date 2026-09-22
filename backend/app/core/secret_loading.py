@@ -120,25 +120,35 @@ def _database_url_from_rds_parts(secret_values: dict[str, Any]) -> str | None:
     return f"postgresql+asyncpg://{auth}{host}:{port}/{database}"
 
 
+# Settings a local .env may override, including with an empty value, which is
+# read as a deliberate "turn this off here". Blanking QWEN_API_KEY forces the
+# offline MockQwenClient; blanking the OSS endpoint/bucket makes
+# ``media_url_service.oss_configured`` false, which switches clip and recording
+# playback to the local dev path. Production has no .env, so these behave
+# exactly as before there. DATABASE_URL has the same rule, handled below.
+DOTENV_OVERRIDABLE_SECRETS = (
+    "QWEN_API_KEY",
+    "ALICLOUD_OSS_ENDPOINT",
+    "ALICLOUD_OSS_BUCKET",
+)
+
+
 def _apply_secret_values(secret_values: dict[str, Any]) -> None:
     for key in (
         "SESSION_SECRET_KEY",
         "FIREBASE_PROJECT_ID",
         "ALIBABA_CLOUD_ACCESS_KEY_ID",
         "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
-        "ALICLOUD_OSS_ENDPOINT",
-        "ALICLOUD_OSS_BUCKET",
         "ALICLOUD_OSS_SECURE",
     ):
         value = secret_values.get(key)
         if value:
             os.environ[key] = str(value)
 
-    # An explicitly set QWEN_API_KEY wins over the KMS value, so a local .env
-    # can blank it to force the offline mock client (see google_secrets).
-    qwen_api_key = secret_values.get("QWEN_API_KEY")
-    if qwen_api_key and "QWEN_API_KEY" not in os.environ:
-        os.environ["QWEN_API_KEY"] = str(qwen_api_key)
+    for key in DOTENV_OVERRIDABLE_SECRETS:
+        value = secret_values.get(key)
+        if value and key not in os.environ:
+            os.environ[key] = str(value)
 
     # An explicitly set DATABASE_URL always wins over the KMS value: tests and
     # local tooling pin their own database, and silently redirecting them to

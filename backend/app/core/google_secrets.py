@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Protocol
 
 from app.core.secret_loading import (
+    DOTENV_OVERRIDABLE_SECRETS,
     _apply_secret_values,
     _parse_secret_data,
     _read_dotenv_key,
@@ -106,15 +107,14 @@ def load_google_secret_manager_secrets(
     if dotenv_database_url and "DATABASE_URL" not in os.environ:
         os.environ["DATABASE_URL"] = dotenv_database_url
 
-    # Same rule for the Qwen key: a QWEN_API_KEY line in .env wins over the
-    # secret, including an empty one. That is how you disable cloud Qwen
-    # locally (the client falls back to MockQwenClient) when the stored key is
-    # revoked, without editing a secret that production shares. Absent from
-    # .env -> None -> the secret applies as before. The deployed image ships no
-    # .env at all, so this is inert there.
-    dotenv_qwen_key = _read_dotenv_key(env_file, "QWEN_API_KEY")
-    if dotenv_qwen_key is not None and "QWEN_API_KEY" not in os.environ:
-        os.environ["QWEN_API_KEY"] = dotenv_qwen_key
+    # Same rule for the settings in DOTENV_OVERRIDABLE_SECRETS: a line in .env
+    # wins over the secret, including an empty one, which reads as "turn this
+    # off locally". Absent from .env -> None -> the secret applies as before.
+    # The deployed image ships no .env, so this is inert in production.
+    for key in DOTENV_OVERRIDABLE_SECRETS:
+        dotenv_value = _read_dotenv_key(env_file, key)
+        if dotenv_value is not None and key not in os.environ:
+            os.environ[key] = dotenv_value
 
     try:
         service_account_info = (
